@@ -19,7 +19,6 @@ concurrency:
 
 jobs:
   build:
-    if: hashFiles('web/pnpm-lock.yaml') != ''
     runs-on: ubuntu-latest
     defaults:
       run:
