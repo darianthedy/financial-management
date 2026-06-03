@@ -1,0 +1,51 @@
+/* General */
+"app_name" = "Financial Management";
+
+/* Auth */
+"sign_in" = "Sign In";
+"sign_up" = "Create Account";
+"sign_out" = "Sign Out";
+"email" = "Email";
+"password" = "Password";
+
+/* Dashboard */
+"dashboard" = "Dashboard";
+"cash_flow" = "Cash Flow";
+"income" = "Income";
+"expense" = "Expense";
+"net" = "Net";
+"budget_progress" = "Budget Progress";
+"spending_by_category" = "Spending by Category";
+"recent_transactions" = "Recent Transactions";
+
+/* Accounts */
+"accounts" = "Accounts";
+"total_balance" = "Total Balance";
+"new_account" = "New Account";
+"archive_account" = "Archive Account";
+
+/* Transactions */
+"transactions" = "Transactions";
+"new_transaction" = "New Transaction";
+"edit_transaction" = "Edit Transaction";
+"all" = "All";
+
+/* Budgets */
+"budgets" = "Budgets";
+"new_budget" = "New Budget";
+"carry_over" = "Carry-over";
+
+/* Fixed Expenses */
+"fixed_expenses" = "Fixed Expenses";
+"new_fixed_expense" = "New Fixed Expense";
+"paid" = "Paid";
+
+/* Scheduled */
+"scheduled" = "Scheduled";
+"pending" = "Pending";
+"confirm" = "Confirm";
+"skip" = "Skip";
+
+/* Settings */
+"settings" = "Settings";
+"more" = "More";
