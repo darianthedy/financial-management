@@ -1,0 +1,5 @@
+# Skip pnpm's pre-run lockfile re-verification so `pnpm dev` / `pnpm build` start
+# without re-running `install` each time. Dependencies are managed explicitly via
+# `pnpm install`. This does NOT relax the supply-chain (minimumReleaseAge) policy —
+# real installs still enforce it.
+verifyDepsBeforeRun: false
