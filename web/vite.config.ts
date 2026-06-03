@@ -2,12 +2,14 @@ import { copyFileSync } from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 // GitHub Pages URL: https://<user>.github.io/<repo>/ — keep base in sync with the repo name.
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     {
       // GitHub Pages SPA fallback: serve index.html for unknown deep links.
       name: 'spa-404-fallback',

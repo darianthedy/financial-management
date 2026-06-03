@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: <html class="dark"> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-border: hsl(220 13% 91%);
+  --color-input: hsl(220 13% 91%);
+  --color-ring: hsl(221 83% 53%);
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(222 47% 11%);
+
+  --color-muted: hsl(220 14% 96%);
+  --color-muted-foreground: hsl(220 9% 46%);
+
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222 47% 11%);
+
+  --color-primary: hsl(221 83% 53%);
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-success: hsl(142 71% 45%);
+  --color-success-foreground: hsl(0 0% 100%);
+
+  --color-danger: hsl(0 72% 51%);
+  --color-danger-foreground: hsl(0 0% 100%);
+
+  --radius: 0.625rem;
+}
+
+.dark {
+  --color-border: hsl(217 19% 24%);
+  --color-input: hsl(217 19% 24%);
+  --color-ring: hsl(217 91% 60%);
+  --color-background: hsl(222 47% 8%);
+  --color-foreground: hsl(210 20% 96%);
+
+  --color-muted: hsl(217 19% 18%);
+  --color-muted-foreground: hsl(218 11% 65%);
+
+  --color-card: hsl(222 41% 11%);
+  --color-card-foreground: hsl(210 20% 96%);
+
+  --color-primary: hsl(217 91% 60%);
+  --color-primary-foreground: hsl(222 47% 11%);
+
+  --color-success: hsl(142 69% 58%);
+  --color-danger: hsl(0 84% 60%);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

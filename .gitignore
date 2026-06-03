@@ -2,3 +2,7 @@
 .env.local
 .env.production
 supabase/.temp/
+
+# Local Claude Code / agent config
+.claude/
+web/.claude/
