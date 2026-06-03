@@ -17,6 +17,11 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# Run the bundled JavaScript actions (checkout, setup-node, pnpm/action-setup,
+# upload/deploy-pages) on Node 24 instead of the deprecated Node 20 runtime.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,7 +37,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
