@@ -1,0 +1,40 @@
+# Normalize line endings: auto-detect text files and use LF in the repo
+* text=auto eol=lf
+
+# Explicit text files
+*.swift   text
+*.ts      text
+*.tsx     text
+*.js      text
+*.jsx     text
+*.json    text
+*.css     text
+*.html    text
+*.md      text
+*.sql     text
+*.toml    text
+*.yml     text
+*.yaml    text
+*.svg     text
+*.plist   text
+*.pbxproj text eol=lf
+
+# Windows-specific scripts keep CRLF
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# Binary files (never normalize/diff as text)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.pdf     binary
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.otf     binary
+
+# Lockfiles: treat as text but suppress diffs in PRs
+pnpm-lock.yaml -diff
