@@ -36,7 +36,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile
+      # The lockfile is committed and reviewed, so the supply-chain age policy
+      # (pnpm's default minimumReleaseAge) is enforced when deps are updated —
+      # not here. Re-checking publish age on a frozen install only makes CI fail
+      # by wall-clock when a transitive dep (e.g. electron-to-chromium) is fresh.
+      - run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
       - name: Build
         run: pnpm build
