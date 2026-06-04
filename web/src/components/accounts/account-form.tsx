@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CurrencySelect } from "@/components/shared/currency-select";
+import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { ACCOUNT_TYPES } from "@/lib/account-types";
 import {
   accountFormSchema,
@@ -36,7 +37,7 @@ interface Props {
 }
 
 export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
-  const { defaultCurrency } = useCurrencies();
+  const { defaultCurrency, decimalsFor } = useCurrencies();
   const [submitError, setSubmitError] = useState("");
   const isEdit = !!account;
 
@@ -128,11 +129,17 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="starting_balance">Starting balance</Label>
-              <Input
+              <CurrencyAmountInput
                 id="starting_balance"
-                type="number"
-                step="0.01"
-                {...register("starting_balance", { valueAsNumber: true })}
+                value={watch("starting_balance")}
+                decimals={decimalsFor(currency)}
+                allowNegative
+                onChange={(v) =>
+                  setValue("starting_balance", v, {
+                    shouldDirty: true,
+                    shouldValidate: !!errors.starting_balance,
+                  })
+                }
               />
               <FieldError message={errors.starting_balance?.message} />
             </div>
