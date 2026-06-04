@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -28,10 +28,12 @@ import {
 } from "@/lib/hooks/use-transactions";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
-import { todayIso } from "@/lib/utils/date";
-import { toDisplayAmount } from "@/lib/utils/currency";
+import { fetchBudgetsForMonth } from "@/lib/hooks/use-budgets";
+import { BudgetForm } from "@/components/budgets/budget-form";
+import { todayIso, yearMonthOf } from "@/lib/utils/date";
+import { toDisplayAmount, formatCurrency } from "@/lib/utils/currency";
 import type { TransactionWithRelations } from "@/lib/hooks/use-transactions";
-import type { Category, Tag } from "@/lib/types/database";
+import type { Category, Tag, BudgetProgress } from "@/lib/types/database";
 
 interface Props {
   transaction?: TransactionWithRelations | null;
@@ -46,6 +48,10 @@ const TYPES = [
   { value: "transfer", label: "Transfer" },
 ] as const;
 
+// Sentinel option values for the budget picker (Radix Select disallows "").
+const BUDGET_NONE = "__none__";
+const BUDGET_CREATE = "__create__";
+
 export function TransactionForm({
   transaction,
   defaultAccountId,
@@ -58,6 +64,8 @@ export function TransactionForm({
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [submitError, setSubmitError] = useState("");
   const [newTagInput, setNewTagInput] = useState("");
+  const [budgetOptions, setBudgetOptions] = useState<BudgetProgress[]>([]);
+  const [budgetFormOpen, setBudgetFormOpen] = useState(false);
 
   // Prefill values for edit mode. Using react-hook-form's `values` prop (rather
   // than reset() in an effect) syncs during render, so prefill is deterministic
@@ -76,6 +84,7 @@ export function TransactionForm({
             currency: transaction.currency,
             date: transaction.date,
             description: transaction.description ?? "",
+            budget_id: transaction.budget_id ?? null,
             category_ids: transaction.categories.map((c) => c.id),
             tag_ids: transaction.tags.map((t) => t.id),
           }
@@ -100,6 +109,7 @@ export function TransactionForm({
       currency: "IDR",
       date: todayIso(),
       description: "",
+      budget_id: null,
       category_ids: [],
       tag_ids: [],
     },
@@ -115,8 +125,24 @@ export function TransactionForm({
   const type = watch("type");
   const currency = watch("currency");
   const accountId = watch("account_id");
+  const date = watch("date");
+  const budgetId = watch("budget_id") ?? null;
   const categoryIds = watch("category_ids") ?? [];
   const tagIds = watch("tag_ids") ?? [];
+
+  // Budgets that can be linked: same month (derived from the date) and currency.
+  const budgetMonth = yearMonthOf(date);
+  const loadBudgets = useCallback(() => {
+    if (type === "transfer") {
+      setBudgetOptions([]);
+      return;
+    }
+    fetchBudgetsForMonth(budgetMonth, currency).then(setBudgetOptions);
+  }, [type, budgetMonth, currency]);
+
+  useEffect(() => {
+    loadBudgets();
+  }, [loadBudgets]);
 
   async function handleCreateCategory(name: string) {
     const category = await createCategory(name);
@@ -163,6 +189,7 @@ export function TransactionForm({
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
       {/* Type */}
       <div className="flex flex-col gap-1.5">
@@ -175,6 +202,7 @@ export function TransactionForm({
               onClick={() => {
                 setValue("type", t.value);
                 if (t.value !== "transfer") setValue("transfer_account_id", null);
+                else setValue("budget_id", null);
               }}
               className={`flex-1 rounded-[var(--radius)] border px-3 py-2 text-sm font-medium transition-colors ${
                 type === t.value
@@ -281,6 +309,38 @@ export function TransactionForm({
         />
       </div>
 
+      {/* Budget (expense/income only) */}
+      {type !== "transfer" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="budget_id">Budget</Label>
+          <Select
+            value={budgetId ?? BUDGET_NONE}
+            onValueChange={(v) => {
+              if (v === BUDGET_CREATE) {
+                setBudgetFormOpen(true);
+                return;
+              }
+              setValue("budget_id", v === BUDGET_NONE ? null : v);
+            }}
+          >
+            <SelectTrigger id="budget_id">
+              <SelectValue placeholder="No budget" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={BUDGET_NONE}>No budget</SelectItem>
+              {budgetOptions.map((b) => (
+                <SelectItem key={b.budget_id} value={b.budget_id}>
+                  {b.budget_name} · {formatCurrency(b.effective_amount, b.currency)}
+                </SelectItem>
+              ))}
+              <SelectItem value={BUDGET_CREATE}>
+                + Create budget for this month
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Categories (expense/income only) */}
       {type !== "transfer" && (
         <div className="flex flex-col gap-1.5">
@@ -358,5 +418,17 @@ export function TransactionForm({
         </Button>
       </div>
     </form>
+
+      <BudgetForm
+        open={budgetFormOpen}
+        onOpenChange={setBudgetFormOpen}
+        yearMonth={budgetMonth}
+        defaultCurrency={currency}
+        onSaved={(id) => {
+          loadBudgets();
+          if (id) setValue("budget_id", id);
+        }}
+      />
+    </>
   );
 }

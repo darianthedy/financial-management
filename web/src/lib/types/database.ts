@@ -37,7 +37,7 @@ type TransactionRow = {
   currency: string;
   description: string | null;
   date: string;
-  budget_period_id: string | null;
+  budget_id: string | null;
   scheduled_txn_id: string | null;
   fixed_expense_id: string | null;
   created_at: string;
@@ -85,6 +85,19 @@ type AccountMonthlyBalanceRow = {
   updated_at: string;
 };
 
+// Flat, self-contained budget entry. Identity = (name + currency). One row per month.
+// Carry-over is derived live in v_budget_progress; there is no stored carry-over column.
+type BudgetRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  year_month: string;
+  currency: string;
+  periodic_amount: number;
+  created_at: string;
+  updated_at: string;
+};
+
 // ---- Database interface (supabase-js 2.x GenericSchema shape) ----
 
 export interface Database {
@@ -118,6 +131,24 @@ export interface Database {
         Update: { account_id?: string; year_month?: string; balance?: number };
         Relationships: [];
       };
+      budgets: {
+        Row: BudgetRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          year_month: string;
+          currency?: string;
+          periodic_amount: number;
+        };
+        Update: {
+          name?: string;
+          year_month?: string;
+          currency?: string;
+          periodic_amount?: number;
+        };
+        Relationships: [];
+      };
       transactions: {
         Row: TransactionRow;
         Insert: {
@@ -131,7 +162,7 @@ export interface Database {
           currency?: string;
           description?: string | null;
           date?: string;
-          budget_period_id?: string | null;
+          budget_id?: string | null;
           scheduled_txn_id?: string | null;
           fixed_expense_id?: string | null;
         };
@@ -144,7 +175,7 @@ export interface Database {
           currency?: string;
           description?: string | null;
           date?: string;
-          budget_period_id?: string | null;
+          budget_id?: string | null;
           fixed_expense_id?: string | null;
         };
         Relationships: [];
@@ -201,6 +232,21 @@ export interface Database {
         };
         Relationships: [];
       };
+      v_budget_progress: {
+        Row: {
+          budget_id: string;
+          user_id: string;
+          budget_name: string;
+          currency: string;
+          year_month: string;
+          periodic_amount: number;
+          carry_over_amount: number;
+          effective_amount: number;
+          spent: number;
+          remaining: number;
+        };
+        Relationships: [];
+      };
       v_spending_by_category: {
         Row: {
           user_id: string;
@@ -228,6 +274,7 @@ export interface Database {
 // Convenience aliases
 export type Account = Database["public"]["Tables"]["accounts"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
+export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Tag = Database["public"]["Tables"]["tags"]["Row"];
 export type Currency = Database["public"]["Tables"]["currencies"]["Row"];
@@ -235,3 +282,4 @@ export type UserSettings = Database["public"]["Tables"]["user_settings"]["Row"];
 export type AccountCurrentBalance = Database["public"]["Views"]["v_account_current_balance"]["Row"];
 export type MonthlyCashflow = Database["public"]["Views"]["v_monthly_cashflow"]["Row"];
 export type SpendingByCategory = Database["public"]["Views"]["v_spending_by_category"]["Row"];
+export type BudgetProgress = Database["public"]["Views"]["v_budget_progress"]["Row"];

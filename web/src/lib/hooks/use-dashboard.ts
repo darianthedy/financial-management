@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
-import type { MonthlyCashflow, SpendingByCategory, Transaction } from "@/lib/types/database";
+import type { MonthlyCashflow, SpendingByCategory, Transaction, BudgetProgress } from "@/lib/types/database";
 
 export type RecentTransaction = Transaction & {
   accounts: { name: string } | null;
@@ -9,6 +9,7 @@ export type RecentTransaction = Transaction & {
 export function useDashboard(yearMonth: string) {
   const [cashflow, setCashflow] = useState<MonthlyCashflow | null>(null);
   const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory[]>([]);
+  const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -17,6 +18,7 @@ export function useDashboard(yearMonth: string) {
     const [
       { data: cfRows },
       { data: spendRows },
+      { data: budgetRows },
       { data: txnRows },
     ] = await Promise.all([
       supabase
@@ -29,6 +31,11 @@ export function useDashboard(yearMonth: string) {
         .select("*")
         .eq("year_month", yearMonth)
         .order("total_amount", { ascending: false }),
+      supabase
+        .from("v_budget_progress")
+        .select("*")
+        .eq("year_month", yearMonth)
+        .order("budget_name", { ascending: true }),
       supabase
         .from("transactions")
         .select("*")
@@ -48,6 +55,7 @@ export function useDashboard(yearMonth: string) {
 
     setCashflow(cfRows ?? null);
     setSpendingByCategory(spendRows ?? []);
+    setBudgetProgress(budgetRows ?? []);
     setRecentTransactions(
       txns.map((t) => ({
         ...t,
@@ -62,9 +70,10 @@ export function useDashboard(yearMonth: string) {
     const channel = supabase
       .channel("dashboard-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => fetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "budgets" }, () => fetch())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { cashflow, spendingByCategory, recentTransactions, loading, refetch: fetch };
+  return { cashflow, spendingByCategory, budgetProgress, recentTransactions, loading, refetch: fetch };
 }

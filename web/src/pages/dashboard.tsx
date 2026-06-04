@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { CashflowCard } from "@/components/dashboard/cashflow-card";
 import { SpendingByCategoryCard } from "@/components/dashboard/spending-by-category";
+import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
 import { getCurrentYearMonth, navigateMonth, formatYearMonth } from "@/lib/utils/date";
 
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
-  const { cashflow, spendingByCategory, recentTransactions, loading } =
+  const { cashflow, spendingByCategory, budgetProgress, recentTransactions, loading } =
     useDashboard(yearMonth);
 
   return (
@@ -45,6 +46,9 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <CashflowCard cashflow={cashflow} />
           <SpendingByCategoryCard data={spendingByCategory} />
+          <div className="md:col-span-2">
+            <BudgetProgressCard budgets={budgetProgress} />
+          </div>
           <div className="md:col-span-2">
             <RecentTransactionsCard transactions={recentTransactions} />
           </div>
