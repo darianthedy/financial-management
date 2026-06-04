@@ -61,9 +61,14 @@ function parseInput(
   return { text, value };
 }
 
-/** Format a settled numeric value to its full, padded display: 1234 -> "1,234.00". */
-function formatFull(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return "0";
+/**
+ * Display for a value the user isn't actively typing: padded to full decimals
+ * (1234 -> "1,234.00"). Zero / empty renders as "" so the placeholder shows a
+ * bare "0" — never literal "0.00", which would otherwise sit in the field and
+ * swallow typed digits into the fraction part.
+ */
+function settledText(value: number, decimals: number): string {
+  if (!Number.isFinite(value) || value === 0) return "";
   const fixed = value.toFixed(decimals);
   const [i, f] = fixed.split(".");
   const grouped = groupInt(i);
@@ -72,14 +77,14 @@ function formatFull(value: number, decimals: number): string {
 
 export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
   ({ value, onChange, decimals, allowNegative = false, ...props }, ref) => {
-    const [text, setText] = useState(() => formatFull(value, decimals));
+    const [text, setText] = useState(() => settledText(value, decimals));
     const focused = useRef(false);
 
     // Re-sync from the outside (edit prefill, currency/decimals change, reset)
     // — but never while the user is actively typing.
     useEffect(() => {
       if (focused.current) return;
-      setText(formatFull(value, decimals));
+      setText(settledText(value, decimals));
     }, [value, decimals]);
 
     return (
@@ -87,6 +92,7 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
         ref={ref}
         type="text"
         inputMode={decimals === 0 ? "numeric" : "decimal"}
+        placeholder="0"
         {...props}
         value={text}
         onFocus={(e) => {
@@ -105,8 +111,9 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
         onBlur={(e) => {
           focused.current = false;
           // Settle the display: pad to full decimals so the user never has to
-          // type trailing zeros, and restore "0" for an empty field.
-          setText(formatFull(Number.isFinite(value) ? value : 0, decimals));
+          // type trailing zeros; an empty/zero field clears to show the "0"
+          // placeholder rather than literal "0.00".
+          setText(settledText(value, decimals));
           props.onBlur?.(e);
         }}
       />
