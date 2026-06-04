@@ -67,26 +67,30 @@ async function currentUserId(): Promise<string> {
 }
 
 /** Account mutations. Balances are maintained by DB triggers — never written here. */
-export async function createAccount(values: AccountFormValues) {
+export async function createAccount(values: AccountFormValues, decimalPlaces = 2) {
   const user_id = await currentUserId();
   const { error } = await supabase.from("accounts").insert({
     user_id,
     name: values.name,
     type: values.type,
     currency: values.currency,
-    starting_balance: toMinorUnits(values.starting_balance),
+    starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
   });
   if (error) throw error;
 }
 
-export async function updateAccount(id: string, values: AccountFormValues) {
+export async function updateAccount(
+  id: string,
+  values: AccountFormValues,
+  decimalPlaces = 2,
+) {
   const { error } = await supabase
     .from("accounts")
     .update({
       name: values.name,
       type: values.type,
       currency: values.currency,
-      starting_balance: toMinorUnits(values.starting_balance),
+      starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
     })
     .eq("id", id);
   if (error) throw error;
