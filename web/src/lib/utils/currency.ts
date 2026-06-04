@@ -8,10 +8,26 @@ export function toDisplayAmount(minorUnits: number, decimalPlaces = 2): number {
   return minorUnits / factor;
 }
 
+/**
+ * Minor-unit count for a currency per Intl/ISO 4217 (IDR/JPY -> 0, USD -> 2,
+ * KWD -> 3). Matches the decimal_places seeded into the currencies table, so it
+ * is a safe source of truth for display when an explicit count isn't supplied.
+ */
+export function currencyDecimals(currency: string): number {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
+  } catch {
+    return 2;
+  }
+}
+
 export function formatCurrency(
   minorUnits: number,
   currency = "USD",
-  decimalPlaces = 2,
+  decimalPlaces = currencyDecimals(currency),
 ): string {
   try {
     return new Intl.NumberFormat(undefined, {
@@ -31,7 +47,7 @@ export function formatSignedCurrency(
   minorUnits: number,
   sign: 1 | -1,
   currency = "USD",
-  decimalPlaces = 2,
+  decimalPlaces = currencyDecimals(currency),
 ): string {
   const formatted = formatCurrency(minorUnits, currency, decimalPlaces);
   return sign < 0 ? `-${formatted}` : `+${formatted}`;
