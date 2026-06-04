@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CurrencySelect } from "@/components/shared/currency-select";
+import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { Plus } from "lucide-react";
 import {
   transactionFormSchema,
@@ -242,12 +243,16 @@ export function TransactionForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Amount</Label>
-          <Input
+          <CurrencyAmountInput
             id="amount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            {...register("amount", { valueAsNumber: true })}
+            value={watch("amount")}
+            decimals={decimalsFor(currency)}
+            onChange={(v) =>
+              setValue("amount", v, {
+                shouldDirty: true,
+                shouldValidate: !!errors.amount,
+              })
+            }
           />
           <FieldError message={errors.amount?.message} />
         </div>

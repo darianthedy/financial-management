@@ -288,7 +288,10 @@ DECLARE
   prev_balance BIGINT;
   month_row    RECORD;
   net          BIGINT;
+  v_end_month  DATE;
 BEGIN
+  -- Balance carried into p_from_month: the most recent prior row,
+  -- or the account's starting balance if there is none.
   SELECT balance INTO prev_balance
   FROM account_monthly_balances
   WHERE account_id = p_account_id AND year_month < p_from_month
@@ -299,11 +302,21 @@ BEGIN
     FROM accounts WHERE id = p_account_id;
   END IF;
 
+  -- Walk through the later of: the current month, the newest existing
+  -- row, or p_from_month — so the affected month always gets a row.
+  SELECT GREATEST(
+           date_trunc('month', CURRENT_DATE)::date,
+           to_date(p_from_month, 'YYYY-MM'),
+           COALESCE(MAX(to_date(year_month, 'YYYY-MM')), '0001-01-01'::date)
+         )
+  INTO v_end_month
+  FROM account_monthly_balances
+  WHERE account_id = p_account_id;
+
   FOR month_row IN
-    SELECT year_month
-    FROM account_monthly_balances
-    WHERE account_id = p_account_id AND year_month >= p_from_month
-    ORDER BY year_month
+    SELECT to_char(d, 'YYYY-MM') AS year_month
+    FROM generate_series(to_date(p_from_month, 'YYYY-MM'), v_end_month, '1 month') d
+    ORDER BY d
   LOOP
     SELECT COALESCE(SUM(
       CASE
@@ -321,12 +334,62 @@ BEGIN
 
     prev_balance := prev_balance + net;
 
-    UPDATE account_monthly_balances
-    SET balance = prev_balance, updated_at = now()
-    WHERE account_id = p_account_id AND year_month = month_row.year_month;
+    INSERT INTO account_monthly_balances (account_id, year_month, balance)
+    VALUES (p_account_id, month_row.year_month, prev_balance)
+    ON CONFLICT (account_id, year_month)
+    DO UPDATE SET balance = EXCLUDED.balance, updated_at = now();
   END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Seed a current-month balance row whenever an account is created, so
+-- the ledger and v_account_current_balance stay consistent even before
+-- the account has any transactions.
+CREATE OR REPLACE FUNCTION fn_seed_account_balance()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO account_monthly_balances (account_id, year_month, balance)
+  VALUES (NEW.id, to_char(CURRENT_DATE, 'YYYY-MM'), NEW.starting_balance)
+  ON CONFLICT (account_id, year_month) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_seed_account_balance ON accounts;
+CREATE TRIGGER trg_seed_account_balance
+  AFTER INSERT ON accounts
+  FOR EACH ROW EXECUTE FUNCTION fn_seed_account_balance();
+
+-- Recompute the ledger when starting_balance changes. The transaction
+-- cascade only reads starting_balance for the earliest month, so without
+-- this an edit to starting_balance would never reach the current balance.
+CREATE OR REPLACE FUNCTION fn_recalc_on_starting_balance_change()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_from TEXT;
+BEGIN
+  -- Recalc from the earliest month that has a balance row — the only
+  -- month whose base figure is starting_balance. Fall back to the
+  -- current month if the account has no rows yet.
+  SELECT to_char(
+    COALESCE(MIN(to_date(year_month, 'YYYY-MM')),
+             date_trunc('month', CURRENT_DATE)::date),
+    'YYYY-MM')
+  INTO v_from
+  FROM account_monthly_balances
+  WHERE account_id = NEW.id;
+
+  PERFORM fn_recalc_balances_from(NEW.id, v_from);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_recalc_on_starting_balance ON accounts;
+CREATE TRIGGER trg_recalc_on_starting_balance
+  AFTER UPDATE OF starting_balance ON accounts
+  FOR EACH ROW
+  WHEN (OLD.starting_balance IS DISTINCT FROM NEW.starting_balance)
+  EXECUTE FUNCTION fn_recalc_on_starting_balance_change();
 
 CREATE OR REPLACE FUNCTION fn_transaction_balance_trigger()
 RETURNS TRIGGER AS $$
