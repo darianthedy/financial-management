@@ -26,7 +26,7 @@ import {
 } from "@/lib/validations/account";
 import { createAccount, updateAccount } from "@/lib/hooks/use-accounts";
 import type { Account } from "@/lib/types/database";
-import { toDisplayAmount } from "@/lib/utils/currency";
+import { toDisplayAmount, currencyDecimals } from "@/lib/utils/currency";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 
 interface Props {
@@ -66,7 +66,10 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
             name: account.name,
             type: account.type,
             currency: account.currency,
-            starting_balance: toDisplayAmount(account.starting_balance),
+            starting_balance: toDisplayAmount(
+              account.starting_balance,
+              currencyDecimals(account.currency),
+            ),
           }
         : {
             name: "",
