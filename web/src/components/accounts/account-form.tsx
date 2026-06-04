@@ -83,8 +83,9 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
 
   async function onSubmit(values: AccountFormValues) {
     try {
-      if (account) await updateAccount(account.id, values);
-      else await createAccount(values);
+      const decimals = decimalsFor(values.currency);
+      if (account) await updateAccount(account.id, values, decimals);
+      else await createAccount(values, decimals);
       onOpenChange(false);
       onSaved?.();
     } catch (e) {
