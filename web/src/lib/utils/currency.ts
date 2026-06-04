@@ -8,10 +8,32 @@ export function toDisplayAmount(minorUnits: number, decimalPlaces = 2): number {
   return minorUnits / factor;
 }
 
+/**
+ * Registry of minor-unit counts sourced from the DB `currencies` table — the
+ * SAME source the input/save path uses (`useCurrencies().decimalsFor`). This is
+ * the source of truth for display.
+ *
+ * Do NOT derive these from `Intl`/ISO 4217: it disagrees with the app's data
+ * (e.g. Intl reports 2 decimals for IDR — phantom "sen" — but the app stores
+ * and edits IDR with 0). Using Intl would render a stored 50000 as "500.00".
+ */
+const decimalsByCode = new Map<string, number>();
+
+export function registerCurrencyDecimals(
+  rows: ReadonlyArray<{ code: string; decimal_places: number }>,
+): void {
+  for (const row of rows) decimalsByCode.set(row.code, row.decimal_places);
+}
+
+/** Minor-unit count for a currency from the DB registry; falls back to 2. */
+export function currencyDecimals(currency: string): number {
+  return decimalsByCode.get(currency) ?? 2;
+}
+
 export function formatCurrency(
   minorUnits: number,
   currency = "USD",
-  decimalPlaces = 2,
+  decimalPlaces = currencyDecimals(currency),
 ): string {
   try {
     return new Intl.NumberFormat(undefined, {
@@ -31,7 +53,7 @@ export function formatSignedCurrency(
   minorUnits: number,
   sign: 1 | -1,
   currency = "USD",
-  decimalPlaces = 2,
+  decimalPlaces = currencyDecimals(currency),
 ): string {
   const formatted = formatCurrency(minorUnits, currency, decimalPlaces);
   return sign < 0 ? `-${formatted}` : `+${formatted}`;

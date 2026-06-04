@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { registerCurrencyDecimals } from "@/lib/utils/currency";
 import type { Currency } from "@/lib/types/database";
 
 export function useCurrencies() {
@@ -10,6 +11,9 @@ export function useCurrencies() {
   const fetchCurrencies = useCallback(async () => {
     const { data } = await supabase.from("currencies").select("*").order("code");
     setCurrencies(data ?? []);
+    // Feed the module-level registry so formatCurrency() resolves the correct
+    // decimal places everywhere, including leaf components that don't use this hook.
+    if (data) registerCurrencyDecimals(data);
   }, []);
 
   const fetchSettings = useCallback(async () => {
