@@ -94,7 +94,8 @@ supabase/
 │   ├── 20260509000012_create_triggers.sql
 │   ├── 20260509000013_create_views.sql
 │   ├── 20260509000014_seed_currencies.sql
-│   └── 20260509000015_backfill_monthly_balances.sql
+│   ├── 20260509000015_backfill_monthly_balances.sql
+│   └── 20260604000001_restructure_budgets.sql   # forward migration (see §3.8)
 ├── seed.sql
 └── functions/
     └── generate-pending-transactions/
@@ -175,7 +176,7 @@ CREATE POLICY policy_owner_user_settings ON user_settings FOR ALL
 
 **Migration 4 — Accounts**
 
-> **Note on Migration 4 (Budgets):** The `budgets` table includes `enable_carry_over BOOLEAN NOT NULL DEFAULT FALSE`, and `budget_periods` includes `carry_over_amount BIGINT NOT NULL DEFAULT 0`. Refer to the System Design doc for the full DDL.
+> **Note on Budgets:** The original budgets schema (a `budgets` header + `budget_periods` child, with a stored `carry_over_amount` snapshot and an `enable_carry_over` toggle) has been **superseded**. Budgets are now a single flat table identified by **name + currency**, one row per month, with carry-over always on and computed live in `v_budget_progress`. Because the schema is already deployed, this is delivered as a **forward migration** (`20260604000001_restructure_budgets.sql`, see §3.7), not by editing the original create migration. Refer to the System Design doc for the full target DDL.
 
 ```sql
 -- 20260509000004_create_accounts.sql
@@ -223,7 +224,7 @@ CREATE POLICY policy_owner_amb ON account_monthly_balances FOR ALL
 
 **Migration 10 — Triggers** contains the balance update triggers and `updated_at` triggers.
 
-**Migration 11 — Views** contains `v_monthly_cashflow`, `v_budget_progress`, and `v_spending_by_category`.
+**Migration 11 — Views** contains `v_monthly_cashflow`, `v_budget_progress`, and `v_spending_by_category`. `v_budget_progress` is later replaced by `20260604000001_restructure_budgets.sql` (see §3.8) with a recursive version that computes carry-over live.
 
 ### 3.4 Complete DDL Reference
 
@@ -320,7 +321,7 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `currency` | `TEXT` | Default `'USD'` |
 | `description` | `TEXT` | Nullable |
 | `date` | `DATE` | Default `CURRENT_DATE` |
-| `budget_period_id` | `UUID` | FK → `budget_periods`, nullable |
+| `budget_id` | `UUID` | FK → `budgets`, nullable. Set via the budget dropdown; only income/expense (not transfers) may link. |
 | `scheduled_txn_id` | `UUID` | FK → `scheduled_transactions`, nullable |
 | `fixed_expense_id` | `UUID` | FK → `fixed_expenses`, nullable. Links this transaction to a fixed expense to indicate payment. |
 | `created_at` | `TIMESTAMPTZ` | |
@@ -348,24 +349,14 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 |---|---|---|
 | `id` | `UUID` | PK |
 | `user_id` | `UUID` | FK → `auth.users` |
-| `name` | `TEXT` | |
-| `is_active` | `BOOLEAN` | Default `TRUE` |
-| `enable_carry_over` | `BOOLEAN` | Default `FALSE` |
+| `name` | `TEXT` | Part of identity (name + currency) |
+| `year_month` | `TEXT` | Format: `'YYYY-MM'` |
+| `currency` | `TEXT` | FK → `currencies`, default `'USD'`. Part of identity. |
+| `periodic_amount` | `BIGINT` | Minor units |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-**budget_periods**
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | `UUID` | PK |
-| `budget_id` | `UUID` | FK → `budgets` |
-| `year_month` | `TEXT` | Format: `'YYYY-MM'`, unique per budget |
-| `periodic_amount` | `BIGINT` | |
-| `carry_over_amount` | `BIGINT` | Default `0` |
-| `currency` | `TEXT` | Default `'USD'` |
-| `created_at` | `TIMESTAMPTZ` | |
-| `updated_at` | `TIMESTAMPTZ` | |
+> Flat, self-contained one row per budget per month, like `fixed_expenses`. `UNIQUE(user_id, name, currency, year_month)`. There is **no** `budget_periods` table, no `is_active`/`enable_carry_over`, and no stored carry-over column. Carry-over is always on and derived in `v_budget_progress`: it compounds along each `(user_id, name, currency)` lineage, resets to 0 after any missing month, and `spent` is net (linked expenses − linked income).
 
 **fixed_expenses**
 
@@ -452,6 +443,63 @@ ON CONFLICT (code) DO UPDATE SET
   symbol = EXCLUDED.symbol,
   decimal_places = EXCLUDED.decimal_places;
 ```
+
+### 3.8 Forward Migration — Restructure Budgets (`20260604000001_restructure_budgets.sql`)
+
+The budgets schema is already deployed, so the move from the header+period model to the flat name+currency model is delivered as a forward migration rather than by editing the original create migration. It assumes little/no production budget data; if real `budget_periods` rows exist, the optional copy step preserves them.
+
+```sql
+-- 20260604000001_restructure_budgets.sql
+BEGIN;
+
+-- 1. Point transactions at budgets directly (was budget_period_id -> budget_periods).
+ALTER TABLE transactions ADD COLUMN budget_id UUID REFERENCES budgets(id) ON DELETE SET NULL;
+
+-- 2. Rebuild the budgets table as flat (name + currency identity, one row per month).
+--    Drop the header columns and add the period-specific columns.
+ALTER TABLE budgets DROP COLUMN IF EXISTS is_active;
+ALTER TABLE budgets DROP COLUMN IF EXISTS enable_carry_over;
+ALTER TABLE budgets ADD COLUMN year_month      TEXT;
+ALTER TABLE budgets ADD COLUMN currency        TEXT NOT NULL DEFAULT 'USD' REFERENCES currencies(code);
+ALTER TABLE budgets ADD COLUMN periodic_amount BIGINT;
+
+-- 3. (Optional) Migrate any existing budget_periods rows into flat budgets rows,
+--    carrying the parent name. One budgets row per (name, currency, year_month).
+--    For the simple case (one period per budget) this is a straight copy; otherwise
+--    additional rows are inserted for the extra months.
+--    Re-point transactions from their old budget_period_id to the new budget row here.
+--    (Skipped when there is no production budget data.)
+
+-- 4. Enforce the new shape.
+ALTER TABLE budgets ALTER COLUMN year_month      SET NOT NULL;
+ALTER TABLE budgets ALTER COLUMN periodic_amount SET NOT NULL;
+ALTER TABLE budgets ADD CONSTRAINT uq_budget_lineage UNIQUE (user_id, name, currency, year_month);
+CREATE INDEX IF NOT EXISTS idx_budgets_lineage ON budgets(user_id, name, currency, year_month);
+
+-- 5. Drop the obsolete child table and the old transactions column/index.
+DROP INDEX IF EXISTS idx_txn_budget_per;
+ALTER TABLE transactions DROP COLUMN IF EXISTS budget_period_id;
+DROP TABLE IF EXISTS budget_periods;
+CREATE INDEX idx_txn_budget ON transactions(budget_id);
+
+-- 6. RLS: budgets now owns user_id directly (drop the derive-through-parent policy).
+DROP POLICY IF EXISTS policy_owner_budget_periods ON budget_periods;
+-- budgets already has policy_owner_budgets (user_id = auth.uid()); no change needed.
+
+-- 7. Realtime publication.
+ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS budget_periods;
+ALTER PUBLICATION supabase_realtime ADD TABLE budgets;
+
+-- 8. Replace the budget progress view with the live carry-over version.
+--    (Full recursive definition is in the System Design doc / migration file.)
+DROP VIEW IF EXISTS v_budget_progress;
+-- CREATE OR REPLACE VIEW v_budget_progress AS WITH spent AS (...), base AS (...),
+--   chain AS (... recursive ...) SELECT ... FROM chain;  -- see System Design §VIEWS
+
+COMMIT;
+```
+
+> Note: `DROP TABLE budget_periods` cascades to the old `transactions.budget_period_id` FK, so step 5's column drop and the table drop must agree on order; the script drops the column first, then the table.
 
 ---
 
@@ -680,7 +728,7 @@ Enable Realtime on tables that clients need to subscribe to for live updates:
 ALTER PUBLICATION supabase_realtime ADD TABLE transactions;
 ALTER PUBLICATION supabase_realtime ADD TABLE accounts;
 ALTER PUBLICATION supabase_realtime ADD TABLE account_monthly_balances;
-ALTER PUBLICATION supabase_realtime ADD TABLE budget_periods;
+ALTER PUBLICATION supabase_realtime ADD TABLE budgets;
 ALTER PUBLICATION supabase_realtime ADD TABLE fixed_expenses;
 ALTER PUBLICATION supabase_realtime ADD TABLE user_settings;
 ```

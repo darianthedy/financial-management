@@ -26,7 +26,7 @@ Transactions are the core records of money moving in, out, or between accounts.
 
 - A transaction is either an **income** or an **expense**
 - A transaction can be a **transfer** between two accounts
-- A transaction can be linked to a **budget**
+- A transaction can be linked to a **budget** (optional, at most one per transaction) via an explicit dropdown on the transaction. The dropdown offers budgets matching the transaction's currency and month. Linking is manual — there is no category-to-budget mapping in P0.
 - A transaction can be linked to a **fixed expense** (optional, at most one per transaction). This indicates payment of that fixed expense for the given month.
 - A transaction can have:
   - Multiple categories / tags
@@ -40,15 +40,39 @@ Transactions are the core records of money moving in, out, or between accounts.
 Budgets allow the user to set spending limits for a given period and track remaining allowance.
 
 - User can have multiple budgets
-- Each budget has a name, a period, a periodic amount, and a remaining amount
-- **Periodic amount**: the target spending limit the user sets for a given period
-- **Remaining amount**: automatically calculated based on transactions linked to the budget within the current period
+- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **currency**, a **periodic amount**, and a computed **remaining amount**
 - For P0, budget period is fixed to **monthly**
-- Budgets are **period-specific**: each budget entry is tied to the exact period it applies to. The amount can differ between periods, and a budget can be added or removed at any time without affecting historical records.
+
+**Identity**
+
+- A budget is identified by its **name + currency** together. Budgets sharing the same name across periods are treated as the same budget only when their currency also matches.
+  - Example: "Food" in USD and "Food" in EUR are two distinct budgets with independent carry-over chains.
+- The name is chosen at the user's discretion and should be kept simple and consistent so the same budget can be matched across periods.
+
+**Amounts**
+
+- **Periodic amount**: the target spending limit the user sets for the period.
+- **Spent**: the net of transactions linked to the budget in that period — `linked expenses − linked income`. Income/refunds linked to a budget add back to its remaining allowance.
+- **Effective budget**: `periodic amount + carry-in` (see carry-over below).
+- **Remaining amount** (computed): `effective budget − spent`. Can be negative (overspent).
+
+**Period-specific design**
+
+- Each budget entry is tied to the exact period it applies to. The periodic amount can differ between periods, and a budget can be added or removed at any time without affecting historical records.
   - Example: Budget "Food" = $100 in May 2026, changed to $200 in June 2026, then removed in July 2026. The records for May and June remain intact.
-- Budgets support **carry-over**: the remaining (or overspent) amount from the previous period is added to (or deducted from) the next period's budget.
-  - Example (surplus): Budget "Food" in May = $300, remaining at end of May = $10. June is set to $400. With carry-over, June's effective budget = $410.
-  - Example (overspend): Budget "Food" in May = $300, overspent by $20. June is set to $400. With carry-over, June's effective budget = $380.
+- Editing a past period's periodic amount, or adding/removing a linked transaction in a past period, recomputes every later period in that budget's carry-over chain (see below).
+
+**Carry-over**
+
+- Carry-over is **always on** for every budget (no opt-out).
+- It **compounds (chains)** across consecutive periods: the remaining (or overspent) amount of one period becomes the carry-in of the next.
+  - `effective[n] = periodic[n] + remaining[n-1]`
+  - `remaining[n] = effective[n] − spent[n]`
+  - Example (surplus): "Food" May = $300, $10 remaining → June periodic $400 → June effective = $410. If June then has $50 remaining, July's carry-in is $50.
+  - Example (overspend): "Food" May = $300, overspent by $20 → June periodic $400 → June effective = $380.
+- Carry-in comes from the **immediately preceding period only**, within the same name + currency lineage.
+- A **gap resets carry-over**: if the immediately preceding period has no budget of the same name + currency, this period starts fresh with carry-in = 0. (Removing a budget for a month then re-adding it is the deliberate way to reset accumulated surplus/debt.)
+- The first period of a lineage (or the first after a gap) has carry-in = 0.
 
 ### Fixed Expenses
 

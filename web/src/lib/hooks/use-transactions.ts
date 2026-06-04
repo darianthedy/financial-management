@@ -155,6 +155,7 @@ export async function createTransaction(values: TransactionFormValues, decimalPl
       currency: values.currency,
       description: values.description ?? null,
       date: values.date,
+      budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
     })
     .select("id")
     .single();
@@ -171,6 +172,7 @@ export async function updateTransaction(id: string, values: TransactionFormValue
     currency: values.currency,
     description: values.description ?? null,
     date: values.date,
+    budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
   }).eq("id", id);
   if (error) throw error;
   await Promise.all([

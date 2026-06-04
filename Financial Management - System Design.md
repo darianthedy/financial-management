@@ -148,23 +148,23 @@ A custom backend would only be needed if future requirements exceed what Edge Fu
    │───────────────────│              │                   │
    │ id                │              │                   │
    │ user_id (FK)      │     ┌────────┴────────┐          │
-   │ account_id (FK)   │     │ budget_periods  │          │
+   │ account_id (FK)   │     │     budgets     │          │
    │ transfer_acc (FK) │     │─────────────────│          │
    │ type              │     │ id              │          │
-   │ amount            │     │ budget_id (FK)  │          │
-   │ currency          │     │ year_month      │          │
-   │ description       │     │ periodic_amount │          │
-   │ date              │     │ carry_over_amt  │          │
-   │ budget_period(FK) │     └────────┬────────┘          │
-   │ fixed_expense(FK) │              │                   │
-   │ status            │              ▼ 1                 │
-   │ scheduled_txn(FK) │     ┌─────────────────┐          │
-   └───────────────────┘     │    budgets      │          │
-                             │─────────────────│          │
-           ▲                 │ id              │          │
-           │                 │ user_id (FK)    │          │
-           │                 │ name            │          │
-   ┌───────┴───────────┐    └─────────────────┘          │
+   │ amount            │     │ user_id (FK)    │          │
+   │ currency          │     │ name            │          │
+   │ description       │     │ year_month      │          │
+   │ date              │     │ currency        │          │
+   │ budget_id (FK)    │     │ periodic_amount │          │
+   │ fixed_expense(FK) │     └─────────────────┘          │
+   │ status            │                                  │
+   │ scheduled_txn(FK) │                                  │
+   └───────────────────┘                                  │
+                                                          │
+           ▲                                              │
+           │                                              │
+           │                                              │
+   ┌───────┴───────────┐                                  │
    │    scheduled      │                                  │
    │   _transactions   │    ┌─────────────────┐          │
    │───────────────────│    │  fixed_expenses │◄─ ─ ─ ─ ┤ (transactions.fixed_expense_id)
@@ -308,37 +308,29 @@ CREATE INDEX idx_tags_user ON tags(user_id);
 -- ============================================================
 -- BUDGETS
 -- ============================================================
+-- Each row is a self-contained monthly budget entry, mirroring fixed_expenses.
+-- Identity is (name + currency): rows sharing the same name AND currency across
+-- consecutive months form one carry-over lineage. The same name under a different
+-- currency is a separate, independent budget with its own carry-over chain.
+-- periodic_amount: the spending limit the user sets for this month.
+-- Carry-over is ALWAYS ON and computed live in v_budget_progress (there is no
+-- stored carry_over column), so editing a past month's periodic_amount or its
+-- linked transactions automatically recomputes every later month in the lineage.
 CREATE TABLE budgets (
-  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  name              TEXT NOT NULL,
-  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
-  enable_carry_over BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  year_month      TEXT NOT NULL,                       -- format: 'YYYY-MM'
+  currency        TEXT NOT NULL DEFAULT 'USD' REFERENCES currencies(code),
+  periodic_amount BIGINT NOT NULL,                     -- minor units
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  UNIQUE(user_id, name, currency, year_month)
 );
 
-CREATE INDEX idx_budgets_user ON budgets(user_id);
-
--- Period-specific budget entries: one row per budget per month.
--- Allows the periodic_amount to differ each month and preserves history.
--- carry_over_amount: surplus (positive) or overspend (negative) from the previous period,
--- computed and locked in when this row is created. 0 if carry-over is disabled.
-CREATE TABLE budget_periods (
-  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  budget_id         UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
-  year_month        TEXT NOT NULL,  -- format: 'YYYY-MM'
-  periodic_amount   BIGINT NOT NULL,
-  carry_over_amount BIGINT NOT NULL DEFAULT 0,
-  currency          TEXT NOT NULL DEFAULT 'USD',
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  UNIQUE(budget_id, year_month)
-);
-
-CREATE INDEX idx_budget_periods_budget ON budget_periods(budget_id);
-CREATE INDEX idx_budget_periods_month  ON budget_periods(year_month);
+CREATE INDEX idx_budgets_user    ON budgets(user_id);
+CREATE INDEX idx_budgets_lineage ON budgets(user_id, name, currency, year_month);
 
 -- ============================================================
 -- FIXED EXPENSES
@@ -399,7 +391,7 @@ CREATE TABLE transactions (
   currency              TEXT NOT NULL DEFAULT 'USD',
   description           TEXT,
   date                  DATE NOT NULL DEFAULT CURRENT_DATE,
-  budget_period_id          UUID REFERENCES budget_periods(id) ON DELETE SET NULL,
+  budget_id                 UUID REFERENCES budgets(id) ON DELETE SET NULL,
   scheduled_txn_id          UUID REFERENCES scheduled_transactions(id) ON DELETE SET NULL,
   fixed_expense_id            UUID REFERENCES fixed_expenses(id) ON DELETE SET NULL,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -416,7 +408,7 @@ CREATE INDEX idx_txn_user       ON transactions(user_id);
 CREATE INDEX idx_txn_account    ON transactions(account_id);
 CREATE INDEX idx_txn_date       ON transactions(date);
 CREATE INDEX idx_txn_status     ON transactions(status);
-CREATE INDEX idx_txn_budget_per ON transactions(budget_period_id);
+CREATE INDEX idx_txn_budget     ON transactions(budget_id);
 CREATE INDEX idx_txn_type_date  ON transactions(type, date);
 CREATE INDEX idx_txn_fixed_exp  ON transactions(fixed_expense_id)
   WHERE fixed_expense_id IS NOT NULL;
@@ -448,7 +440,6 @@ ALTER TABLE accounts                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tags                    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budgets                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE budget_periods          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fixed_expenses          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scheduled_transactions  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions              ENABLE ROW LEVEL SECURITY;
@@ -498,12 +489,6 @@ CREATE POLICY policy_owner_txn_categories ON transaction_categories FOR ALL
 CREATE POLICY policy_owner_txn_tags ON transaction_tags FOR ALL
   USING (
     EXISTS (SELECT 1 FROM transactions t WHERE t.id = transaction_id AND t.user_id = auth.uid())
-  );
-
--- budget_periods: derive through budget.
-CREATE POLICY policy_owner_budget_periods ON budget_periods FOR ALL
-  USING (
-    EXISTS (SELECT 1 FROM budgets b WHERE b.id = budget_id AND b.user_id = auth.uid())
   );
 
 -- ============================================================
@@ -658,7 +643,7 @@ DECLARE
 BEGIN
   FOR t IN
     SELECT unnest(ARRAY[
-      'user_settings','accounts','budgets','budget_periods','fixed_expenses',
+      'user_settings','accounts','budgets','fixed_expenses',
       'scheduled_transactions','transactions',
       'account_monthly_balances'
     ])
@@ -696,28 +681,62 @@ FROM transactions
 WHERE status = 'confirmed'
 GROUP BY user_id, to_char(date, 'YYYY-MM');
 
--- Budget progress: spent vs. limit per budget per month (with carry-over)
--- effective_amount = periodic_amount + carry_over_amount
+-- Budget progress: spent vs. limit per budget per month, with carry-over
+-- computed live (no stored column). Carry-over is always on and compounds along
+-- each (user_id, name, currency) lineage; a missing preceding month breaks the
+-- chain and resets carry-in to 0. spent is NET: linked expenses minus linked income.
+--   effective_amount = periodic_amount + carry_in
+--   remaining        = effective_amount - spent   (carries into the next month)
 CREATE OR REPLACE VIEW v_budget_progress AS
+WITH RECURSIVE spent AS (
+  SELECT
+    b.id AS budget_id,
+    COALESCE(SUM(CASE WHEN t.type = 'income' THEN -t.amount
+                      ELSE t.amount END), 0)::BIGINT AS spent
+  FROM budgets b
+  LEFT JOIN transactions t
+    ON t.budget_id = b.id AND t.status = 'confirmed'
+  GROUP BY b.id
+),
+base AS (
+  SELECT b.*, s.spent,
+         to_char(to_date(b.year_month, 'YYYY-MM') - interval '1 month', 'YYYY-MM') AS prev_month
+  FROM budgets b
+  JOIN spent s ON s.budget_id = b.id
+),
+chain AS (
+  -- Anchors: no same-lineage row in the immediately preceding month -> carry_in = 0
+  SELECT b.id, b.user_id, b.name, b.currency, b.year_month, b.periodic_amount, b.spent,
+         0::BIGINT AS carry_in,
+         b.periodic_amount - b.spent AS remaining
+  FROM base b
+  WHERE NOT EXISTS (
+    SELECT 1 FROM base p
+    WHERE p.user_id = b.user_id AND p.name = b.name
+      AND p.currency = b.currency AND p.year_month = b.prev_month
+  )
+  UNION ALL
+  -- Recurse forward into the next consecutive month of the same lineage (compounding)
+  SELECT n.id, n.user_id, n.name, n.currency, n.year_month, n.periodic_amount, n.spent,
+         c.remaining AS carry_in,
+         n.periodic_amount + c.remaining - n.spent AS remaining
+  FROM chain c
+  JOIN base n
+    ON n.user_id = c.user_id AND n.name = c.name AND n.currency = c.currency
+   AND n.year_month = to_char(to_date(c.year_month, 'YYYY-MM') + interval '1 month', 'YYYY-MM')
+)
 SELECT
-  bp.id AS budget_period_id,
-  b.id AS budget_id,
-  b.name AS budget_name,
-  b.enable_carry_over,
-  bp.year_month,
-  bp.periodic_amount,
-  bp.carry_over_amount,
-  bp.periodic_amount + bp.carry_over_amount AS effective_amount,
-  bp.currency,
-  COALESCE(SUM(t.amount), 0) AS spent,
-  (bp.periodic_amount + bp.carry_over_amount) - COALESCE(SUM(t.amount), 0) AS remaining
-FROM budget_periods bp
-JOIN budgets b ON b.id = bp.budget_id
-LEFT JOIN transactions t
-  ON t.budget_period_id = bp.id
-  AND t.status = 'confirmed'
-GROUP BY bp.id, b.id, b.name, b.enable_carry_over,
-         bp.year_month, bp.periodic_amount, bp.carry_over_amount, bp.currency;
+  id AS budget_id,
+  user_id,
+  name AS budget_name,
+  currency,
+  year_month,
+  periodic_amount,
+  carry_in AS carry_over_amount,
+  periodic_amount + carry_in AS effective_amount,
+  spent,
+  periodic_amount + carry_in - spent AS remaining
+FROM chain;
 
 -- Spending by category for a given month
 CREATE OR REPLACE VIEW v_spending_by_category AS
@@ -748,11 +767,10 @@ GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 | 3b | `account_monthly_balances` | End-of-month running balance per account | `account_id` (PK), `year_month` (PK), `balance` |
 | 4 | `categories` | Expense/income categories (Food, Salary…) | `name`, `icon`, `color` |
 | 5 | `tags` | Free-form labels on transactions | `name` |
-| 6 | `budgets` | Named budget definitions | `name`, `is_active`, `enable_carry_over` |
-| 7 | `budget_periods` | Monthly snapshot of a budget's limit + carry-over | `budget_id`, `year_month`, `periodic_amount`, `carry_over_amount` |
+| 6 | `budgets` | Self-contained monthly budget entries (identity = name + currency) | `name`, `year_month`, `currency`, `periodic_amount` (carry-over computed in `v_budget_progress`) |
 | 8 | `fixed_expenses` | Monthly fixed expense entries with period-specific amounts | `name`, `year_month`, `amount`, `due_day`, `is_active` (paid = has linked txn) |
 | 9 | `scheduled_transactions` | Templates for auto-recorded transactions | `account_id`, `type`, `amount`, `recurrence`, `next_due_date` |
-| 10 | `transactions` | All financial movements | `account_id`, `type`, `status`, `amount`, `date`, `budget_period_id`, `fixed_expense_id` |
+| 10 | `transactions` | All financial movements | `account_id`, `type`, `status`, `amount`, `date`, `budget_id`, `fixed_expense_id` |
 | 11 | `transaction_categories` | Many-to-many: transaction ↔ category | `transaction_id`, `category_id` |
 | 12 | `transaction_tags` | Many-to-many: transaction ↔ tag | `transaction_id`, `tag_id` |
 
@@ -764,11 +782,9 @@ GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 
 The requirement states that budgets and fixed expenses are **period-specific** — the amount can change between months, and deleting the parent should not erase historical data.
 
-**Budgets** use a **header + period** pattern:
+**Budgets** use the same **flat, self-contained** pattern as fixed expenses: each row in `budgets` represents one budget for one specific month, carrying both the identity (`user_id`, `name`, `currency`) and the period-specific detail (`year_month`, `periodic_amount`). A budget's identity is **name + currency** — `UNIQUE(user_id, name, currency, year_month)` prevents duplicates, and the same name under a different currency is treated as a distinct budget.
 
-- `budgets` → `budget_periods` (one row per active month)
-
-When the user "removes" a budget in July, we simply stop creating new `budget_periods` rows from July onward. May and June rows remain untouched.
+When the user "removes" a budget in July, we simply stop creating new `budgets` rows from July onward. May and June rows remain untouched. There is no separate header or periods table.
 
 **Fixed expenses** use a **flat, self-contained** pattern: each row in `fixed_expenses` represents one fixed expense for one specific month. The table carries both the identity (`name`, `user_id`) and the period-specific details (`year_month`, `amount`, `currency`, `due_day`). A UNIQUE constraint on `(user_id, name, year_month)` prevents duplicates. To set up a new month, the user copies entries from the previous month (amounts can be adjusted). Historical entries are preserved even if the user stops copying forward.
 
@@ -776,26 +792,25 @@ The app provides a **"Copy from Previous Month"** action: it duplicates all acti
 
 ### 4.2 Budget Carry-Over
 
-Carry-over allows unspent budget (or overspend) to roll into the next month. It is controlled by a per-budget toggle (`enable_carry_over` on `budgets`) and recorded as a snapshot on each period row (`carry_over_amount` on `budget_periods`).
+Carry-over allows unspent budget (or overspend) to roll into the next month. It is **always on** for every budget — there is no toggle — and it is **computed live** in `v_budget_progress` rather than stored. Because nothing is frozen, editing a past month's `periodic_amount` or adding/removing a linked transaction automatically recomputes every later month in the lineage.
 
 **How it works:**
 
-1. When a new `budget_periods` row is created for month M, the app checks whether `enable_carry_over` is true on the parent budget.
-2. If enabled, it looks up the **previous period** (M-1) and computes: `carry_over = previous.periodic_amount + previous.carry_over_amount - previous.spent`.
-   - Positive → surplus (user underspent → next month gets more).
-   - Negative → deficit (user overspent → next month gets less).
-3. This value is stored in `carry_over_amount` on the new row and **never changes retroactively**. Even if the user edits past transactions, the carry-over for subsequent periods remains as it was — consistent with the period-specific snapshot model.
-4. The **effective budget** for display and progress bars is: `periodic_amount + carry_over_amount`.
+1. A budget lineage is the set of `budgets` rows sharing the same `(user_id, name, currency)`. Carry-over chains forward through that lineage one month at a time.
+2. **`spent`** for a month is the net of its linked confirmed transactions: `SUM(expenses) - SUM(income)`. Income/refunds linked to the budget reduce spend (add back to remaining).
+3. **`carry_in(M)`** comes from the **immediately preceding month** (M-1) of the same lineage: `carry_in(M) = remaining(M-1)`. If there is no row for M-1 in this lineage (first month, or a gap because the budget was removed), `carry_in(M) = 0` — the gap resets the chain.
+4. **`effective_amount(M)` = `periodic_amount(M) + carry_in(M)`**, and **`remaining(M)` = `effective_amount(M) - spent(M)`**. `remaining(M)` then becomes `carry_in(M+1)`, so surpluses and overspends **compound** down an unbroken run of months.
+5. Progress bars and badges read `effective_amount`, `spent`, `remaining`, and `carry_over_amount` (= `carry_in`) directly from `v_budget_progress`.
 
-**Example:**
+**Example** (single "Food" / USD lineage, unbroken May–Jul):
 
-| Month | periodic_amount | carry_over_amount | effective_amount | spent | remaining |
+| Month | periodic_amount | carry_in | effective_amount | spent (net) | remaining |
 |---|---|---|---|---|---|
-| May 2026 | $300 | $0 (first month) | $300 | $290 | $10 |
-| Jun 2026 | $400 | +$10 (surplus) | $410 | $430 | -$20 |
-| Jul 2026 | $400 | -$20 (overspend) | $380 | $350 | $30 |
+| May 2026 | $300 | $0 (first month) | $300 | $290 | +$10 |
+| Jun 2026 | $400 | +$10 (surplus) | $410 | $430 | −$20 |
+| Jul 2026 | $400 | −$20 (overspend) | $380 | $350 | +$30 |
 
-If carry-over is disabled, `carry_over_amount` is always 0, and the budget behaves as before.
+If "Food" were removed in June and re-added in July, July's `carry_in` would be $0 (the May→July gap breaks the chain). A "Food" budget in EUR would form a completely separate lineage with its own chain.
 
 ### 4.3 Account Monthly Balances (Running Balance Ledger)
 
@@ -872,7 +887,7 @@ Four **Postgres views** are provided to power the dashboard and account list:
 
 ### 4.8 Row-Level Security
 
-Every table has RLS enabled. Policies ensure that a user can only read/write rows where `user_id = auth.uid()`. Junction tables (`transaction_categories`, `transaction_tags`) derive ownership through the parent `transactions` row. `budget_periods` derives ownership through its parent `budgets` table. `fixed_expenses` has a direct `user_id` column and uses the standard owner policy.
+Every table has RLS enabled. Policies ensure that a user can only read/write rows where `user_id = auth.uid()`. Junction tables (`transaction_categories`, `transaction_tags`) derive ownership through the parent `transactions` row. `budgets` and `fixed_expenses` each have a direct `user_id` column and use the standard owner policy.
 
 ---
 
@@ -881,6 +896,6 @@ Every table has RLS enabled. Policies ensure that a user can only read/write row
 | Feature | Schema Impact |
 |---|---|
 | **Receipt Scanning** | Add `receipt_url TEXT` column to `transactions`; store images in Supabase Storage; add an Edge Function that calls an OCR/AI API and pre-fills transaction fields. |
-| **Flexible Periods** | Extend `recurrence_type` enum with `'weekly'`, `'quarterly'`, `'yearly'`, `'custom'`. Add `period_type` to `budget_periods`. Adjust cron logic. |
+| **Flexible Periods** | Extend `recurrence_type` enum with `'weekly'`, `'quarterly'`, `'yearly'`, `'custom'`. Add a `period_type` column to `budgets` and generalize the lineage/period key in `v_budget_progress` beyond `year_month`. Adjust cron logic. |
 | **Multi-Currency Transactions** | Add `original_amount BIGINT`, `original_currency TEXT`, and `exchange_rate NUMERIC` columns to `transactions`. The existing `amount` holds the converted value in the account's currency. The trigger uses `amount` for balance updates. |
 | **Extended Dashboard** | Queries over `fixed_expenses` (upcoming/overdue), `transactions WHERE status = 'pending'`, and `v_monthly_cashflow` grouped over multiple months. No schema changes needed. |

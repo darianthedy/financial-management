@@ -105,8 +105,8 @@ src/
 │   │   ├── account-card.tsx
 │   │   └── account-form.tsx
 │   ├── budgets/
-│   │   ├── budget-card.tsx          # Shows effective amount + carry-over badge
-│   │   └── budget-form.tsx          # Includes carry-over toggle
+│   │   ├── budget-card.tsx          # Shows effective amount + carry-over badge (from v_budget_progress)
+│   │   └── budget-form.tsx          # Name, currency, periodic amount (no carry-over toggle)
 │   └── fixed-expenses/
 │       ├── fixed-expense-row.tsx
 │       └── fixed-expense-form.tsx
@@ -447,7 +447,7 @@ While TypeScript types are auto-generated from the database schema (see section 
 | `date` | `DATE` | **Not** `transaction_date` |
 | `transfer_account_id` | `UUID` | **Not** `to_account_id`. Required when `type = 'transfer'` |
 | `status` | `transaction_status` | `'confirmed'` \| `'pending'` \| `'dismissed'`. Default `'confirmed'` |
-| `budget_period_id` | `UUID` | FK → `budget_periods`, nullable |
+| `budget_id` | `UUID` | FK → `budgets`, nullable. Set via the budget dropdown (income/expense only) |
 | `scheduled_txn_id` | `UUID` | FK → `scheduled_transactions`, nullable |
 | `fixed_expense_id` | `UUID` | FK → `fixed_expenses`, nullable. Links to a fixed expense to indicate payment. |
 
@@ -514,7 +514,7 @@ The same pattern applies to tags via `transaction_tags`.
 | Widget | Data Source | Query |
 |---|---|---|
 | Monthly Cash Flow | `v_monthly_cashflow` | `.from("v_monthly_cashflow").select("*").eq("year_month", currentMonth)` |
-| Budget Progress | `v_budget_progress` | `.from("v_budget_progress").select("*").eq("year_month", currentMonth)` — includes `effective_amount` (periodic + carry-over), `carry_over_amount`, and `remaining` |
+| Budget Progress | `v_budget_progress` | `.from("v_budget_progress").select("*").eq("year_month", currentMonth)` — returns `budget_name`, `currency`, `periodic_amount`, `carry_over_amount`, `effective_amount` (= periodic + carry-in), `spent` (net of linked expenses − income), and `remaining`, all computed live |
 | Spending by Category | `v_spending_by_category` | `.from("v_spending_by_category").select("*").eq("year_month", currentMonth)` |
 | Recent Transactions | `transactions` | `.from("transactions").select("*, accounts(name)").order("date", { ascending: false }).limit(10)` |
 
@@ -538,19 +538,19 @@ The same pattern applies to tags via `transaction_tags`.
   - Date picker
   - Category multi-select
   - Tag multi-select (autocomplete + create)
-  - Budget picker (expense only) — loads active `budget_periods` for the transaction's month, displays budget name + effective amount. Selection stored as `budget_period_id`. Cleared when type is not `expense`.
+  - Budget picker (income & expense; hidden for transfers) — loads `budgets` for the transaction's month **whose currency matches the transaction's currency**, displaying budget name + effective amount (from `v_budget_progress`). Selection stored as `budget_id`. Offers an inline "create budget for this month" option when none exists. Cleared when type is `transfer`.
   - Fixed expense picker (expense only) — loads `fixed_expenses` for the transaction's month (filtered by `year_month`). Selection stored as `fixed_expense_id`. Linking a transaction indicates the fixed expense is paid. Cleared when type is not `expense`.
   - Description
 
 ### 7.4 Budgets Page
 
-- Current month's budgets with progress bars showing **effective amount** (periodic + carry-over).
-- If carry-over is active, display the carry-over amount as a label (e.g., "+$10 carried over" or "-$20 overspent").
+- Current month's budgets with progress bars showing **net spent** vs. **effective amount** (periodic + carry-in), read from `v_budget_progress`.
+- Display the carry-in as a label when non-zero (e.g., "+$10 carried over" or "−$20 overspent"). Carry-over is always on; there is no toggle.
 - Month navigator (prev / next). On mobile/touch viewports, support swipe left/right to navigate months.
-- Add budget → creates header + current month's period entry. Toggle to enable/disable carry-over.
-- Edit periodic amount for any month.
-- Deactivate budget (stops generating future period entries).
-- When creating a new month's period for a carry-over-enabled budget, the app computes `carry_over_amount` from the previous period's remaining and stores it on the new row.
+- Add budget → inserts a single `budgets` row for the selected month (`name`, `currency`, `periodic_amount`). Identity is name + currency; the same name in a different currency is a separate budget. There is no header record.
+- Edit `periodic_amount` (or `name`) for the selected month only — past months are untouched, but because carry-over is computed live, editing an earlier month re-flows every later month in the lineage.
+- "Remove" a budget for a month = delete that month's row. Future months stop being created; a deliberate gap resets that lineage's carry-over to 0.
+- No carry-over is stored or precomputed — `v_budget_progress` derives it on read by chaining each `(name, currency)` lineage across consecutive months.
 
 ### 7.5 Fixed Expenses Page
 

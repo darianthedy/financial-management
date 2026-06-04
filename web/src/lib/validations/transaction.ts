@@ -11,6 +11,7 @@ export const transactionFormSchema = z
     currency: z.string().min(3).max(3),
     date: z.string().min(1, "Date is required"),
     description: z.string().max(500).nullable().optional(),
+    budget_id: z.string().uuid().nullable().optional(),
     category_ids: z.array(z.string().uuid()).default([]),
     tag_ids: z.array(z.string().uuid()).default([]),
   })

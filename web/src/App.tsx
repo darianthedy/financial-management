@@ -7,6 +7,7 @@ import AccountsPage from "@/pages/accounts";
 import AccountDetailPage from "@/pages/account-detail";
 import TransactionsPage from "@/pages/transactions";
 import TransactionFormPage from "@/pages/transaction-form";
+import BudgetsPage from "@/pages/budgets";
 import PlaceholderPage from "@/pages/placeholder";
 
 const basename = import.meta.env.BASE_URL;
@@ -25,10 +26,7 @@ export default function App() {
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/transactions/new" element={<TransactionFormPage />} />
             <Route path="/transactions/:id/edit" element={<TransactionFormPage />} />
-            <Route
-              path="/budgets"
-              element={<PlaceholderPage title="Budgets" />}
-            />
+            <Route path="/budgets" element={<BudgetsPage />} />
             <Route
               path="/fixed-expenses"
               element={<PlaceholderPage title="Fixed Expenses" />}
