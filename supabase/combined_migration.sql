@@ -575,6 +575,14 @@ JOIN categories c ON c.id = tc.category_id
 WHERE t.type = 'expense' AND t.status = 'confirmed'
 GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 
+-- Run views with the caller's privileges so the base tables' RLS
+-- (user_id = auth.uid()) applies through the view. Without this, views
+-- default to the owner's privileges and leak every user's rows.
+ALTER VIEW v_account_current_balance SET (security_invoker = true);
+ALTER VIEW v_monthly_cashflow        SET (security_invoker = true);
+ALTER VIEW v_budget_progress         SET (security_invoker = true);
+ALTER VIEW v_spending_by_category    SET (security_invoker = true);
+
 -- ============================================================
 -- 16. REALTIME: enable on tables clients subscribe to
 -- ============================================================
