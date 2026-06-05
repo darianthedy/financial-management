@@ -35,6 +35,25 @@ Transactions are the core records of money moving in, out, or between accounts.
   - An amount
   - A currency
 
+**Filtering & Search**
+
+The transaction list can be narrowed by any combination of the following filters:
+
+- **Search**: free-text match on the transaction description
+- **Type**: income, expense, or transfer
+- **Account**: a specific account (matches whether it is the source or the transfer destination)
+- **Status**: confirmed, pending, or dismissed
+- **Date range**: a from/to range, with quick presets (this month, last month, last 3 months, this year, all time)
+- **Categories**: one or more categories — a transaction matches if it carries **any** of the selected categories
+- **Tags**: one or more tags — a transaction matches if it carries **any** of the selected tags
+- **Amount range**: a minimum and/or maximum amount
+- **Budget**: a specific budget by **name**. The list offers all existing budgets across every period (matched by name, since a budget name spans multiple monthly entries). When a **date range** is also active, the available budgets are limited to those that exist within the selected range's months (e.g., a 30 May – 3 June range offers budgets present in May or June). Selecting a budget shows transactions linked to that budget's name within the selected date range, or across all dates when no date range is set.
+- **Fixed-expense link**: "linked to a fixed expense" (paid) or "not linked" (unpaid)
+
+Combination semantics: filters across different dimensions are combined with **AND**; multiple selections within a single multi-select dimension (categories, tags) are combined with **OR**. Example: `type = expense` **AND** category ∈ {Food, Travel}.
+
+Active filters are shown as removable chips with a "Clear all" action, alongside a count of matching transactions. For P0, filters are not persisted across sessions (they reset on reload).
+
 ### Budgets
 
 Budgets allow the user to set spending limits for a given period and track remaining allowance.

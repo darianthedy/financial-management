@@ -889,6 +889,43 @@ Four **Postgres views** are provided to power the dashboard and account list:
 
 Every table has RLS enabled. Policies ensure that a user can only read/write rows where `user_id = auth.uid()`. Junction tables (`transaction_categories`, `transaction_tags`) derive ownership through the parent `transactions` row. `budgets` and `fixed_expenses` each have a direct `user_id` column and use the standard owner policy.
 
+### 4.9 Transaction Filtering & Search
+
+The transaction list supports filtering on any combination of attributes (see the "Filtering & Search" requirements). Filtering is implemented entirely as **client-issued PostgREST queries against the existing `transactions` schema** — no schema changes, new columns, or new views are required. RLS already scopes every query to the current user, so filters compose on top of an owner-only row set.
+
+**Combination semantics:** filters across different dimensions are `AND`-ed; multiple values within one multi-select dimension are `OR`-ed.
+
+**Column-level filters** map directly to PostgREST operators on `transactions` and are backed by existing indexes:
+
+| Filter | Query mapping | Index |
+|---|---|---|
+| Search (description) | `ilike('description', '%term%')` | none (sequential scan over the user's rows; acceptable for a single-user dataset) |
+| Type | `eq('type', …)` | `idx_txn_type_date` |
+| Account | `or('account_id.eq.X,transfer_account_id.eq.X')` | `idx_txn_account` |
+| Status | `eq('status', …)` | `idx_txn_status` |
+| Date range | `gte('date', from)` / `lte('date', to)` | `idx_txn_date` |
+| Amount range | `gte('amount', min)` / `lte('amount', max)` | none (acceptable for single-user) |
+| Fixed-expense link | `not('fixed_expense_id','is',null)` / `is('fixed_expense_id', null)` | `idx_txn_fixed_exp` |
+
+Amounts are filtered in **minor units** (`bigint`) — the client converts the user's major-unit input via `toMinorUnits()` before querying. Date bounds are inclusive `YYYY-MM-DD` strings.
+
+**Category & tag filters (junction tables).** Because there is no `category_id`/`tag_id` column on `transactions`, these are resolved with a **pre-query that collects matching transaction IDs** from the junction tables, then constrains the main query with `in('id', …)`:
+
+1. Selected category IDs → `transaction_categories.select('transaction_id').in('category_id', categoryIds)` yields the set of transaction IDs carrying **any** selected category (the `OR`-within rule). Repeat for tags via `transaction_tags`.
+2. If both categories **and** tags are filtered, **intersect** the two ID sets (the `AND`-across rule).
+3. The resulting ID set is applied to the main query as `in('id', ids)`, combined with all column-level filters above.
+
+**Budget filter (by name, via `v_budget_progress`).** The budget filter selects a budget **name**, not a single `budget_id` — budgets are month-specific rows, so one name (a `(name, currency)` lineage) spans many rows. It is resolved with a pre-query, then applied as `in('budget_id', …)`:
+
+1. Read budget rows from **`v_budget_progress`** (the same view the Budgets page and the transaction budget picker use), not the `budgets` table directly, so the filter offers exactly the budgets surfaced elsewhere in the app: `v_budget_progress.select('budget_id').eq('budget_name', name)`.
+2. When a **date range** is also active, the budget rows are narrowed to the months the range spans: `gte('year_month', fromYM)` / `lte('year_month', toYM)`, where `fromYM`/`toYM` are the `YYYY-MM` prefixes of the date bounds. (Example: a 2026-05-30 → 2026-06-03 range matches budget rows in `2026-05` and `2026-06`.) With no date range, every period of that name is included.
+3. The resolved `budget_id` set is applied as `in('budget_id', ids)` (backed by `idx_txn_budget`); an empty set short-circuits to no results. The transaction `date` filter still applies independently, so the final rows are those linked to the named budget **and** within any selected date range.
+
+The list of selectable budget **names** for the filter UI is likewise read from `v_budget_progress` (distinct `budget_name`), scoped by the same optional month range so the options reflect the active date filter.
+4. If a junction pre-query returns no IDs, the list is empty — short-circuit without issuing the main query.
+
+This keeps filtering server-side and index-assisted on the junction tables (`transaction_categories`/`transaction_tags` are keyed on `(transaction_id, …)`), avoids over-fetching, and needs no embedded-resource filter syntax. For a single-user app the row counts are small enough that the un-indexed `description ilike` and `amount` range scans are not a concern; both are natural candidates for a trigram / btree index should multi-user scale ever be introduced (P1).
+
 ---
 
 ## 5. P1 Extension Points
