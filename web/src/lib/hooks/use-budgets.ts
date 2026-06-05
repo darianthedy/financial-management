@@ -108,6 +108,28 @@ export async function deleteBudget(id: string) {
 }
 
 /**
+ * Distinct budget names for the transaction-list filter. Reads `v_budget_progress`
+ * (the same source the Budgets page and the transaction budget picker use), so the
+ * filter offers exactly the budgets the user sees elsewhere. Budgets are month-
+ * specific rows, so the same name spans many periods — we de-dupe to names. An
+ * optional [fromYM, toYM] month range (derived from the date filter) limits the
+ * list to budgets that exist in those months. year_month is 'YYYY-MM', so lexical
+ * gte/lte bounds the range.
+ */
+export async function fetchBudgetNames(
+  fromYM?: string,
+  toYM?: string,
+): Promise<string[]> {
+  let q = supabase.from("v_budget_progress").select("budget_name");
+  if (fromYM) q = q.gte("year_month", fromYM);
+  if (toYM) q = q.lte("year_month", toYM);
+  const { data } = await q;
+  return [...new Set((data ?? []).map((r) => r.budget_name))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
+/**
  * Budgets available to link a transaction to: those for the transaction's month
  * whose currency matches the transaction's currency. Reads the progress view so
  * callers can show each budget's effective amount.

@@ -17,11 +17,87 @@ export interface TransactionFilters {
   status?: "confirmed" | "pending" | "dismissed";
   dateFrom?: string;
   dateTo?: string;
+  /** Free-text match on description (case-insensitive). */
+  search?: string;
+  /** Inclusive amount bounds in MINOR units (e.g. cents). */
+  amountMin?: number;
+  amountMax?: number;
+  /** Match transactions carrying ANY of these category IDs (OR within). */
+  categoryIds?: string[];
+  /** Match transactions carrying ANY of these tag IDs (OR within). */
+  tagIds?: string[];
+  /**
+   * Match transactions linked to a budget with this name, across every period
+   * (budget identity is name + currency; this matches by name only). When a date
+   * range is also set, only budget rows whose month falls within that range count.
+   */
+  budgetName?: string;
+  /** true = linked to a fixed expense (paid); false = not linked (unpaid). */
+  fixedExpenseLinked?: boolean;
+}
+
+/**
+ * Resolve a budget NAME to the set of budget row IDs to match against
+ * transactions.budget_id. Reads `v_budget_progress` (the same source the rest of
+ * the app surfaces budgets from), so the ids line up with what budgets a
+ * transaction can actually be linked to. Budgets are month-specific rows, so one
+ * name spans many rows; an optional [fromYM, toYM] month range (derived from the
+ * date filter) narrows it to those periods. year_month is 'YYYY-MM', so lexical
+ * gte/lte works.
+ */
+async function resolveBudgetIds(
+  name: string,
+  fromYM?: string,
+  toYM?: string,
+): Promise<string[]> {
+  let q = supabase
+    .from("v_budget_progress")
+    .select("budget_id")
+    .eq("budget_name", name);
+  if (fromYM) q = q.gte("year_month", fromYM);
+  if (toYM) q = q.lte("year_month", toYM);
+  const { data } = await q;
+  return (data ?? []).map((r) => r.budget_id);
+}
+
+/**
+ * Category and tag filters live in junction tables (there is no category_id/
+ * tag_id column on transactions). Collect the matching transaction IDs — OR
+ * within a dimension, AND (intersect) across dimensions — so the caller can
+ * constrain the main query with `.in("id", ids)`. Returns null when neither
+ * dimension is filtered (no restriction). See System Design §4.9.
+ */
+async function resolveJunctionIds(
+  categoryIds?: string[],
+  tagIds?: string[],
+): Promise<string[] | null> {
+  let ids: string[] | null = null;
+  if (categoryIds?.length) {
+    const { data } = await supabase
+      .from("transaction_categories")
+      .select("transaction_id")
+      .in("category_id", categoryIds);
+    ids = [...new Set((data ?? []).map((r) => r.transaction_id))];
+  }
+  if (tagIds?.length) {
+    const { data } = await supabase
+      .from("transaction_tags")
+      .select("transaction_id")
+      .in("tag_id", tagIds);
+    const tagTxnIds = new Set((data ?? []).map((r) => r.transaction_id));
+    ids = ids === null ? [...tagTxnIds] : ids.filter((id) => tagTxnIds.has(id));
+  }
+  return ids;
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
   const [transactions, setTransactions] = useState<TransactionWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Arrays change identity each render; depend on a stable serialization so the
+  // memoized fetch only changes when the selected ids actually change.
+  const categoryKey = filters.categoryIds?.join(",");
+  const tagKey = filters.tagIds?.join(",");
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -41,6 +117,39 @@ export function useTransactions(filters: TransactionFilters = {}) {
     if (filters.status) q = q.eq("status", filters.status);
     if (filters.dateFrom) q = q.gte("date", filters.dateFrom);
     if (filters.dateTo) q = q.lte("date", filters.dateTo);
+    if (filters.search) q = q.ilike("description", `%${filters.search}%`);
+    if (filters.amountMin != null) q = q.gte("amount", filters.amountMin);
+    if (filters.amountMax != null) q = q.lte("amount", filters.amountMax);
+    if (filters.budgetName) {
+      const budgetIds = await resolveBudgetIds(
+        filters.budgetName,
+        filters.dateFrom?.slice(0, 7),
+        filters.dateTo?.slice(0, 7),
+      );
+      if (budgetIds.length === 0) {
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
+      q = q.in("budget_id", budgetIds);
+    }
+    if (filters.fixedExpenseLinked === true) {
+      q = q.not("fixed_expense_id", "is", null);
+    } else if (filters.fixedExpenseLinked === false) {
+      q = q.is("fixed_expense_id", null);
+    }
+
+    // Category & tag filters are resolved via the junction tables, then applied
+    // as an id restriction on the main query. An empty result short-circuits.
+    const restrictIds = await resolveJunctionIds(filters.categoryIds, filters.tagIds);
+    if (restrictIds !== null) {
+      if (restrictIds.length === 0) {
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
+      q = q.in("id", restrictIds);
+    }
 
     const { data: txnRows } = await q;
     const rows: Transaction[] = txnRows ?? [];
@@ -111,7 +220,23 @@ export function useTransactions(filters: TransactionFilters = {}) {
       })),
     );
     setLoading(false);
-  }, [filters.accountId, filters.type, filters.status, filters.dateFrom, filters.dateTo]);
+    // categoryKey/tagKey stand in for the categoryIds/tagIds arrays (stable
+    // identity); listing the arrays themselves would refetch every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filters.accountId,
+    filters.type,
+    filters.status,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.search,
+    filters.amountMin,
+    filters.amountMax,
+    filters.budgetName,
+    filters.fixedExpenseLinked,
+    categoryKey,
+    tagKey,
+  ]);
 
   useEffect(() => {
     fetch();

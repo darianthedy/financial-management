@@ -529,8 +529,8 @@ The same pattern applies to tags via `transaction_tags`.
 
 ### 7.3 Transactions Page
 
-- Filterable list: by date range, type, account, category, status.
 - Inline confirm/dismiss for pending transactions.
+- **Filter & Search** (see §7.3.1 below).
 - "Add Transaction" form with:
   - Type selector (income/expense/transfer)
   - Account picker (+ transfer destination if transfer)
@@ -541,6 +541,53 @@ The same pattern applies to tags via `transaction_tags`.
   - Budget picker (income & expense; hidden for transfers) — loads `budgets` for the transaction's month **whose currency matches the transaction's currency**, displaying budget name + effective amount (from `v_budget_progress`). Selection stored as `budget_id`. Offers an inline "create budget for this month" option when none exists. Cleared when type is `transfer`.
   - Fixed expense picker (expense only) — loads `fixed_expenses` for the transaction's month (filtered by `year_month`). Selection stored as `fixed_expense_id`. Linking a transaction indicates the fixed expense is paid. Cleared when type is not `expense`.
   - Description
+
+#### 7.3.1 Filter & Search
+
+The transaction list can be narrowed by any combination of filters. The query strategy (column-level filters vs. junction pre-query for categories/tags, and the AND-across / OR-within semantics) is defined in the System Design doc §4.9; this section covers the web implementation.
+
+**Filters**
+
+| Filter | Control | State shape |
+|---|---|---|
+| Search | Always-visible text input (debounced ~300ms) | `search?: string` |
+| Type | Select (All / income / expense / transfer) | `type?` |
+| Account | Select (All / each account) | `accountId?` |
+| Status | Select (All / confirmed / pending / dismissed) | `status?` |
+| Date range | From/to date inputs + preset buttons (This month, Last month, Last 3 months, This year, All time) | `dateFrom?`, `dateTo?` |
+| Categories | Multi-select chips (reuse the combobox pattern) | `categoryIds?: string[]` |
+| Tags | Multi-select chips | `tagIds?: string[]` |
+| Amount range | Two `CurrencyAmountInput`s (min/max). Stored in **minor units**; the widget shows major units using the default currency's decimals | `amountMin?`, `amountMax?` |
+| Budget | Select (All budgets / each budget **name**). Options come from `v_budget_progress` (distinct `budget_name`) and are scoped to the active date range's months; a selected name is kept in the list even if the range no longer lists it | `budgetName?: string` |
+| Fixed-expense link | Select (All / Linked (paid) / Not linked (unpaid)) | `fixedExpenseLinked?: boolean` |
+
+**Budget filter semantics** (see System Design §4.9): selecting a budget name resolves — via `v_budget_progress`, the same source used elsewhere in the app — to the set of `budget_id`s for that name, narrowed to the date range's months when a date filter is set (otherwise all periods). Transactions are then matched with `in('budget_id', ids)`. The transaction `date` filter still applies independently, so results are transactions linked to that budget **and** within any selected date range. `fetchBudgetNames(fromYM?, toYM?)` and `resolveBudgetIds(name, fromYM?, toYM?)` both read `v_budget_progress` — **not** the `budgets` table — so the filter is consistent with the Budgets page and the transaction budget picker (the raw table is RLS-scoped differently from the view the rest of the app reads).
+
+**UI layout**
+
+- The search input stays visible in the bar. A **"Filters" button** (with an active-count badge) opens a panel holding the remaining controls — a Radix **Popover** on desktop and a full-height **sheet/Dialog** on mobile (the existing PWA-first pattern).
+- **Active filters render as removable chips** below the bar (e.g. `Expense ✕`, `Food, Travel ✕`, `≥ $50 ✕`), plus a **"Clear all"** button and a **count of matching transactions**.
+- Empty state when no transactions match the active filters.
+
+**URL synchronization**
+
+Filters are the **single source of truth in the URL query string** via `react-router`'s `useSearchParams` (no `useState` mirror, no cross-session persistence). This makes filtered views shareable/bookmarkable and survives reload while resetting on a fresh navigation to `/transactions`.
+
+- Serialize each non-empty filter to a param: `?type=expense&from=2026-06-01&to=2026-06-30&cat=<id>,<id>&tag=<id>&amtMin=5000&search=coffee&budget=Food&fixed=unlinked`. Multi-selects are comma-joined ID lists; `budget` carries the budget **name**. Omit params that are unset/`"all"`.
+- A small `parseFilters(searchParams)` / `serializeFilters(filters)` pair (in `lib/utils/transaction-filters.ts`) converts between the URL and the `TransactionFilters` object. Amount params are **minor-unit** integers in the URL (parse/serialize stay currency-decimal-agnostic); only the amount input widget converts to/from major units for display.
+- Changing a filter calls `setSearchParams(serialize(next), { replace: true })` so filter tweaks don't spam browser history.
+
+**Hook changes (`use-transactions.ts`)**
+
+Extend `TransactionFilters` with the new fields and the existing `fetch` accordingly:
+
+- Add column-level operators for `search` (`.ilike`), `amountMin`/`amountMax` (`.gte`/`.lte` on `amount`, in minor units), `budgetId`/`budgetLinked`, and `fixedExpenseLinked` (`.not('…','is',null)` / `.is('…', null)`).
+- For `categoryIds`/`tagIds`, run the junction pre-query described in System Design §4.9 to collect transaction IDs, intersect when both are present, and apply `.in('id', ids)`. Short-circuit to an empty result if the pre-query yields no IDs.
+- Add the new fields to the `useCallback` dependency array so the list refetches when any filter changes.
+
+**Supporting data**
+
+The filter panel needs the lists of accounts (`useAccounts`), categories & tags (`fetchCategories`/`fetchTags`), and budgets (`useBudgets`) to populate its selectors.
 
 ### 7.4 Budgets Page
 
