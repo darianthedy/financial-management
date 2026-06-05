@@ -22,6 +22,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
@@ -30,6 +31,8 @@ import {
   fetchCategories,
   fetchTags,
   type TransactionFilters,
+  type TransactionType,
+  type TransactionStatus,
 } from "@/lib/hooks/use-transactions";
 import { countPanelFilters } from "@/lib/utils/transaction-filters";
 import {
@@ -47,6 +50,21 @@ interface Props {
 }
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
+
+const TYPE_OPTIONS: { value: TransactionType; label: string }[] = [
+  { value: "income", label: "Income" },
+  { value: "expense", label: "Expense" },
+  { value: "transfer", label: "Transfer" },
+];
+
+const STATUS_OPTIONS: { value: TransactionStatus; label: string }[] = [
+  { value: "confirmed", label: "Confirmed" },
+  { value: "pending", label: "Pending" },
+  { value: "dismissed", label: "Dismissed" },
+];
+
+// Array-valued filter keys whose chips remove a single value at a time.
+type ArrayKey = "types" | "statuses" | "accountIds" | "categoryIds" | "tagIds";
 
 export function TransactionFiltersBar({ filters, onChange, resultCount }: Props) {
   const { accounts } = useAccounts();
@@ -89,13 +107,35 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
     onChange(next);
   }
 
-  function toggleId(key: "categoryIds" | "tagIds", id: string) {
-    const cur = filters[key] ?? [];
-    const next = cur.includes(id)
-      ? cur.filter((x) => x !== id)
-      : [...cur, id];
-    if (next.length) patch({ [key]: next });
+  // Set an array filter, dropping the key entirely when the selection is empty.
+  function setArray(key: ArrayKey, values: string[]) {
+    if (values.length) patch({ [key]: values } as Partial<TransactionFilters>);
     else clear(key);
+  }
+
+  function removeValue(key: ArrayKey, value: string) {
+    const cur = (filters[key] ?? []) as string[];
+    setArray(
+      key,
+      cur.filter((v) => v !== value),
+    );
+  }
+
+  // Clear every panel filter but leave the always-visible search intact.
+  function clearPanel() {
+    clear(
+      "types",
+      "statuses",
+      "accountIds",
+      "dateFrom",
+      "dateTo",
+      "amountMin",
+      "amountMax",
+      "categoryIds",
+      "tagIds",
+      "budgetName",
+      "fixedExpenseLinked",
+    );
   }
 
   const now = new Date();
@@ -133,25 +173,25 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
   const panelCount = countPanelFilters(filters);
   const fmtAmt = (minor: number) => formatCurrency(minor, defaultCurrency);
 
-  // Build the active-filter chip list.
+  // Build the active-filter chip list (one chip per selected value).
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
-  if (filters.type)
+  for (const t of filters.types ?? [])
     chips.push({
-      key: "type",
-      label: `Type: ${filters.type}`,
-      onRemove: () => clear("type"),
+      key: `type-${t}`,
+      label: `Type: ${t}`,
+      onRemove: () => removeValue("types", t),
     });
-  if (filters.accountId)
+  for (const id of filters.accountIds ?? [])
     chips.push({
-      key: "account",
-      label: `Account: ${accountName(filters.accountId)}`,
-      onRemove: () => clear("accountId"),
+      key: `account-${id}`,
+      label: `Account: ${accountName(id)}`,
+      onRemove: () => removeValue("accountIds", id),
     });
-  if (filters.status)
+  for (const s of filters.statuses ?? [])
     chips.push({
-      key: "status",
-      label: `Status: ${filters.status}`,
-      onRemove: () => clear("status"),
+      key: `status-${s}`,
+      label: `Status: ${s}`,
+      onRemove: () => removeValue("statuses", s),
     });
   if (filters.dateFrom || filters.dateTo)
     chips.push({
@@ -180,13 +220,13 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
     chips.push({
       key: `cat-${id}`,
       label: categoryName(id),
-      onRemove: () => toggleId("categoryIds", id),
+      onRemove: () => removeValue("categoryIds", id),
     });
   for (const id of filters.tagIds ?? [])
     chips.push({
       key: `tag-${id}`,
       label: `#${tagName(id)}`,
-      onRemove: () => toggleId("tagIds", id),
+      onRemove: () => removeValue("tagIds", id),
     });
   if (filters.budgetName)
     chips.push({
@@ -225,76 +265,64 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
           />
         </div>
 
-        {/* Filters panel */}
+        {/* Filters panel — icon-only trigger; the active count replaces the icon. */}
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button variant="outline">
-              <SlidersHorizontal className="h-4 w-4" /> Filters
-              {panelCount > 0 && (
-                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--color-primary)] px-1.5 text-xs font-semibold text-[var(--color-primary-foreground)]">
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={
+                panelCount > 0 ? `Filters (${panelCount} active)` : "Filters"
+              }
+            >
+              {panelCount > 0 ? (
+                <span className="text-sm font-semibold text-[var(--color-success)]">
                   {panelCount}
                 </span>
+              ) : (
+                <SlidersHorizontal className="h-4 w-4" />
               )}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Filter</h3>
+              {panelCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearPanel}
+                  className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
             <FilterField label="Type">
-              <Select
-                value={filters.type ?? "all"}
-                onValueChange={(v) =>
-                  v === "all" ? clear("type") : patch({ type: v as TransactionFilters["type"] })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="income">Income</SelectItem>
-                  <SelectItem value="expense">Expense</SelectItem>
-                  <SelectItem value="transfer">Transfer</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                placeholder="All types"
+                options={TYPE_OPTIONS}
+                value={filters.types ?? []}
+                onChange={(v) => setArray("types", v)}
+              />
             </FilterField>
 
             <FilterField label="Account">
-              <Select
-                value={filters.accountId ?? "all"}
-                onValueChange={(v) =>
-                  v === "all" ? clear("accountId") : patch({ accountId: v })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All accounts</SelectItem>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                placeholder="All accounts"
+                options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+                value={filters.accountIds ?? []}
+                onChange={(v) => setArray("accountIds", v)}
+              />
             </FilterField>
 
             <FilterField label="Status">
-              <Select
-                value={filters.status ?? "all"}
-                onValueChange={(v) =>
-                  v === "all" ? clear("status") : patch({ status: v as TransactionFilters["status"] })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="dismissed">Dismissed</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                placeholder="All statuses"
+                options={STATUS_OPTIONS}
+                value={filters.statuses ?? []}
+                onChange={(v) => setArray("statuses", v)}
+              />
             </FilterField>
 
             <FilterField label="Date">
@@ -380,20 +408,26 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
 
             {categories.length > 0 && (
               <FilterField label="Categories">
-                <ToggleChips
-                  options={categories.map((c) => ({ id: c.id, label: c.name, color: c.color }))}
-                  selected={filters.categoryIds ?? []}
-                  onToggle={(id) => toggleId("categoryIds", id)}
+                <MultiSelect
+                  placeholder="All categories"
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    color: c.color,
+                  }))}
+                  value={filters.categoryIds ?? []}
+                  onChange={(v) => setArray("categoryIds", v)}
                 />
               </FilterField>
             )}
 
             {tags.length > 0 && (
               <FilterField label="Tags">
-                <ToggleChips
-                  options={tags.map((t) => ({ id: t.id, label: `#${t.name}` }))}
-                  selected={filters.tagIds ?? []}
-                  onToggle={(id) => toggleId("tagIds", id)}
+                <MultiSelect
+                  placeholder="All tags"
+                  options={tags.map((t) => ({ value: t.id, label: `#${t.name}` }))}
+                  value={filters.tagIds ?? []}
+                  onChange={(v) => setArray("tagIds", v)}
                 />
               </FilterField>
             )}
@@ -440,6 +474,8 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
                 </SelectContent>
               </Select>
             </FilterField>
+
+            {/* A "Sort" section can be added here alongside the Filter one. */}
           </PopoverContent>
         </Popover>
 
@@ -495,39 +531,6 @@ function FilterField({
         {label}
       </label>
       {children}
-    </div>
-  );
-}
-
-function ToggleChips({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: { id: string; label: string; color?: string | null }[];
-  selected: string[];
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => {
-        const on = selected.includes(o.id);
-        return (
-          <button
-            key={o.id}
-            type="button"
-            onClick={() => onToggle(o.id)}
-            className={`rounded-full border px-2.5 py-1 text-xs ${
-              on
-                ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
-                : "border-[var(--color-border)] text-[var(--color-foreground)]"
-            }`}
-            style={!on && o.color ? { borderColor: o.color, color: o.color } : undefined}
-          >
-            {o.label}
-          </button>
-        );
-      })}
     </div>
   );
 }

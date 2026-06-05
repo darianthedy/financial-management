@@ -13,16 +13,22 @@ export function parseFilters(params: URLSearchParams): TransactionFilters {
   const f: TransactionFilters = {};
 
   const account = params.get("account");
-  if (account) f.accountId = account;
+  if (account) f.accountIds = account.split(",").filter(Boolean);
 
   const type = params.get("type");
-  if (type && (TYPES as readonly string[]).includes(type)) {
-    f.type = type as TransactionFilters["type"];
+  if (type) {
+    const types = type
+      .split(",")
+      .filter((t) => (TYPES as readonly string[]).includes(t));
+    if (types.length) f.types = types as TransactionFilters["types"];
   }
 
   const status = params.get("status");
-  if (status && (STATUSES as readonly string[]).includes(status)) {
-    f.status = status as TransactionFilters["status"];
+  if (status) {
+    const statuses = status
+      .split(",")
+      .filter((s) => (STATUSES as readonly string[]).includes(s));
+    if (statuses.length) f.statuses = statuses as TransactionFilters["statuses"];
   }
 
   const from = params.get("from");
@@ -61,9 +67,9 @@ export function parseFilters(params: URLSearchParams): TransactionFilters {
 
 export function serializeFilters(f: TransactionFilters): Record<string, string> {
   const p: Record<string, string> = {};
-  if (f.accountId) p.account = f.accountId;
-  if (f.type) p.type = f.type;
-  if (f.status) p.status = f.status;
+  if (f.accountIds?.length) p.account = f.accountIds.join(",");
+  if (f.types?.length) p.type = f.types.join(",");
+  if (f.statuses?.length) p.status = f.statuses.join(",");
   if (f.dateFrom) p.from = f.dateFrom;
   if (f.dateTo) p.to = f.dateTo;
   if (f.search) p.search = f.search;
@@ -83,9 +89,9 @@ export function serializeFilters(f: TransactionFilters): Record<string, string> 
  */
 export function countPanelFilters(f: TransactionFilters): number {
   let n = 0;
-  if (f.accountId) n++;
-  if (f.type) n++;
-  if (f.status) n++;
+  if (f.accountIds?.length) n++;
+  if (f.types?.length) n++;
+  if (f.statuses?.length) n++;
   if (f.dateFrom || f.dateTo) n++;
   if (f.amountMin != null || f.amountMax != null) n++;
   if (f.categoryIds?.length) n++;

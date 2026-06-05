@@ -11,10 +11,18 @@ export type TransactionWithRelations = Transaction & {
   tags: Tag[];
 };
 
+export type TransactionType = "income" | "expense" | "transfer";
+export type TransactionStatus = "confirmed" | "pending" | "dismissed";
+
 export interface TransactionFilters {
+  /** Single account, used by the account-detail page (not the filter panel). */
   accountId?: string;
-  type?: "income" | "expense" | "transfer";
-  status?: "confirmed" | "pending" | "dismissed";
+  /** Multi-select accounts from the filter panel (matches account OR transfer). */
+  accountIds?: string[];
+  /** Match ANY of these transaction types. */
+  types?: TransactionType[];
+  /** Match ANY of these statuses. */
+  statuses?: TransactionStatus[];
   dateFrom?: string;
   dateTo?: string;
   /** Free-text match on description (case-insensitive). */
@@ -98,6 +106,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
   // memoized fetch only changes when the selected ids actually change.
   const categoryKey = filters.categoryIds?.join(",");
   const tagKey = filters.tagIds?.join(",");
+  const typeKey = filters.types?.join(",");
+  const statusKey = filters.statuses?.join(",");
+  const accountIdsKey = filters.accountIds?.join(",");
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -113,8 +124,14 @@ export function useTransactions(filters: TransactionFilters = {}) {
     if (filters.accountId) {
       q = q.or(`account_id.eq.${filters.accountId},transfer_account_id.eq.${filters.accountId}`);
     }
-    if (filters.type) q = q.eq("type", filters.type);
-    if (filters.status) q = q.eq("status", filters.status);
+    if (filters.accountIds?.length) {
+      const ors = filters.accountIds
+        .flatMap((id) => [`account_id.eq.${id}`, `transfer_account_id.eq.${id}`])
+        .join(",");
+      q = q.or(ors);
+    }
+    if (filters.types?.length) q = q.in("type", filters.types);
+    if (filters.statuses?.length) q = q.in("status", filters.statuses);
     if (filters.dateFrom) q = q.gte("date", filters.dateFrom);
     if (filters.dateTo) q = q.lte("date", filters.dateTo);
     if (filters.search) q = q.ilike("description", `%${filters.search}%`);
@@ -225,8 +242,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     filters.accountId,
-    filters.type,
-    filters.status,
+    accountIdsKey,
+    typeKey,
+    statusKey,
     filters.dateFrom,
     filters.dateTo,
     filters.search,
