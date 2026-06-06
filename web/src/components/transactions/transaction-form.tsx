@@ -220,7 +220,9 @@ export function TransactionForm({
           </Label>
           <Select
             value={accountId}
-            onValueChange={(v) => setValue("account_id", v)}
+            // Ignore the empty-value change Radix fires while options are still
+            // loading — it would wipe the prefilled account in edit mode.
+            onValueChange={(v) => v && setValue("account_id", v)}
           >
             <SelectTrigger id="account_id">
               <SelectValue placeholder="Select account" />
@@ -241,7 +243,7 @@ export function TransactionForm({
             <Label htmlFor="transfer_account_id">To</Label>
             <Select
               value={watch("transfer_account_id") ?? ""}
-              onValueChange={(v) => setValue("transfer_account_id", v)}
+              onValueChange={(v) => v && setValue("transfer_account_id", v)}
             >
               <SelectTrigger id="transfer_account_id">
                 <SelectValue placeholder="Select account" />
@@ -282,7 +284,14 @@ export function TransactionForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="date">Date</Label>
-          <Input id="date" type="date" {...register("date")} />
+          <Input
+            id="date"
+            type="date"
+            // Native date controls render taller than text inputs on WebKit;
+            // appearance-none + block strips the intrinsic height so it matches.
+            className="appearance-none block"
+            {...register("date")}
+          />
           <FieldError message={errors.date?.message} />
         </div>
       </div>
@@ -303,6 +312,7 @@ export function TransactionForm({
           <Select
             value={budgetId ?? BUDGET_NONE}
             onValueChange={(v) => {
+              if (!v) return;
               if (v === BUDGET_CREATE) {
                 setBudgetFormOpen(true);
                 return;
