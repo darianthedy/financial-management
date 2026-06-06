@@ -18,9 +18,9 @@ export function SelectTrigger({
       )}
       {...props}
     >
-      {children}
+      <span className="min-w-0 flex-1 truncate text-left">{children}</span>
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="h-4 w-4 opacity-60" />
+        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );

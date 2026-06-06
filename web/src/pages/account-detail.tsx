@@ -48,36 +48,47 @@ export default function AccountDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Link to="/accounts">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">{account.name}</h1>
-            <Badge>{accountTypeLabel(account.type)}</Badge>
+      <div className="space-y-3 sm:space-y-0">
+        <div className="flex items-start gap-2">
+          <Link to="/accounts" className="shrink-0">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-2xl font-semibold">{account.name}</h1>
+              <Badge className="shrink-0">{accountTypeLabel(account.type)}</Badge>
+            </div>
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              Starting balance: {formatCurrency(account.starting_balance)}
+            </p>
           </div>
-          <p className="text-sm text-[var(--color-muted-foreground)]">
-            Starting balance:{" "}
-            {formatCurrency(account.starting_balance)}
-          </p>
+          {/* Balance + actions sit inline on desktop; they drop to their own row on mobile. */}
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+            <p className="text-xl font-bold">
+              {formatCurrency(account.current_balance)}
+            </p>
+            <Button variant="outline" size="icon" onClick={() => setFormOpen(true)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={handleArchive}>
+              <Archive className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <p className="text-xl font-bold">
+        <div className="flex items-center justify-between gap-2 sm:hidden">
+          <p className="min-w-0 truncate text-xl font-bold">
             {formatCurrency(account.current_balance)}
           </p>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setFormOpen(true)}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleArchive}>
-            <Archive className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setFormOpen(true)}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={handleArchive}>
+              <Archive className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

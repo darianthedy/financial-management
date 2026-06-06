@@ -17,9 +17,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Month navigator */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-2 sm:justify-end">
           <Button
             variant="ghost"
             size="icon"
@@ -43,7 +43,7 @@ export default function DashboardPage() {
       {loading ? (
         <CenteredSpinner />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <CashflowCard cashflow={cashflow} />
           <SpendingByCategoryCard data={spendingByCategory} />
           <div className="md:col-span-2">
