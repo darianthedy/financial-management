@@ -1,5 +1,4 @@
-﻿import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import {
   useTransactions,
@@ -16,8 +15,6 @@ interface Props {
   showAddButton?: boolean;
   /** Hide the list's own "Transactions" heading (e.g. when the page already has one). */
   hideHeader?: boolean;
-  /** Notified with the number of matching rows after each load. */
-  onResult?: (count: number) => void;
   onMutated?: () => void;
 }
 
@@ -26,7 +23,6 @@ export function TransactionList({
   filters = {},
   showAddButton = true,
   hideHeader = false,
-  onResult,
   onMutated,
 }: Props) {
   const navigate = useNavigate();
@@ -34,10 +30,6 @@ export function TransactionList({
     accountId,
     ...filters,
   });
-
-  useEffect(() => {
-    if (!loading) onResult?.(transactions.length);
-  }, [loading, transactions.length, onResult]);
 
   function handleMutated() {
     refetch();

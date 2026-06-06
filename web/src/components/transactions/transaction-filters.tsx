@@ -46,7 +46,6 @@ import type { Category, Tag } from "@/lib/types/database";
 interface Props {
   filters: TransactionFilters;
   onChange: (next: TransactionFilters) => void;
-  resultCount?: number;
 }
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
@@ -66,7 +65,7 @@ const STATUS_OPTIONS: { value: TransactionStatus; label: string }[] = [
 // Array-valued filter keys whose chips remove a single value at a time.
 type ArrayKey = "types" | "statuses" | "accountIds" | "categoryIds" | "tagIds";
 
-export function TransactionFiltersBar({ filters, onChange, resultCount }: Props) {
+export function TransactionFiltersBar({ filters, onChange }: Props) {
   const { accounts } = useAccounts();
   const { defaultCurrency, decimalsFor } = useCurrencies();
   const decimals = decimalsFor(defaultCurrency);
@@ -478,12 +477,6 @@ export function TransactionFiltersBar({ filters, onChange, resultCount }: Props)
             {/* A "Sort" section can be added here alongside the Filter one. */}
           </PopoverContent>
         </Popover>
-
-        {resultCount != null && (
-          <span className="text-sm text-[var(--color-muted-foreground)]">
-            {resultCount} {resultCount === 1 ? "result" : "results"}
-          </span>
-        )}
       </div>
 
       {/* Active filter chips */}
