@@ -11,7 +11,6 @@ export const accountTypeEnum = z.enum([
 export const accountFormSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
   type: accountTypeEnum,
-  currency: z.string().min(3).max(3),
   // Display value in major units (e.g. dollars); converted to minor units on submit.
   starting_balance: z
     .number({ message: "Enter a number" })

@@ -61,12 +61,12 @@ export default function AccountDetailPage() {
           </div>
           <p className="text-sm text-[var(--color-muted-foreground)]">
             Starting balance:{" "}
-            {formatCurrency(account.starting_balance, account.currency)}
+            {formatCurrency(account.starting_balance)}
           </p>
         </div>
         <div className="flex gap-2">
           <p className="text-xl font-bold">
-            {formatCurrency(account.current_balance, account.currency)}
+            {formatCurrency(account.current_balance)}
           </p>
           <Button
             variant="outline"

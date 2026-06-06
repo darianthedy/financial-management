@@ -36,7 +36,7 @@ export interface TransactionFilters {
   tagIds?: string[];
   /**
    * Match transactions linked to a budget with this name, across every period
-   * (budget identity is name + currency; this matches by name only). When a date
+   * (budget identity is name + year_month; this matches by name only). When a date
    * range is also set, only budget rows whose month falls within that range count.
    */
   budgetName?: string;
@@ -295,7 +295,6 @@ export async function createTransaction(values: TransactionFormValues, decimalPl
       transfer_account_id: values.type === "transfer" ? (values.transfer_account_id ?? null) : null,
       type: values.type,
       amount: toMinorUnits(values.amount, decimalPlaces),
-      currency: values.currency,
       description: values.description ?? null,
       date: values.date,
       budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
@@ -312,7 +311,6 @@ export async function updateTransaction(id: string, values: TransactionFormValue
     transfer_account_id: values.type === "transfer" ? (values.transfer_account_id ?? null) : null,
     type: values.type,
     amount: toMinorUnits(values.amount, decimalPlaces),
-    currency: values.currency,
     description: values.description ?? null,
     date: values.date,
     budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),

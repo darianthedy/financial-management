@@ -1,7 +1,6 @@
 import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/misc";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { BudgetProgress } from "@/lib/types/database";
 import { cn } from "@/lib/utils/cn";
@@ -13,8 +12,7 @@ interface Props {
 }
 
 export function BudgetCard({ budget, onEdit, onRemove }: Props) {
-  const { currency, effective_amount, spent, remaining, carry_over_amount } =
-    budget;
+  const { effective_amount, spent, remaining, carry_over_amount } = budget;
   const overspent = remaining < 0;
 
   // Bar fills with net spend against the effective amount (periodic + carry-in).
@@ -32,23 +30,20 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="truncate font-medium">{budget.budget_name}</span>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge>{currency}</Badge>
-              {carry_over_amount !== 0 && (
-                <span
-                  className={cn(
-                    "text-xs",
-                    carry_over_amount > 0
-                      ? "text-[var(--color-success)]"
-                      : "text-[var(--color-danger)]",
-                  )}
-                >
-                  {carry_over_amount > 0
-                    ? `+${formatCurrency(carry_over_amount, currency)} carried over`
-                    : `${formatCurrency(carry_over_amount, currency)} overspent`}
-                </span>
-              )}
-            </div>
+            {carry_over_amount !== 0 && (
+              <span
+                className={cn(
+                  "text-xs",
+                  carry_over_amount > 0
+                    ? "text-[var(--color-success)]"
+                    : "text-[var(--color-danger)]",
+                )}
+              >
+                {carry_over_amount > 0
+                  ? `+${formatCurrency(carry_over_amount)} carried over`
+                  : `${formatCurrency(carry_over_amount)} overspent`}
+              </span>
+            )}
           </div>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger className="rounded p-1 hover:bg-[var(--color-muted)]">
@@ -91,8 +86,7 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
 
         <div className="flex items-center justify-between text-sm">
           <span className="text-[var(--color-muted-foreground)]">
-            {formatCurrency(spent, currency)} of{" "}
-            {formatCurrency(effective_amount, currency)}
+            {formatCurrency(spent)} of {formatCurrency(effective_amount)}
           </span>
           <span
             className={cn(
@@ -103,8 +97,8 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
             )}
           >
             {overspent
-              ? `${formatCurrency(Math.abs(remaining), currency)} over`
-              : `${formatCurrency(remaining, currency)} left`}
+              ? `${formatCurrency(Math.abs(remaining))} over`
+              : `${formatCurrency(remaining)} left`}
           </span>
         </div>
       </CardContent>

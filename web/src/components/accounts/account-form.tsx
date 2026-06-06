@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CurrencySelect } from "@/components/shared/currency-select";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { ACCOUNT_TYPES } from "@/lib/account-types";
 import {
@@ -53,7 +52,6 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
     defaultValues: {
       name: "",
       type: "bank_account",
-      currency: defaultCurrency,
       starting_balance: 0,
     },
   });
@@ -65,16 +63,14 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
         ? {
             name: account.name,
             type: account.type,
-            currency: account.currency,
             starting_balance: toDisplayAmount(
               account.starting_balance,
-              currencyDecimals(account.currency),
+              currencyDecimals(defaultCurrency),
             ),
           }
         : {
             name: "",
             type: "bank_account",
-            currency: defaultCurrency,
             starting_balance: 0,
           },
     );
@@ -83,7 +79,7 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
 
   async function onSubmit(values: AccountFormValues) {
     try {
-      const decimals = decimalsFor(values.currency);
+      const decimals = decimalsFor(defaultCurrency);
       if (account) await updateAccount(account.id, values, decimals);
       else await createAccount(values, decimals);
       onOpenChange(false);
@@ -94,7 +90,6 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
   }
 
   const type = watch("type");
-  const currency = watch("currency");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,31 +125,21 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="starting_balance">Starting balance</Label>
-              <CurrencyAmountInput
-                id="starting_balance"
-                value={watch("starting_balance")}
-                decimals={decimalsFor(currency)}
-                allowNegative
-                onChange={(v) =>
-                  setValue("starting_balance", v, {
-                    shouldDirty: true,
-                    shouldValidate: !!errors.starting_balance,
-                  })
-                }
-              />
-              <FieldError message={errors.starting_balance?.message} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="currency">Currency</Label>
-              <CurrencySelect
-                id="currency"
-                value={currency}
-                onChange={(c) => setValue("currency", c)}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="starting_balance">Starting balance</Label>
+            <CurrencyAmountInput
+              id="starting_balance"
+              value={watch("starting_balance")}
+              decimals={decimalsFor(defaultCurrency)}
+              allowNegative
+              onChange={(v) =>
+                setValue("starting_balance", v, {
+                  shouldDirty: true,
+                  shouldValidate: !!errors.starting_balance,
+                })
+              }
+            />
+            <FieldError message={errors.starting_balance?.message} />
           </div>
 
           <FieldError message={submitError} />

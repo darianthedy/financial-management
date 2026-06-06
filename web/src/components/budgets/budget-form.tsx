@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/input";
-import { CurrencySelect } from "@/components/shared/currency-select";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import {
   budgetFormSchema,
@@ -28,8 +27,6 @@ interface Props {
   /** Month this budget belongs to (`YYYY-MM`). For edits this matches the row. */
   yearMonth: string;
   budget?: BudgetProgress | null;
-  /** Initial currency for a new budget (e.g. a transaction's currency). */
-  defaultCurrency?: string;
   onSaved?: (budgetId?: string) => void;
 }
 
@@ -38,11 +35,9 @@ export function BudgetForm({
   onOpenChange,
   yearMonth,
   budget,
-  defaultCurrency,
   onSaved,
 }: Props) {
-  const { defaultCurrency: settingsCurrency, decimalsFor } = useCurrencies();
-  const initialCurrency = defaultCurrency ?? settingsCurrency;
+  const { defaultCurrency, decimalsFor } = useCurrencies();
   const [submitError, setSubmitError] = useState("");
   const isEdit = !!budget;
 
@@ -57,7 +52,6 @@ export function BudgetForm({
     resolver: zodResolver(budgetFormSchema),
     defaultValues: {
       name: "",
-      currency: initialCurrency,
       periodic_amount: 0,
     },
   });
@@ -68,24 +62,22 @@ export function BudgetForm({
       budget
         ? {
             name: budget.budget_name,
-            currency: budget.currency,
             periodic_amount: toDisplayAmount(
               budget.periodic_amount,
-              currencyDecimals(budget.currency),
+              currencyDecimals(defaultCurrency),
             ),
           }
         : {
             name: "",
-            currency: initialCurrency,
             periodic_amount: 0,
           },
     );
     setSubmitError("");
-  }, [open, budget, initialCurrency, reset]);
+  }, [open, budget, defaultCurrency, reset]);
 
   async function onSubmit(values: BudgetFormValues) {
     try {
-      const decimals = decimalsFor(values.currency);
+      const decimals = decimalsFor(defaultCurrency);
       if (budget) {
         await updateBudget(budget.budget_id, values, decimals);
         onOpenChange(false);
@@ -99,8 +91,6 @@ export function BudgetForm({
       setSubmitError(e instanceof Error ? e.message : "Failed to save budget");
     }
   }
-
-  const currency = watch("currency");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,30 +107,20 @@ export function BudgetForm({
             <FieldError message={errors.name?.message} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="periodic_amount">Monthly amount</Label>
-              <CurrencyAmountInput
-                id="periodic_amount"
-                value={watch("periodic_amount")}
-                decimals={decimalsFor(currency)}
-                onChange={(v) =>
-                  setValue("periodic_amount", v, {
-                    shouldDirty: true,
-                    shouldValidate: !!errors.periodic_amount,
-                  })
-                }
-              />
-              <FieldError message={errors.periodic_amount?.message} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="currency">Currency</Label>
-              <CurrencySelect
-                id="currency"
-                value={currency}
-                onChange={(c) => setValue("currency", c)}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="periodic_amount">Monthly amount</Label>
+            <CurrencyAmountInput
+              id="periodic_amount"
+              value={watch("periodic_amount")}
+              decimals={decimalsFor(defaultCurrency)}
+              onChange={(v) =>
+                setValue("periodic_amount", v, {
+                  shouldDirty: true,
+                  shouldValidate: !!errors.periodic_amount,
+                })
+              }
+            />
+            <FieldError message={errors.periodic_amount?.message} />
           </div>
 
           <FieldError message={submitError} />
