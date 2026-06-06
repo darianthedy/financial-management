@@ -9,6 +9,7 @@ export type TransactionWithRelations = Transaction & {
   transfer_accounts: { name: string } | null;
   categories: Category[];
   tags: Tag[];
+  budget: { name: string } | null;
 };
 
 export type TransactionType = "income" | "expense" | "transfer";
@@ -181,10 +182,18 @@ export function useTransactions(filters: TransactionFilters = {}) {
       ]),
     ] as string[];
 
-    // Fetch account names and junction rows in parallel.
-    const [accountResult, catResult, tagResult] = await Promise.all([
+    // Budgets linked to these transactions (for the row title).
+    const budgetIds = [
+      ...new Set(rows.map((r) => r.budget_id).filter(Boolean)),
+    ] as string[];
+
+    // Fetch account names, budget names, and junction rows in parallel.
+    const [accountResult, budgetResult, catResult, tagResult] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name").in("id", accountIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      budgetIds.length
+        ? supabase.from("budgets").select("id, name").in("id", budgetIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
       ids.length
         ? (supabase
@@ -210,6 +219,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
     const accountNameById = new Map(
       (accountResult.data ?? []).map((a) => [a.id, a.name]),
     );
+    const budgetNameById = new Map(
+      (budgetResult.data ?? []).map((b) => [b.id, b.name]),
+    );
 
     const catsByTxn = new Map<string, Category[]>();
     for (const link of catResult.data ?? []) {
@@ -234,6 +246,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
           : null,
         categories: catsByTxn.get(r.id) ?? [],
         tags: tagsByTxn.get(r.id) ?? [],
+        budget: r.budget_id ? { name: budgetNameById.get(r.budget_id) ?? "" } : null,
       })),
     );
     setLoading(false);
