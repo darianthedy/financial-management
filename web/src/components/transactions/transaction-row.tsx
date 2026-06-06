@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ArrowLeftRight,
   Check,
   X,
   MoreVertical,
@@ -14,8 +11,13 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
-import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
+import {
+  AccountAvatar,
+  TransactionChips,
+  amountColor as amountColorFor,
+  deriveTitle,
+} from "./transaction-display";
 import {
   Dialog,
   DialogContent,
@@ -40,33 +42,14 @@ export function TransactionRow({ txn, onMutated }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const isIncome = txn.type === "income";
-  const isTransfer = txn.type === "transfer";
   const isPending = txn.status === "pending";
 
-  const Icon = isTransfer
-    ? ArrowLeftRight
-    : isIncome
-      ? ArrowDownLeft
-      : ArrowUpRight;
-
-  const iconColor = isTransfer
-    ? "text-[var(--color-muted-foreground)]"
-    : isIncome
-      ? "text-[var(--color-success)]"
-      : "text-[var(--color-danger)]";
-
-  const amountColor = isTransfer
-    ? "text-[var(--color-foreground)]"
-    : isIncome
-      ? "text-[var(--color-success)]"
-      : "text-[var(--color-danger)]";
-
+  const amountColor = amountColorFor(txn.type);
   const displayAmount = formatCurrency(txn.amount);
 
-  const accountLabel = isTransfer
-    ? `${txn.accounts?.name ?? "?"} → ${txn.transfer_accounts?.name ?? "?"}`
-    : txn.accounts?.name ?? "—";
+  const { title, usedCategoryId, titleIsDescription } = deriveTitle(txn);
+  const subtitle = titleIsDescription ? null : txn.description;
+  const accountName = txn.accounts?.name ?? "?";
 
   async function handleConfirm(e: React.MouseEvent) {
     e.stopPropagation();
@@ -111,33 +94,16 @@ export function TransactionRow({ txn, onMutated }: Props) {
         isPending ? "bg-[var(--color-muted)]" : "hover:bg-[var(--color-muted)]",
       )}
     >
-      <div
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-muted)]",
-        )}
-      >
-        <Icon className={cn("h-4 w-4", iconColor)} />
-      </div>
+      <AccountAvatar name={accountName} type={txn.type} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">
-          {txn.description || (isTransfer ? "Transfer" : txn.type)}
-        </span>
-        <span className="truncate text-xs text-[var(--color-muted-foreground)]">
-          {accountLabel}
-        </span>
-        {txn.categories.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-0.5">
-            {txn.categories.map((c) => (
-              <Badge
-                key={c.id}
-                style={c.color ? { borderColor: c.color, color: c.color } : undefined}
-              >
-                {c.icon} {c.name}
-              </Badge>
-            ))}
-          </div>
+        <span className="truncate text-sm font-semibold">{title}</span>
+        {subtitle && (
+          <span className="truncate text-xs text-[var(--color-muted-foreground)]">
+            {subtitle}
+          </span>
         )}
+        <TransactionChips txn={txn} excludeCategoryId={usedCategoryId} />
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-1">
