@@ -31,7 +31,6 @@ Deno.serve(async (req: Request) => {
       type: sched.type,
       status: "pending",
       amount: sched.amount,
-      currency: sched.currency,
       description: sched.description,
       date: sched.next_due_date,
       scheduled_txn_id: sched.id,

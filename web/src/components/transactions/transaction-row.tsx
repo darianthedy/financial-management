@@ -62,7 +62,7 @@ export function TransactionRow({ txn, onMutated }: Props) {
       ? "text-[var(--color-success)]"
       : "text-[var(--color-danger)]";
 
-  const displayAmount = formatCurrency(txn.amount, txn.currency);
+  const displayAmount = formatCurrency(txn.amount);
 
   const accountLabel = isTransfer
     ? `${txn.accounts?.name ?? "?"} → ${txn.transfer_accounts?.name ?? "?"}`

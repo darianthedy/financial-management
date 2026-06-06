@@ -6,7 +6,7 @@ import { toMinorUnits } from "@/lib/utils/currency";
 
 /**
  * Budget progress for a single month. Reads the live `v_budget_progress` view,
- * which derives carry-over by chaining each (name, currency) lineage — so this
+ * which derives carry-over by chaining each (name) lineage — so this
  * also re-fetches on transaction changes, not just budget edits.
  */
 export function useBudgets(yearMonth: string) {
@@ -56,7 +56,7 @@ async function currentUserId(): Promise<string> {
 }
 
 /**
- * Insert one budget row for the given month. Identity is (name + currency);
+ * Insert one budget row for the given month. Identity is (name + year_month);
  * the UNIQUE constraint rejects a duplicate for the same month. Returns the new
  * row id so callers (e.g. the transaction budget picker) can auto-select it.
  */
@@ -72,7 +72,6 @@ export async function createBudget(
       user_id,
       name: values.name,
       year_month: yearMonth,
-      currency: values.currency,
       periodic_amount: toMinorUnits(values.periodic_amount, decimalPlaces),
     })
     .select("id")
@@ -94,7 +93,6 @@ export async function updateBudget(
     .from("budgets")
     .update({
       name: values.name,
-      currency: values.currency,
       periodic_amount: toMinorUnits(values.periodic_amount, decimalPlaces),
     })
     .eq("id", id);
@@ -130,19 +128,16 @@ export async function fetchBudgetNames(
 }
 
 /**
- * Budgets available to link a transaction to: those for the transaction's month
- * whose currency matches the transaction's currency. Reads the progress view so
- * callers can show each budget's effective amount.
+ * Budgets available to link a transaction to: those for the transaction's month.
+ * Reads the progress view so callers can show each budget's effective amount.
  */
 export async function fetchBudgetsForMonth(
   yearMonth: string,
-  currency: string,
 ): Promise<BudgetProgress[]> {
   const { data } = await supabase
     .from("v_budget_progress")
     .select("*")
     .eq("year_month", yearMonth)
-    .eq("currency", currency)
     .order("budget_name", { ascending: true });
   return data ?? [];
 }

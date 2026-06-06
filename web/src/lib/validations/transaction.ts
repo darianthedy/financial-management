@@ -8,7 +8,6 @@ export const transactionFormSchema = z
     amount: z
       .number({ message: "Enter an amount" })
       .positive("Amount must be greater than 0"),
-    currency: z.string().min(3).max(3),
     date: z.string().min(1, "Date is required"),
     description: z.string().max(500).nullable().optional(),
     budget_id: z.string().uuid().nullable().optional(),

@@ -19,7 +19,6 @@ type AccountRow = {
   user_id: string;
   name: string;
   type: AccountType;
-  currency: string;
   starting_balance: number;
   is_archived: boolean;
   created_at: string;
@@ -34,7 +33,6 @@ type TransactionRow = {
   type: TransactionType;
   status: TransactionStatus;
   amount: number;
-  currency: string;
   description: string | null;
   date: string;
   budget_id: string | null;
@@ -85,14 +83,13 @@ type AccountMonthlyBalanceRow = {
   updated_at: string;
 };
 
-// Flat, self-contained budget entry. Identity = (name + currency). One row per month.
+// Flat, self-contained budget entry. Identity = (name + year_month). One row per month.
 // Carry-over is derived live in v_budget_progress; there is no stored carry-over column.
 type BudgetRow = {
   id: string;
   user_id: string;
   name: string;
   year_month: string;
-  currency: string;
   periodic_amount: number;
   created_at: string;
   updated_at: string;
@@ -110,7 +107,6 @@ export interface Database {
           user_id: string;
           name: string;
           type?: AccountType;
-          currency?: string;
           starting_balance?: number;
           is_archived?: boolean;
         };
@@ -119,7 +115,6 @@ export interface Database {
           user_id?: string;
           name?: string;
           type?: AccountType;
-          currency?: string;
           starting_balance?: number;
           is_archived?: boolean;
         };
@@ -138,13 +133,11 @@ export interface Database {
           user_id: string;
           name: string;
           year_month: string;
-          currency?: string;
           periodic_amount: number;
         };
         Update: {
           name?: string;
           year_month?: string;
-          currency?: string;
           periodic_amount?: number;
         };
         Relationships: [];
@@ -159,7 +152,6 @@ export interface Database {
           type: TransactionType;
           status?: TransactionStatus;
           amount: number;
-          currency?: string;
           description?: string | null;
           date?: string;
           budget_id?: string | null;
@@ -172,7 +164,6 @@ export interface Database {
           type?: TransactionType;
           status?: TransactionStatus;
           amount?: number;
-          currency?: string;
           description?: string | null;
           date?: string;
           budget_id?: string | null;
@@ -237,7 +228,6 @@ export interface Database {
           budget_id: string;
           user_id: string;
           budget_name: string;
-          currency: string;
           year_month: string;
           periodic_amount: number;
           carry_over_amount: number;

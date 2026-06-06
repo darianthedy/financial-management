@@ -10,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CurrencySelect } from "@/components/shared/currency-select";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { Plus } from "lucide-react";
 import {
@@ -59,7 +58,7 @@ export function TransactionForm({
   onCancel,
 }: Props) {
   const { accounts } = useAccounts();
-  const { decimalsFor } = useCurrencies();
+  const { decimalsFor, defaultCurrency } = useCurrencies();
   const [categories, setCategories] = useState<Category[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [submitError, setSubmitError] = useState("");
@@ -79,9 +78,8 @@ export function TransactionForm({
             transfer_account_id: transaction.transfer_account_id ?? null,
             amount: toDisplayAmount(
               transaction.amount,
-              decimalsFor(transaction.currency),
+              decimalsFor(defaultCurrency),
             ),
-            currency: transaction.currency,
             date: transaction.date,
             description: transaction.description ?? "",
             budget_id: transaction.budget_id ?? null,
@@ -89,7 +87,7 @@ export function TransactionForm({
             tag_ids: transaction.tags.map((t) => t.id),
           }
         : undefined,
-    [transaction, decimalsFor],
+    [transaction, decimalsFor, defaultCurrency],
   );
 
   const {
@@ -106,7 +104,6 @@ export function TransactionForm({
       account_id: defaultAccountId ?? "",
       transfer_account_id: null,
       amount: 0,
-      currency: "IDR",
       date: todayIso(),
       description: "",
       budget_id: null,
@@ -123,22 +120,21 @@ export function TransactionForm({
   }, []);
 
   const type = watch("type");
-  const currency = watch("currency");
   const accountId = watch("account_id");
   const date = watch("date");
   const budgetId = watch("budget_id") ?? null;
   const categoryIds = watch("category_ids") ?? [];
   const tagIds = watch("tag_ids") ?? [];
 
-  // Budgets that can be linked: same month (derived from the date) and currency.
+  // Budgets that can be linked: same month (derived from the date).
   const budgetMonth = yearMonthOf(date);
   const loadBudgets = useCallback(() => {
     if (type === "transfer") {
       setBudgetOptions([]);
       return;
     }
-    fetchBudgetsForMonth(budgetMonth, currency).then(setBudgetOptions);
-  }, [type, budgetMonth, currency]);
+    fetchBudgetsForMonth(budgetMonth).then(setBudgetOptions);
+  }, [type, budgetMonth]);
 
   useEffect(() => {
     loadBudgets();
@@ -174,7 +170,7 @@ export function TransactionForm({
 
   async function onSubmit(values: TransactionFormValues) {
     try {
-      const decimals = decimalsFor(values.currency);
+      const decimals = decimalsFor(defaultCurrency);
       if (transaction) {
         await updateTransaction(transaction.id, values, decimals);
       } else {
@@ -267,14 +263,14 @@ export function TransactionForm({
         )}
       </div>
 
-      {/* Amount + Currency + Date */}
+      {/* Amount + Date */}
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Amount</Label>
           <CurrencyAmountInput
             id="amount"
             value={watch("amount")}
-            decimals={decimalsFor(currency)}
+            decimals={decimalsFor(defaultCurrency)}
             onChange={(v) =>
               setValue("amount", v, {
                 shouldDirty: true,
@@ -285,19 +281,10 @@ export function TransactionForm({
           <FieldError message={errors.amount?.message} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="currency">Currency</Label>
-          <CurrencySelect
-            id="currency"
-            value={currency}
-            onChange={(c) => setValue("currency", c)}
-          />
+          <Label htmlFor="date">Date</Label>
+          <Input id="date" type="date" {...register("date")} />
+          <FieldError message={errors.date?.message} />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="date">Date</Label>
-        <Input id="date" type="date" {...register("date")} />
-        <FieldError message={errors.date?.message} />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -330,7 +317,7 @@ export function TransactionForm({
               <SelectItem value={BUDGET_NONE}>No budget</SelectItem>
               {budgetOptions.map((b) => (
                 <SelectItem key={b.budget_id} value={b.budget_id}>
-                  {b.budget_name} · {formatCurrency(b.effective_amount, b.currency)}
+                  {b.budget_name} · {formatCurrency(b.effective_amount)}
                 </SelectItem>
               ))}
               <SelectItem value={BUDGET_CREATE}>
@@ -423,7 +410,6 @@ export function TransactionForm({
         open={budgetFormOpen}
         onOpenChange={setBudgetFormOpen}
         yearMonth={budgetMonth}
-        defaultCurrency={currency}
         onSaved={(id) => {
           loadBudgets();
           if (id) setValue("budget_id", id);

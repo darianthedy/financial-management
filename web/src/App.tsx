@@ -8,6 +8,7 @@ import AccountDetailPage from "@/pages/account-detail";
 import TransactionsPage from "@/pages/transactions";
 import TransactionFormPage from "@/pages/transaction-form";
 import BudgetsPage from "@/pages/budgets";
+import SettingsPage from "@/pages/settings";
 import PlaceholderPage from "@/pages/placeholder";
 
 const basename = import.meta.env.BASE_URL;
@@ -35,10 +36,7 @@ export default function App() {
               path="/scheduled"
               element={<PlaceholderPage title="Scheduled" />}
             />
-            <Route
-              path="/settings"
-              element={<PlaceholderPage title="Settings" />}
-            />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>
 

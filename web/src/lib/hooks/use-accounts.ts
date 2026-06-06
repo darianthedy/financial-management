@@ -73,7 +73,6 @@ export async function createAccount(values: AccountFormValues, decimalPlaces = 2
     user_id,
     name: values.name,
     type: values.type,
-    currency: values.currency,
     starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
   });
   if (error) throw error;
@@ -89,7 +88,6 @@ export async function updateAccount(
     .update({
       name: values.name,
       type: values.type,
-      currency: values.currency,
       starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
     })
     .eq("id", id);

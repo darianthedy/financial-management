@@ -53,8 +53,7 @@ export function BudgetProgressCard({ budgets }: Props) {
                           : "text-[var(--color-muted-foreground)]",
                       )}
                     >
-                      {formatCurrency(b.spent, b.currency)} /{" "}
-                      {formatCurrency(b.effective_amount, b.currency)}
+                      {formatCurrency(b.spent)} / {formatCurrency(b.effective_amount)}
                     </span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-muted)]">

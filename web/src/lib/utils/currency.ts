@@ -30,9 +30,25 @@ export function currencyDecimals(currency: string): number {
   return decimalsByCode.get(currency) ?? 2;
 }
 
+/**
+ * The app's single currency (from `user_settings.default_currency`). Since
+ * currency is no longer stored per record, this is the one currency every amount
+ * is formatted in. Set by CurrencyProvider; read by formatCurrency() as the
+ * default, so leaf components can format without threading the currency through.
+ */
+let appCurrency = "USD";
+
+export function setAppCurrency(code: string): void {
+  appCurrency = code;
+}
+
+export function getAppCurrency(): string {
+  return appCurrency;
+}
+
 export function formatCurrency(
   minorUnits: number,
-  currency = "USD",
+  currency = appCurrency,
   decimalPlaces = currencyDecimals(currency),
 ): string {
   try {
@@ -52,7 +68,7 @@ export function formatCurrency(
 export function formatSignedCurrency(
   minorUnits: number,
   sign: 1 | -1,
-  currency = "USD",
+  currency = appCurrency,
   decimalPlaces = currencyDecimals(currency),
 ): string {
   const formatted = formatCurrency(minorUnits, currency, decimalPlaces);

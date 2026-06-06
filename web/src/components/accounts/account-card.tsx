@@ -16,7 +16,7 @@ interface Props {
 
 export function AccountCard({ account, onClick, onEdit, onArchive }: Props) {
   const Icon = accountTypeIcon(account.type);
-  const balance = formatCurrency(account.current_balance, account.currency);
+  const balance = formatCurrency(account.current_balance);
   const isNegative = account.current_balance < 0;
 
   return (

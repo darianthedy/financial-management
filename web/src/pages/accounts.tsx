@@ -32,25 +32,19 @@ export default function AccountsPage() {
     refetch();
   }
 
-  // Net worth: sum all balances (may mix currencies — display as-is for now)
-  const totalsByCurrency = accounts.reduce<Record<string, number>>((acc, a) => {
-    acc[a.currency] = (acc[a.currency] ?? 0) + a.current_balance;
-    return acc;
-  }, {});
+  // Net worth: sum all balances (single app-wide currency).
+  const totalBalance = accounts.reduce((sum, a) => sum + a.current_balance, 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Accounts</h1>
-          {Object.entries(totalsByCurrency).map(([currency, total]) => (
-            <p
-              key={currency}
-              className="text-sm text-[var(--color-muted-foreground)]"
-            >
-              Total: {formatCurrency(total, currency)}
+          {accounts.length > 0 && (
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              Total: {formatCurrency(totalBalance)}
             </p>
-          ))}
+          )}
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />
