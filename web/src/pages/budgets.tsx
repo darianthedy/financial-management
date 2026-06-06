@@ -81,7 +81,7 @@ export default function BudgetsPage() {
           action={<Button onClick={openCreate}>Add budget</Button>}
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {budgets.map((budget) => (
             <BudgetCard
               key={budget.budget_id}

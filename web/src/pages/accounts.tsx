@@ -61,7 +61,7 @@ export default function AccountsPage() {
           action={<Button onClick={openCreate}>Add account</Button>}
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {accounts.map((account) => (
             <AccountCard
               key={account.id}
