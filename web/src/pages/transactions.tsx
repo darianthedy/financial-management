@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import {
 export default function TransactionsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [resultCount, setResultCount] = useState<number>();
 
   // The URL query string is the single source of truth for the active filters.
   const filters = useMemo(
@@ -38,18 +37,9 @@ export default function TransactionsPage() {
         </Button>
       </div>
 
-      <TransactionFiltersBar
-        filters={filters}
-        onChange={setFilters}
-        resultCount={resultCount}
-      />
+      <TransactionFiltersBar filters={filters} onChange={setFilters} />
 
-      <TransactionList
-        filters={filters}
-        showAddButton={false}
-        hideHeader
-        onResult={setResultCount}
-      />
+      <TransactionList filters={filters} showAddButton={false} hideHeader />
     </div>
   );
 }
