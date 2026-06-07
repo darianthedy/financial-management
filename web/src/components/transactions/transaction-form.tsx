@@ -16,14 +16,13 @@ import {
   transactionFormSchema,
   type TransactionFormValues,
 } from "@/lib/validations/transaction";
-import { CategoryCombobox } from "@/components/transactions/category-combobox";
+import { CategoryForm } from "@/components/transactions/category-form";
 import {
   createTransaction,
   updateTransaction,
   fetchCategories,
   fetchTags,
   createTag,
-  createCategory,
 } from "@/lib/hooks/use-transactions";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
@@ -47,9 +46,12 @@ const TYPES = [
   { value: "transfer", label: "Transfer" },
 ] as const;
 
-// Sentinel option values for the budget picker (Radix Select disallows "").
+// Sentinel option values for the budget/category pickers (Radix Select
+// disallows "").
 const BUDGET_NONE = "__none__";
 const BUDGET_CREATE = "__create__";
+const CATEGORY_NONE = "__none__";
+const CATEGORY_CREATE = "__create__";
 
 export function TransactionForm({
   transaction,
@@ -65,6 +67,7 @@ export function TransactionForm({
   const [newTagInput, setNewTagInput] = useState("");
   const [budgetOptions, setBudgetOptions] = useState<BudgetProgress[]>([]);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
 
   // Prefill values for edit mode. Using react-hook-form's `values` prop (rather
   // than reset() in an effect) syncs during render, so prefill is deterministic
@@ -139,14 +142,6 @@ export function TransactionForm({
   useEffect(() => {
     loadBudgets();
   }, [loadBudgets]);
-
-  async function handleCreateCategory(name: string) {
-    const category = await createCategory(name);
-    setCategories((prev) =>
-      [...prev, category].sort((a, b) => a.name.localeCompare(b.name)),
-    );
-    return category;
-  }
 
   function toggleTag(id: string) {
     const next = tagIds.includes(id)
@@ -338,16 +333,34 @@ export function TransactionForm({
         </div>
       )}
 
-      {/* Categories (expense/income only) */}
+      {/* Category (expense/income only) */}
       {type !== "transfer" && (
         <div className="flex flex-col gap-1.5">
-          <Label>Categories</Label>
-          <CategoryCombobox
-            categories={categories}
-            value={categoryId}
-            onChange={(id) => setValue("category_id", id)}
-            onCreate={handleCreateCategory}
-          />
+          <Label htmlFor="category_id">Category</Label>
+          <Select
+            value={categoryId ?? CATEGORY_NONE}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v === CATEGORY_CREATE) {
+                setCategoryFormOpen(true);
+                return;
+              }
+              setValue("category_id", v === CATEGORY_NONE ? null : v);
+            }}
+          >
+            <SelectTrigger id="category_id">
+              <SelectValue placeholder="No category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={CATEGORY_NONE}>No category</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+              <SelectItem value={CATEGORY_CREATE}>+ Create category</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       )}
 
@@ -423,6 +436,17 @@ export function TransactionForm({
         onSaved={(id) => {
           loadBudgets();
           if (id) setValue("budget_id", id);
+        }}
+      />
+
+      <CategoryForm
+        open={categoryFormOpen}
+        onOpenChange={setCategoryFormOpen}
+        onSaved={(category) => {
+          setCategories((prev) =>
+            [...prev, category].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          setValue("category_id", category.id);
         }}
       />
     </>
