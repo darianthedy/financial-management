@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
-import { Plus } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverAnchor,
+} from "@/components/ui/popover";
+import { Plus, ChevronDown, X } from "lucide-react";
 import {
   transactionFormSchema,
   type TransactionFormValues,
@@ -64,7 +69,9 @@ export function TransactionForm({
   const [categories, setCategories] = useState<Category[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [submitError, setSubmitError] = useState("");
-  const [newTagInput, setNewTagInput] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
   const [budgetOptions, setBudgetOptions] = useState<BudgetProgress[]>([]);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
   const [categoryFormOpen, setCategoryFormOpen] = useState(false);
@@ -143,21 +150,40 @@ export function TransactionForm({
     loadBudgets();
   }, [loadBudgets]);
 
-  function toggleTag(id: string) {
-    const next = tagIds.includes(id)
-      ? tagIds.filter((t) => t !== id)
-      : [...tagIds, id];
-    setValue("tag_ids", next);
+  // Tags actually attached to the transaction, shown as removable chips.
+  const selectedTags = allTags.filter((t) => tagIds.includes(t.id));
+
+  // Available tags (not yet selected) narrowed by what the user has typed.
+  const tagQ = tagQuery.trim().toLowerCase();
+  const filteredTags = allTags.filter(
+    (t) => !tagIds.includes(t.id) && t.name.toLowerCase().includes(tagQ),
+  );
+  // Only offer "create" when the typed name doesn't already exist verbatim.
+  const canCreateTag =
+    tagQ.length > 0 && !allTags.some((t) => t.name.toLowerCase() === tagQ);
+
+  function addTag(id: string) {
+    if (!tagIds.includes(id)) setValue("tag_ids", [...tagIds, id]);
+    setTagQuery("");
+    tagInputRef.current?.focus();
   }
 
-  async function addNewTag() {
-    const name = newTagInput.trim();
+  function removeTag(id: string) {
+    setValue(
+      "tag_ids",
+      tagIds.filter((t) => t !== id),
+    );
+  }
+
+  async function createAndAddTag() {
+    const name = tagQuery.trim();
     if (!name) return;
     try {
       const tag = await createTag(name);
       setAllTags((prev) => [...prev, tag]);
       setValue("tag_ids", [...tagIds, tag.id]);
-      setNewTagInput("");
+      setTagQuery("");
+      tagInputRef.current?.focus();
     } catch {
       // Tag might already exist; ignore.
     }
@@ -367,48 +393,91 @@ export function TransactionForm({
       {/* Tags */}
       <div className="flex flex-col gap-1.5">
         <Label>Tags</Label>
-        <div className="flex flex-wrap gap-2">
-          {allTags.map((t) => {
-            const selected = tagIds.includes(t.id);
-            return (
+
+        {/* Selected tags: chips shown only once a tag is attached. Clicking a
+            chip detaches that tag from the transaction. */}
+        {selectedTags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {selectedTags.map((t) => (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => toggleTag(t.id)}
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                  selected
-                    ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
-                    : "border-[var(--color-border)] hover:bg-[var(--color-muted)]"
-                }`}
+                onClick={() => removeTag(t.id)}
+                className="flex items-center gap-1 rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-primary-foreground)] transition-colors hover:opacity-90"
               >
                 {t.name}
+                <X className="h-3 w-3" />
               </button>
-            );
-          })}
-        </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="New tag"
-            value={newTagInput}
-            onChange={(e) => setNewTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addNewTag();
-              }
+            ))}
+          </div>
+        )}
+
+        {/* Typeable dropdown: the input doubles as the trigger and the filter.
+            Typing narrows the list and, if no tag matches, offers to create it. */}
+        <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+          <PopoverAnchor asChild>
+            <div className="relative">
+              <Input
+                ref={tagInputRef}
+                placeholder="Add tag"
+                value={tagQuery}
+                onChange={(e) => {
+                  setTagQuery(e.target.value);
+                  setTagPopoverOpen(true);
+                }}
+                onFocus={() => setTagPopoverOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (filteredTags.length > 0) addTag(filteredTags[0].id);
+                    else if (canCreateTag) createAndAddTag();
+                  }
+                }}
+                className="pr-9"
+              />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+            </div>
+          </PopoverAnchor>
+          <PopoverContent
+            align="start"
+            sideOffset={4}
+            // Keep focus in the input so the user can keep typing while the
+            // list is open, and don't close when they click back into it.
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={(e) => {
+              if (e.target === tagInputRef.current) e.preventDefault();
             }}
-            className="h-8 text-sm"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addNewTag}
-            className="shrink-0"
+            className="w-[var(--radix-popover-trigger-width)] p-1"
           >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
+            <div className="max-h-56 overflow-y-auto">
+              {filteredTags.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => addTag(t.id)}
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-[var(--color-muted)]"
+                >
+                  {t.name}
+                </button>
+              ))}
+              {canCreateTag && (
+                <button
+                  type="button"
+                  onClick={createAndAddTag}
+                  className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-[var(--color-muted)]"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Create “{tagQuery.trim()}”
+                </button>
+              )}
+              {filteredTags.length === 0 && !canCreateTag && (
+                <div className="px-2 py-1.5 text-sm text-[var(--color-muted-foreground)]">
+                  {allTags.length === 0 ? "No tags yet" : "All tags selected"}
+                </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <FieldError message={submitError} />
