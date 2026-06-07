@@ -374,14 +374,26 @@ function colorForName(name: string): string {
   return CATEGORY_COLORS[hash % CATEGORY_COLORS.length];
 }
 
-export async function createCategory(name: string): Promise<Category> {
+export async function createCategory(
+  name: string,
+  color?: string | null,
+  icon?: string | null,
+): Promise<Category> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   const { data, error } = await supabase
     .from("categories")
-    .insert({ user_id: user.id, name, color: colorForName(name) })
+    .insert({
+      user_id: user.id,
+      name,
+      color: color ?? colorForName(name),
+      icon: icon ?? null,
+    })
     .select()
     .single();
   if (error) throw error;
   return data;
 }
+
+// Shared palette for category color swatches; mirrors the dashboard donut.
+export { CATEGORY_COLORS };

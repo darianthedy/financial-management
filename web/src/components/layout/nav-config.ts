@@ -5,6 +5,8 @@ import {
   PiggyBank,
   Receipt,
   CalendarClock,
+  Tags,
+  Shapes,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +29,8 @@ export const navItems: NavItem[] = [
     primary: true,
   },
   { to: "/budgets", label: "Budgets", icon: PiggyBank, primary: false },
+  { to: "/categories", label: "Categories", icon: Shapes, primary: false },
+  { to: "/tags", label: "Tags", icon: Tags, primary: false },
   {
     to: "/fixed-expenses",
     label: "Fixed Expenses",
