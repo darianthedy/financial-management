@@ -83,7 +83,7 @@ export function TransactionForm({
             date: transaction.date,
             description: transaction.description ?? "",
             budget_id: transaction.budget_id ?? null,
-            category_ids: transaction.categories.map((c) => c.id),
+            category_id: transaction.category?.id ?? null,
             tag_ids: transaction.tags.map((t) => t.id),
           }
         : undefined,
@@ -107,7 +107,7 @@ export function TransactionForm({
       date: todayIso(),
       description: "",
       budget_id: null,
-      category_ids: [],
+      category_id: null,
       tag_ids: [],
     },
     values,
@@ -123,7 +123,7 @@ export function TransactionForm({
   const accountId = watch("account_id");
   const date = watch("date");
   const budgetId = watch("budget_id") ?? null;
-  const categoryIds = watch("category_ids") ?? [];
+  const categoryId = watch("category_id") ?? null;
   const tagIds = watch("tag_ids") ?? [];
 
   // Budgets that can be linked: same month (derived from the date).
@@ -344,8 +344,8 @@ export function TransactionForm({
           <Label>Categories</Label>
           <CategoryCombobox
             categories={categories}
-            value={categoryIds}
-            onChange={(ids) => setValue("category_ids", ids)}
+            value={categoryId}
+            onChange={(id) => setValue("category_id", id)}
             onCreate={handleCreateCategory}
           />
         </div>

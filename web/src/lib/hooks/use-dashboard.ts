@@ -1,11 +1,12 @@
 ﻿import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
-import type { MonthlyCashflow, SpendingByCategory, Transaction, BudgetProgress, Category } from "@/lib/types/database";
+import type { MonthlyCashflow, SpendingByCategory, Transaction, BudgetProgress, Category, Tag } from "@/lib/types/database";
 
 export type RecentTransaction = Transaction & {
   accounts: { name: string } | null;
   transfer_accounts: { name: string } | null;
-  categories: Category[];
+  category: Category | null;
+  tags: Tag[];
   budget: { name: string } | null;
 };
 
@@ -61,31 +62,38 @@ export function useDashboard(yearMonth: string) {
     const budgetIds = [
       ...new Set(txns.map((t) => t.budget_id).filter(Boolean)),
     ] as string[];
+    const catIds = [
+      ...new Set(txns.map((t) => t.category_id).filter(Boolean)),
+    ] as string[];
 
-    const [accountRes, budgetRes, catRes] = await Promise.all([
+    const [accountRes, budgetRes, categoryRes, tagRes] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name").in("id", accountIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
       budgetIds.length
         ? supabase.from("budgets").select("id, name").in("id", budgetIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      catIds.length
+        ? supabase.from("categories").select("*").in("id", catIds)
+        : Promise.resolve({ data: [] as Category[] }),
       txnIds.length
         ? (supabase
-            .from("transaction_categories")
-            .select("transaction_id, categories(*)")
+            .from("transaction_tags")
+            .select("transaction_id, tags(*)")
             .in("transaction_id", txnIds) as unknown as Promise<{
-            data: Array<{ transaction_id: string; categories: Category | null }> | null;
+            data: Array<{ transaction_id: string; tags: Tag | null }> | null;
           }>)
-        : Promise.resolve({ data: [] as Array<{ transaction_id: string; categories: Category | null }> }),
+        : Promise.resolve({ data: [] as Array<{ transaction_id: string; tags: Tag | null }> }),
     ]);
 
     const nameById = new Map((accountRes.data ?? []).map((a) => [a.id, a.name]));
     const budgetNameById = new Map((budgetRes.data ?? []).map((b) => [b.id, b.name]));
-    const catsByTxn = new Map<string, Category[]>();
-    for (const link of catRes.data ?? []) {
-      const cats = catsByTxn.get(link.transaction_id) ?? [];
-      if (link.categories) cats.push(link.categories);
-      catsByTxn.set(link.transaction_id, cats);
+    const categoryById = new Map((categoryRes.data ?? []).map((c) => [c.id, c]));
+    const tagsByTxn = new Map<string, Tag[]>();
+    for (const link of tagRes.data ?? []) {
+      const tags = tagsByTxn.get(link.transaction_id) ?? [];
+      if (link.tags) tags.push(link.tags);
+      tagsByTxn.set(link.transaction_id, tags);
     }
 
     setCashflow(cfRows ?? null);
@@ -98,7 +106,8 @@ export function useDashboard(yearMonth: string) {
         transfer_accounts: t.transfer_account_id
           ? { name: nameById.get(t.transfer_account_id) ?? "" }
           : null,
-        categories: catsByTxn.get(t.id) ?? [],
+        category: t.category_id ? categoryById.get(t.category_id) ?? null : null,
+        tags: tagsByTxn.get(t.id) ?? [],
         budget: t.budget_id ? { name: budgetNameById.get(t.budget_id) ?? "" } : null,
       })),
     );

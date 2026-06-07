@@ -1,6 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import type { Category, TransactionType } from "@/lib/types/database";
+import type { Category, Tag, TransactionType } from "@/lib/types/database";
 
 /*
  * Shared presentation helpers for a transaction "row" so the transactions list
@@ -17,7 +17,8 @@ export type TxnDisplay = {
   description: string | null;
   accounts: { name: string } | null;
   transfer_accounts: { name: string } | null;
-  categories: Category[];
+  category: Category | null;
+  tags: Tag[];
   budget: { name: string } | null;
 };
 
@@ -57,10 +58,10 @@ export function deriveTitle(txn: TxnDisplay): {
   if (txn.budget && txn.type !== "transfer") {
     return { title: txn.budget.name, usedCategoryId: null, titleIsDescription: false };
   }
-  if (txn.categories.length) {
+  if (txn.category) {
     return {
-      title: txn.categories[0].name,
-      usedCategoryId: txn.categories[0].id,
+      title: txn.category.name,
+      usedCategoryId: txn.category.id,
       titleIsDescription: false,
     };
   }
@@ -118,8 +119,8 @@ export function AccountAvatar({
 
 /**
  * The chip row beneath the title: the transfer destination (source is the
- * avatar) plus category chips, minus whichever category became the title.
- * Renders nothing when there is nothing to show. Chips have no icons yet.
+ * avatar), the single category (unless it was promoted to the title), and any
+ * tags. Renders nothing when there is nothing to show. Chips have no icons yet.
  */
 export function TransactionChips({
   txn,
@@ -129,8 +130,11 @@ export function TransactionChips({
   excludeCategoryId: string | null;
 }) {
   const dest = txn.type === "transfer" ? txn.transfer_accounts?.name : undefined;
-  const chips = txn.categories.filter((c) => c.id !== excludeCategoryId);
-  if (!dest && chips.length === 0) return null;
+  // Show the category unless it already became the title.
+  const category =
+    txn.category && txn.category.id !== excludeCategoryId ? txn.category : null;
+  const tags = txn.tags;
+  if (!dest && !category && tags.length === 0) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -139,17 +143,28 @@ export function TransactionChips({
           → {dest}
         </span>
       )}
-      {chips.map((c) => (
+      {category && (
         <span
-          key={c.id}
           className={cn(
             "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-            !c.color &&
+            !category.color &&
               "border border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
           )}
-          style={c.color ? { backgroundColor: `${c.color}1a`, color: c.color } : undefined}
+          style={
+            category.color
+              ? { backgroundColor: `${category.color}1a`, color: category.color }
+              : undefined
+          }
         >
-          {c.name}
+          {category.name}
+        </span>
+      )}
+      {tags.map((t) => (
+        <span
+          key={t.id}
+          className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-0.5 text-xs font-medium text-[var(--color-muted-foreground)]"
+        >
+          #{t.name}
         </span>
       ))}
     </div>

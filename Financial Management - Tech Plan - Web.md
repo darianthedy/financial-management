@@ -448,28 +448,37 @@ While TypeScript types are auto-generated from the database schema (see section 
 | `transfer_account_id` | `UUID` | **Not** `to_account_id`. Required when `type = 'transfer'` |
 | `status` | `transaction_status` | `'confirmed'` \| `'pending'` \| `'dismissed'`. Default `'confirmed'` |
 | `budget_id` | `UUID` | FK → `budgets`, nullable. Set via the budget dropdown (income/expense only) |
+| `category_id` | `UUID` | FK → `categories`, nullable. **Single** category, set via the category combobox (income/expense only) |
 | `scheduled_txn_id` | `UUID` | FK → `scheduled_transactions`, nullable |
 | `fixed_expense_id` | `UUID` | FK → `fixed_expenses`, nullable. Links to a fixed expense to indicate payment. |
 
-**Categories — junction table pattern:**
+**Categories — single column; Tags — junction table:**
 
-There is **no** `category_id` column on `transactions`. Categories are linked via a many-to-many junction table:
+A transaction has **at most one** category, stored directly in `transactions.category_id` (set or cleared like any other column — there is no junction table for categories):
 
 ```typescript
-// Link a category to a transaction
-await supabase.from("transaction_categories").insert({
-  transaction_id: txnId,
-  category_id: catId,
-});
+// Set (or clear) a transaction's category
+await supabase
+  .from("transactions")
+  .update({ category_id: catId ?? null })
+  .eq("id", txnId);
 
-// Fetch a transaction's categories
-const { data } = await supabase
-  .from("transaction_categories")
-  .select("category_id, categories(name, icon, color)")
-  .eq("transaction_id", txnId);
+// Categories are read back via the column; hydrate the row with a lookup map
+// (id → category) rather than an embedded join.
 ```
 
-The same pattern applies to tags via `transaction_tags`.
+Tags remain **many-to-many** via the `transaction_tags` junction:
+
+```typescript
+// Link a tag to a transaction
+await supabase.from("transaction_tags").insert({ transaction_id: txnId, tag_id: tagId });
+
+// Fetch a transaction's tags
+const { data } = await supabase
+  .from("transaction_tags")
+  .select("tag_id, tags(name)")
+  .eq("transaction_id", txnId);
+```
 
 **`categories` table:**
 
@@ -536,7 +545,7 @@ The same pattern applies to tags via `transaction_tags`.
   - Account picker (+ transfer destination if transfer)
   - Amount + currency
   - Date picker
-  - Category multi-select
+  - Category single-select (autocomplete + create; at most one per transaction)
   - Tag multi-select (autocomplete + create)
   - Budget picker (income & expense; hidden for transfers) — loads `budgets` for the transaction's month **whose currency matches the transaction's currency**, displaying budget name + effective amount (from `v_budget_progress`). Selection stored as `budget_id`. Offers an inline "create budget for this month" option when none exists. Cleared when type is `transfer`.
   - Fixed expense picker (expense only) — loads `fixed_expenses` for the transaction's month (filtered by `year_month`). Selection stored as `fixed_expense_id`. Linking a transaction indicates the fixed expense is paid. Cleared when type is not `expense`.
@@ -555,7 +564,7 @@ The transaction list can be narrowed by any combination of filters. The query st
 | Account | Select (All / each account) | `accountId?` |
 | Status | Select (All / confirmed / pending / dismissed) | `status?` |
 | Date range | From/to date inputs + preset buttons (This month, Last month, Last 3 months, This year, All time) | `dateFrom?`, `dateTo?` |
-| Categories | Multi-select chips (reuse the combobox pattern) | `categoryIds?: string[]` |
+| Categories | Multi-select (a transaction matches if its one category is any selected) | `categoryIds?: string[]` |
 | Tags | Multi-select chips | `tagIds?: string[]` |
 | Amount range | Two `CurrencyAmountInput`s (min/max). Stored in **minor units**; the widget shows major units using the default currency's decimals | `amountMin?`, `amountMax?` |
 | Budget | Select (All budgets / each budget **name**). Options come from `v_budget_progress` (distinct `budget_name`) and are scoped to the active date range's months; a selected name is kept in the list even if the range no longer lists it | `budgetName?: string` |
@@ -581,8 +590,8 @@ Filters are the **single source of truth in the URL query string** via `react-ro
 
 Extend `TransactionFilters` with the new fields and the existing `fetch` accordingly:
 
-- Add column-level operators for `search` (`.ilike`), `amountMin`/`amountMax` (`.gte`/`.lte` on `amount`, in minor units), `budgetId`/`budgetLinked`, and `fixedExpenseLinked` (`.not('…','is',null)` / `.is('…', null)`).
-- For `categoryIds`/`tagIds`, run the junction pre-query described in System Design §4.9 to collect transaction IDs, intersect when both are present, and apply `.in('id', ids)`. Short-circuit to an empty result if the pre-query yields no IDs.
+- Add column-level operators for `search` (`.ilike`), `amountMin`/`amountMax` (`.gte`/`.lte` on `amount`, in minor units), `categoryIds` (`.in('category_id', …)` — matches any selected), `budgetName`, and `fixedExpenseLinked` (`.not('…','is',null)` / `.is('…', null)`).
+- For `tagIds`, run the junction pre-query described in System Design §4.9 to collect transaction IDs and apply `.in('id', ids)`. Short-circuit to an empty result if the pre-query yields no IDs.
 - Add the new fields to the `useCallback` dependency array so the list refetches when any filter changes.
 
 **Supporting data**

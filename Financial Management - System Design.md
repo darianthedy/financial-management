@@ -82,7 +82,7 @@ A custom backend would only be needed if future requirements exceed what Edge Fu
 | **Sync strategy** | Supabase Realtime subscriptions + optimistic client cache | Clients subscribe to table changes via WebSocket. Offline writes are queued locally and pushed on reconnect. |
 | **Auth model** | Supabase Auth, single user | Even though single-user, we still gate every table with RLS (`auth.uid()`) so the schema is secure-by-default and P1-ready for multi-user. |
 | **Auto-record engine** | Supabase `pg_cron` + Edge Function | A cron job runs daily (or more frequently), checks `scheduled_transactions` for items due today, and inserts pending transactions. Push notification sent via Edge Function. |
-| **Currency** | Stored per transaction; amounts stored as `bigint` in minor units (cents). A `currencies` table holds all supported ISO 4217 codes. A `user_settings` table stores the user's default currency. | Avoids floating-point errors. Centralised currency list prevents hardcoding across platforms. Display layer converts to decimal. |
+| **Currency** | Single-currency: the currency is chosen once in Settings (`user_settings.default_currency`) and every amount is formatted in it — there is no per-record `currency` column. Amounts stored as `bigint` in minor units (cents). A `currencies` table holds all supported ISO 4217 codes. | Avoids floating-point errors. Centralised currency list prevents hardcoding across platforms. Display layer converts to decimal. |
 | **Period handling** | `year_month` column (`TEXT` formatted `YYYY-MM`) | Enables simple equality checks for monthly budgets/fixed expenses. Easy to extend to other period types in P1. |
 
 ---
@@ -92,92 +92,66 @@ A custom backend would only be needed if future requirements exceed what Edge Fu
 ### 2.1 Entity-Relationship Overview
 
 ```
-   ┌──────────────────┐
-   │   currencies     │  (reference data — no user_id)
-   │──────────────────│
-   │ code (PK)        │
-   │ name             │
-   │ symbol           │
-   │ decimal_places   │
-   └──────────────────┘
+  Reference tables (currencies) have no user_id. Every other table carries a
+  user_id FK -> users.id (Supabase Auth, single-user). Entities are shown as
+  boxes; the cardinality of every link is listed under "Relationships" below.
 
-                           ┌──────────────┐
-                           │    users     │  (Supabase Auth — managed)
-                           │──────────────│
-                           │ id (uuid)    │
-                           └──────┬───────┘
-                                  │
-                                  ├──────────────────────────┐
-                                  ▼ 1                        │
-                           ┌────────────────┐                │
-                           │ user_settings  │                │
-                           │────────────────│                │
-                           │ user_id (PK/FK)│                │
-                           │ default_currency│               │
-                           └────────────────┘                │
-                                  │ 1
-           ┌──────────────────────┼──────────────────────────┐
-           │                      │                          │
-           ▼ *                    ▼ *                        ▼ *
-   ┌───────────────┐    ┌─────────────────┐        ┌────────────────┐
-   │   accounts    │    │    categories   │        │     tags       │
-   │───────────────│    │─────────────────│        │────────────────│
-   │ id            │    │ id              │        │ id             │
-   │ user_id (FK)  │    │ user_id (FK)    │        │ user_id (FK)   │
-   │ name          │    │ name            │        │ name           │
-   │ type          │    │ icon            │        └────────────────┘
-   │ starting_bal  │    │ color           │                │
-   │ currency      │    └────────┬────────┘                │
-   └───────┬───────┘             │                         │
-           │                     │ *                       │ *
-           ├──────────────┐      │     ┌──────────────┐    │
-           │ 1            │      └─────┤ transaction  │────┘
-           │              │ *          │  _categories │  transaction_tags
-           │     ┌────────────────┐    └──────┬───────┘
-           │     │ account_monthly│            │
-           │     │  _balances     │            │
-           │     │────────────────│            │
-           │     │ account_id(PFK)│            │
-           │     │ year_month (PK)│            │
-           │     │ balance        │            │
-           │     └────────────────┘            │
-           │                                   │
-           ▼ *                                 │
-   ┌───────────────────┐              ┌────────┴──────────┐
-   │   transactions    │◄─────────────┤                   │
-   │───────────────────│              │                   │
-   │ id                │              │                   │
-   │ user_id (FK)      │     ┌────────┴────────┐          │
-   │ account_id (FK)   │     │     budgets     │          │
-   │ transfer_acc (FK) │     │─────────────────│          │
-   │ type              │     │ id              │          │
-   │ amount            │     │ user_id (FK)    │          │
-   │ currency          │     │ name            │          │
-   │ description       │     │ year_month      │          │
-   │ date              │     │ currency        │          │
-   │ budget_id (FK)    │     │ periodic_amount │          │
-   │ fixed_expense(FK) │     └─────────────────┘          │
-   │ status            │                                  │
-   │ scheduled_txn(FK) │                                  │
-   └───────────────────┘                                  │
-                                                          │
-           ▲                                              │
-           │                                              │
-           │                                              │
-   ┌───────┴───────────┐                                  │
-   │    scheduled      │                                  │
-   │   _transactions   │    ┌─────────────────┐          │
-   │───────────────────│    │  fixed_expenses │◄─ ─ ─ ─ ┤ (transactions.fixed_expense_id)
-   │ id                │    │─────────────────│          │
-   │ user_id (FK)      │    │ id              │          │
-   │ account_id (FK)   │    │ user_id (FK)    │          │
-   │ type              │    │ name            │          │
-   │ amount            │    │ year_month      │          │
-   │ description       │    │ amount          │          │
-   │ recurrence        │    │ due_day         │          │
-   │ next_due_date     │    │ is_active       │          │
-   │ is_active         │    └─────────────────┘          │
-   └───────────────────┘                                  │
+  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+  │    currencies    │   │   user_settings  │   │     accounts     │
+  │──────────────────│   │──────────────────│   │──────────────────│
+  │ code (PK)        │   │ user_id (PK/FK)  │   │ id (PK)          │
+  │ name             │   │ default_currency │   │ user_id (FK)     │
+  │ symbol           │   └──────────────────┘   │ name             │
+  │ decimal_places   │                          │ type             │
+  └──────────────────┘                          │ starting_balance │
+                                                └──────────────────┘
+  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+  │    categories    │   │       tags       │   │     budgets      │
+  │──────────────────│   │──────────────────│   │──────────────────│
+  │ id (PK)          │   │ id (PK)          │   │ id (PK)          │
+  │ user_id (FK)     │   │ user_id (FK)     │   │ user_id (FK)     │
+  │ name             │   │ name             │   │ name             │
+  │ icon             │   └──────────────────┘   │ year_month       │
+  │ color            │                          │ periodic_amount  │
+  └──────────────────┘                          └──────────────────┘
+  ┌──────────────────┐   ┌──────────────────┐   ┌───────────────────────┐
+  │  fixed_expenses  │   │ account_monthly  │   │ scheduled_transactions│
+  │──────────────────│   │   _balances      │   │───────────────────────│
+  │ id (PK)          │   │──────────────────│   │ id (PK)               │
+  │ user_id (FK)     │   │ account_id (PFK) │   │ user_id (FK)          │
+  │ name             │   │ year_month (PK)  │   │ account_id (FK)       │
+  │ year_month       │   │ balance          │   │ type                  │
+  │ amount           │   └──────────────────┘   │ amount                │
+  │ due_day          │                          │ recurrence            │
+  │ is_active        │                          │ next_due_date         │
+  └──────────────────┘                          │ is_active             │
+                                                └───────────────────────┘
+  ┌────────────────────────────────┐   ┌──────────────────────────────┐
+  │          transactions          │   │       transaction_tags       │
+  │────────────────────────────────│   │  (many-to-many junction)     │
+  │ id (PK)                        │   │──────────────────────────────│
+  │ user_id (FK)                   │   │ transaction_id (PFK -> txns) │
+  │ account_id (FK)                │   │ tag_id        (PFK -> tags)  │
+  │ transfer_account_id (FK)       │   └──────────────────────────────┘
+  │ category_id (FK)  <- ONE per txn, nullable
+  │ budget_id (FK)                 │
+  │ fixed_expense_id (FK)          │
+  │ scheduled_txn_id (FK)          │
+  │ type / status / amount / date  │
+  └────────────────────────────────┘
+
+  Relationships
+  ─────────────
+   users          1 --< accounts, categories, tags, budgets, fixed_expenses,
+                        scheduled_transactions, transactions      (user_id)
+   users          1 --  user_settings                             (user_id, PK)
+   accounts       1 --< transactions       (account_id, transfer_account_id)
+   accounts       1 --< account_monthly_balances                  (account_id)
+   categories     1 --< transactions       (category_id - ONE per txn, nullable)   <- single-select
+   budgets        1 --< transactions       (budget_id, nullable)
+   fixed_expenses 1 --< transactions       (fixed_expense_id, nullable)
+   scheduled_transactions 1 --< transactions (scheduled_txn_id, nullable)
+   tags           * --< transaction_tags >-- 1 transactions       (many-to-many)
 ```
 
 ### 2.2 Table Definitions (SQL DDL)
@@ -247,7 +221,6 @@ CREATE TABLE accounts (
   user_id       UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name          TEXT NOT NULL,
   type          account_type NOT NULL DEFAULT 'other',
-  currency      TEXT NOT NULL DEFAULT 'USD' REFERENCES currencies(code),
   starting_balance BIGINT NOT NULL DEFAULT 0,
   is_archived   BOOLEAN NOT NULL DEFAULT FALSE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -309,9 +282,8 @@ CREATE INDEX idx_tags_user ON tags(user_id);
 -- BUDGETS
 -- ============================================================
 -- Each row is a self-contained monthly budget entry, mirroring fixed_expenses.
--- Identity is (name + currency): rows sharing the same name AND currency across
--- consecutive months form one carry-over lineage. The same name under a different
--- currency is a separate, independent budget with its own carry-over chain.
+-- Identity is (name): rows sharing the same name across consecutive months form
+-- one carry-over lineage.
 -- periodic_amount: the spending limit the user sets for this month.
 -- Carry-over is ALWAYS ON and computed live in v_budget_progress (there is no
 -- stored carry_over column), so editing a past month's periodic_amount or its
@@ -321,16 +293,15 @@ CREATE TABLE budgets (
   user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name            TEXT NOT NULL,
   year_month      TEXT NOT NULL,                       -- format: 'YYYY-MM'
-  currency        TEXT NOT NULL DEFAULT 'USD' REFERENCES currencies(code),
   periodic_amount BIGINT NOT NULL,                     -- minor units
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  UNIQUE(user_id, name, currency, year_month)
+  UNIQUE(user_id, name, year_month)
 );
 
 CREATE INDEX idx_budgets_user    ON budgets(user_id);
-CREATE INDEX idx_budgets_lineage ON budgets(user_id, name, currency, year_month);
+CREATE INDEX idx_budgets_lineage ON budgets(user_id, name, year_month);
 
 -- ============================================================
 -- FIXED EXPENSES
@@ -345,7 +316,6 @@ CREATE TABLE fixed_expenses (
   name       TEXT NOT NULL,
   year_month TEXT NOT NULL,  -- format: 'YYYY-MM'
   amount     BIGINT NOT NULL,
-  currency   TEXT NOT NULL DEFAULT 'USD',
   due_day    SMALLINT NOT NULL CHECK (due_day BETWEEN 1 AND 31),
   is_active  BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -364,7 +334,6 @@ CREATE TABLE scheduled_transactions (
   account_id    UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   type          transaction_type NOT NULL,
   amount        BIGINT NOT NULL,
-  currency      TEXT NOT NULL DEFAULT 'USD',
   description   TEXT,
   recurrence    recurrence_type NOT NULL DEFAULT 'monthly',
   next_due_date DATE NOT NULL,
@@ -388,10 +357,10 @@ CREATE TABLE transactions (
   type                  transaction_type NOT NULL,
   status                transaction_status NOT NULL DEFAULT 'confirmed',
   amount                BIGINT NOT NULL CHECK (amount > 0),
-  currency              TEXT NOT NULL DEFAULT 'USD',
   description           TEXT,
   date                  DATE NOT NULL DEFAULT CURRENT_DATE,
   budget_id                 UUID REFERENCES budgets(id) ON DELETE SET NULL,
+  category_id               UUID REFERENCES categories(id) ON DELETE SET NULL,
   scheduled_txn_id          UUID REFERENCES scheduled_transactions(id) ON DELETE SET NULL,
   fixed_expense_id            UUID REFERENCES fixed_expenses(id) ON DELETE SET NULL,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -409,18 +378,10 @@ CREATE INDEX idx_txn_account    ON transactions(account_id);
 CREATE INDEX idx_txn_date       ON transactions(date);
 CREATE INDEX idx_txn_status     ON transactions(status);
 CREATE INDEX idx_txn_budget     ON transactions(budget_id);
+CREATE INDEX idx_txn_category   ON transactions(category_id);
 CREATE INDEX idx_txn_type_date  ON transactions(type, date);
 CREATE INDEX idx_txn_fixed_exp  ON transactions(fixed_expense_id)
   WHERE fixed_expense_id IS NOT NULL;
-
--- ============================================================
--- TRANSACTION ↔ CATEGORY  (many-to-many)
--- ============================================================
-CREATE TABLE transaction_categories (
-  transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  category_id    UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
-  PRIMARY KEY (transaction_id, category_id)
-);
 
 -- ============================================================
 -- TRANSACTION ↔ TAG  (many-to-many)
@@ -444,7 +405,6 @@ ALTER TABLE fixed_expenses          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scheduled_transactions  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_monthly_balances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transaction_categories   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transaction_tags         ENABLE ROW LEVEL SECURITY;
 
 -- currencies: read-only for all authenticated users
@@ -480,12 +440,7 @@ CREATE POLICY policy_owner_amb ON account_monthly_balances FOR ALL
     EXISTS (SELECT 1 FROM accounts a WHERE a.id = account_id AND a.user_id = auth.uid())
   );
 
--- Junction tables: derive ownership through the transaction's user_id.
-CREATE POLICY policy_owner_txn_categories ON transaction_categories FOR ALL
-  USING (
-    EXISTS (SELECT 1 FROM transactions t WHERE t.id = transaction_id AND t.user_id = auth.uid())
-  );
-
+-- Junction table: derive ownership through the transaction's user_id.
 CREATE POLICY policy_owner_txn_tags ON transaction_tags FOR ALL
   USING (
     EXISTS (SELECT 1 FROM transactions t WHERE t.id = transaction_id AND t.user_id = auth.uid())
@@ -683,7 +638,7 @@ GROUP BY user_id, to_char(date, 'YYYY-MM');
 
 -- Budget progress: spent vs. limit per budget per month, with carry-over
 -- computed live (no stored column). Carry-over is always on and compounds along
--- each (user_id, name, currency) lineage; a missing preceding month breaks the
+-- each (user_id, name) lineage; a missing preceding month breaks the
 -- chain and resets carry-in to 0. spent is NET: linked expenses minus linked income.
 --   effective_amount = periodic_amount + carry_in
 --   remaining        = effective_amount - spent   (carries into the next month)
@@ -706,30 +661,29 @@ base AS (
 ),
 chain AS (
   -- Anchors: no same-lineage row in the immediately preceding month -> carry_in = 0
-  SELECT b.id, b.user_id, b.name, b.currency, b.year_month, b.periodic_amount, b.spent,
+  SELECT b.id, b.user_id, b.name, b.year_month, b.periodic_amount, b.spent,
          0::BIGINT AS carry_in,
          b.periodic_amount - b.spent AS remaining
   FROM base b
   WHERE NOT EXISTS (
     SELECT 1 FROM base p
     WHERE p.user_id = b.user_id AND p.name = b.name
-      AND p.currency = b.currency AND p.year_month = b.prev_month
+      AND p.year_month = b.prev_month
   )
   UNION ALL
   -- Recurse forward into the next consecutive month of the same lineage (compounding)
-  SELECT n.id, n.user_id, n.name, n.currency, n.year_month, n.periodic_amount, n.spent,
+  SELECT n.id, n.user_id, n.name, n.year_month, n.periodic_amount, n.spent,
          c.remaining AS carry_in,
          n.periodic_amount + c.remaining - n.spent AS remaining
   FROM chain c
   JOIN base n
-    ON n.user_id = c.user_id AND n.name = c.name AND n.currency = c.currency
+    ON n.user_id = c.user_id AND n.name = c.name
    AND n.year_month = to_char(to_date(c.year_month, 'YYYY-MM') + interval '1 month', 'YYYY-MM')
 )
 SELECT
   id AS budget_id,
   user_id,
   name AS budget_name,
-  currency,
   year_month,
   periodic_amount,
   carry_in AS carry_over_amount,
@@ -738,7 +692,9 @@ SELECT
   periodic_amount + carry_in - spent AS remaining
 FROM chain;
 
--- Spending by category for a given month
+-- Spending by category for a given month. Category is single-select
+-- (transactions.category_id), so each expense counts toward exactly one slice
+-- and the slices sum to total expenses (no double-counting).
 CREATE OR REPLACE VIEW v_spending_by_category AS
 SELECT
   t.user_id,
@@ -749,8 +705,7 @@ SELECT
   c.color,
   SUM(t.amount) AS total_amount
 FROM transactions t
-JOIN transaction_categories tc ON tc.transaction_id = t.id
-JOIN categories c ON c.id = tc.category_id
+JOIN categories c ON c.id = t.category_id
 WHERE t.type = 'expense' AND t.status = 'confirmed'
 GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 ```
@@ -763,16 +718,15 @@ GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 |---|---|---|---|
 | 1 | `currencies` | Reference table of supported ISO 4217 currency codes | `code` (PK), `name`, `symbol`, `decimal_places` |
 | 2 | `user_settings` | Per-user preferences (e.g., default currency) | `user_id` (PK), `default_currency` |
-| 3 | `accounts` | Bank accounts, wallets, cash, credit cards | `name`, `type`, `currency`, `starting_balance` |
+| 3 | `accounts` | Bank accounts, wallets, cash, credit cards | `name`, `type`, `starting_balance` |
 | 3b | `account_monthly_balances` | End-of-month running balance per account | `account_id` (PK), `year_month` (PK), `balance` |
 | 4 | `categories` | Expense/income categories (Food, Salary…) | `name`, `icon`, `color` |
 | 5 | `tags` | Free-form labels on transactions | `name` |
-| 6 | `budgets` | Self-contained monthly budget entries (identity = name + currency) | `name`, `year_month`, `currency`, `periodic_amount` (carry-over computed in `v_budget_progress`) |
+| 6 | `budgets` | Self-contained monthly budget entries (identity = name) | `name`, `year_month`, `periodic_amount` (carry-over computed in `v_budget_progress`) |
 | 8 | `fixed_expenses` | Monthly fixed expense entries with period-specific amounts | `name`, `year_month`, `amount`, `due_day`, `is_active` (paid = has linked txn) |
 | 9 | `scheduled_transactions` | Templates for auto-recorded transactions | `account_id`, `type`, `amount`, `recurrence`, `next_due_date` |
-| 10 | `transactions` | All financial movements | `account_id`, `type`, `status`, `amount`, `date`, `budget_id`, `fixed_expense_id` |
-| 11 | `transaction_categories` | Many-to-many: transaction ↔ category | `transaction_id`, `category_id` |
-| 12 | `transaction_tags` | Many-to-many: transaction ↔ tag | `transaction_id`, `tag_id` |
+| 10 | `transactions` | All financial movements | `account_id`, `type`, `status`, `amount`, `date`, `category_id`, `budget_id`, `fixed_expense_id` |
+| 11 | `transaction_tags` | Many-to-many: transaction ↔ tag | `transaction_id`, `tag_id` |
 
 ---
 
@@ -782,13 +736,13 @@ GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 
 The requirement states that budgets and fixed expenses are **period-specific** — the amount can change between months, and deleting the parent should not erase historical data.
 
-**Budgets** use the same **flat, self-contained** pattern as fixed expenses: each row in `budgets` represents one budget for one specific month, carrying both the identity (`user_id`, `name`, `currency`) and the period-specific detail (`year_month`, `periodic_amount`). A budget's identity is **name + currency** — `UNIQUE(user_id, name, currency, year_month)` prevents duplicates, and the same name under a different currency is treated as a distinct budget.
+**Budgets** use the same **flat, self-contained** pattern as fixed expenses: each row in `budgets` represents one budget for one specific month, carrying both the identity (`user_id`, `name`) and the period-specific detail (`year_month`, `periodic_amount`). A budget's identity is **name** — `UNIQUE(user_id, name, year_month)` prevents duplicates.
 
 When the user "removes" a budget in July, we simply stop creating new `budgets` rows from July onward. May and June rows remain untouched. There is no separate header or periods table.
 
-**Fixed expenses** use a **flat, self-contained** pattern: each row in `fixed_expenses` represents one fixed expense for one specific month. The table carries both the identity (`name`, `user_id`) and the period-specific details (`year_month`, `amount`, `currency`, `due_day`). A UNIQUE constraint on `(user_id, name, year_month)` prevents duplicates. To set up a new month, the user copies entries from the previous month (amounts can be adjusted). Historical entries are preserved even if the user stops copying forward.
+**Fixed expenses** use a **flat, self-contained** pattern: each row in `fixed_expenses` represents one fixed expense for one specific month. The table carries both the identity (`name`, `user_id`) and the period-specific details (`year_month`, `amount`, `due_day`). A UNIQUE constraint on `(user_id, name, year_month)` prevents duplicates. To set up a new month, the user copies entries from the previous month (amounts can be adjusted). Historical entries are preserved even if the user stops copying forward.
 
-The app provides a **"Copy from Previous Month"** action: it duplicates all active fixed expense rows from month M-1 into month M, preserving each entry's name, amount, currency, and due day. The user can then edit individual entries as needed.
+The app provides a **"Copy from Previous Month"** action: it duplicates all active fixed expense rows from month M-1 into month M, preserving each entry's name, amount, and due day. The user can then edit individual entries as needed.
 
 ### 4.2 Budget Carry-Over
 
@@ -796,13 +750,13 @@ Carry-over allows unspent budget (or overspend) to roll into the next month. It 
 
 **How it works:**
 
-1. A budget lineage is the set of `budgets` rows sharing the same `(user_id, name, currency)`. Carry-over chains forward through that lineage one month at a time.
+1. A budget lineage is the set of `budgets` rows sharing the same `(user_id, name)`. Carry-over chains forward through that lineage one month at a time.
 2. **`spent`** for a month is the net of its linked confirmed transactions: `SUM(expenses) - SUM(income)`. Income/refunds linked to the budget reduce spend (add back to remaining).
 3. **`carry_in(M)`** comes from the **immediately preceding month** (M-1) of the same lineage: `carry_in(M) = remaining(M-1)`. If there is no row for M-1 in this lineage (first month, or a gap because the budget was removed), `carry_in(M) = 0` — the gap resets the chain.
 4. **`effective_amount(M)` = `periodic_amount(M) + carry_in(M)`**, and **`remaining(M)` = `effective_amount(M) - spent(M)`**. `remaining(M)` then becomes `carry_in(M+1)`, so surpluses and overspends **compound** down an unbroken run of months.
 5. Progress bars and badges read `effective_amount`, `spent`, `remaining`, and `carry_over_amount` (= `carry_in`) directly from `v_budget_progress`.
 
-**Example** (single "Food" / USD lineage, unbroken May–Jul):
+**Example** (single "Food" lineage, unbroken May–Jul):
 
 | Month | periodic_amount | carry_in | effective_amount | spent (net) | remaining |
 |---|---|---|---|---|---|
@@ -880,18 +834,17 @@ Four **Postgres views** are provided to power the dashboard and account list:
 ### 4.7 Currency Handling
 
 - Amounts stored as `bigint` in **minor units** (e.g., 1050 = $10.50).
-- A `currencies` reference table stores all supported ISO 4217 codes, names, symbols, and decimal places. All `currency` columns in other tables reference this table via FK.
-- A `user_settings` table stores the user's **default currency**. New accounts, transactions, budgets, and fixed expenses default to this currency.
-- Each account and each transaction carries its own `currency` code.
-- **P1 — Multi-Currency Transactions:** When a transaction's currency differs from the account's currency, the user provides the exchange rate or converted amount. The transaction is recorded in its original currency, and the account balance is adjusted using the converted amount.
+- A `currencies` reference table stores all supported ISO 4217 codes, names, symbols, and decimal places. `user_settings.default_currency` references this table via FK.
+- The app is **single-currency**: `user_settings.default_currency` is chosen once in Settings and every amount across the app is formatted in it. There is no per-record `currency` column on accounts, transactions, budgets, scheduled transactions, or fixed expenses; the currency's `decimal_places` drive minor-unit scaling.
+- **P1 — Multi-Currency Transactions:** Reintroduces per-record currency. When a transaction's currency differs from the account's currency, the user provides the exchange rate or converted amount. The transaction is recorded in its original currency, and the account balance is adjusted using the converted amount.
 
 ### 4.8 Row-Level Security
 
-Every table has RLS enabled. Policies ensure that a user can only read/write rows where `user_id = auth.uid()`. Junction tables (`transaction_categories`, `transaction_tags`) derive ownership through the parent `transactions` row. `budgets` and `fixed_expenses` each have a direct `user_id` column and use the standard owner policy.
+Every table has RLS enabled. Policies ensure that a user can only read/write rows where `user_id = auth.uid()`. The junction table (`transaction_tags`) derives ownership through the parent `transactions` row. `categories`, `budgets`, and `fixed_expenses` each have a direct `user_id` column and use the standard owner policy.
 
 ### 4.9 Transaction Filtering & Search
 
-The transaction list supports filtering on any combination of attributes (see the "Filtering & Search" requirements). Filtering is implemented entirely as **client-issued PostgREST queries against the existing `transactions` schema** — no schema changes, new columns, or new views are required. RLS already scopes every query to the current user, so filters compose on top of an owner-only row set.
+The transaction list supports filtering on any combination of attributes (see the "Filtering & Search" requirements). Filtering is implemented entirely as **client-issued PostgREST queries against the `transactions` schema** — no filter-specific schema changes or new views are required (the category filter reuses the `category_id` column the feature already adds). RLS already scopes every query to the current user, so filters compose on top of an owner-only row set.
 
 **Combination semantics:** filters across different dimensions are `AND`-ed; multiple values within one multi-select dimension are `OR`-ed.
 
@@ -905,17 +858,19 @@ The transaction list supports filtering on any combination of attributes (see th
 | Status | `eq('status', …)` | `idx_txn_status` |
 | Date range | `gte('date', from)` / `lte('date', to)` | `idx_txn_date` |
 | Amount range | `gte('amount', min)` / `lte('amount', max)` | none (acceptable for single-user) |
+| Category | `in('category_id', categoryIds)` (matches ANY selected) | `idx_txn_category` |
 | Fixed-expense link | `not('fixed_expense_id','is',null)` / `is('fixed_expense_id', null)` | `idx_txn_fixed_exp` |
 
 Amounts are filtered in **minor units** (`bigint`) — the client converts the user's major-unit input via `toMinorUnits()` before querying. Date bounds are inclusive `YYYY-MM-DD` strings.
 
-**Category & tag filters (junction tables).** Because there is no `category_id`/`tag_id` column on `transactions`, these are resolved with a **pre-query that collects matching transaction IDs** from the junction tables, then constrains the main query with `in('id', …)`:
+**Category filter (column-level).** Category is single-select on `transactions` (`category_id`), so it maps directly to `in('category_id', categoryIds)` — a transaction matches when its one category is **any** of the selected (the `OR`-within rule), backed by `idx_txn_category`.
 
-1. Selected category IDs → `transaction_categories.select('transaction_id').in('category_id', categoryIds)` yields the set of transaction IDs carrying **any** selected category (the `OR`-within rule). Repeat for tags via `transaction_tags`.
-2. If both categories **and** tags are filtered, **intersect** the two ID sets (the `AND`-across rule).
-3. The resulting ID set is applied to the main query as `in('id', ids)`, combined with all column-level filters above.
+**Tag filter (junction table).** Because there is no `tag_id` column on `transactions`, tags are resolved with a **pre-query that collects matching transaction IDs** from `transaction_tags`, then constrains the main query with `in('id', …)`:
 
-**Budget filter (by name, via `v_budget_progress`).** The budget filter selects a budget **name**, not a single `budget_id` — budgets are month-specific rows, so one name (a `(name, currency)` lineage) spans many rows. It is resolved with a pre-query, then applied as `in('budget_id', …)`:
+1. Selected tag IDs → `transaction_tags.select('transaction_id').in('tag_id', tagIds)` yields the set of transaction IDs carrying **any** selected tag (the `OR`-within rule).
+2. The resulting ID set is applied to the main query as `in('id', ids)`, combined with all column-level filters above (including the category filter). An empty pre-query result short-circuits to no results.
+
+**Budget filter (by name, via `v_budget_progress`).** The budget filter selects a budget **name**, not a single `budget_id` — budgets are month-specific rows, so one name (a `(name)` lineage) spans many rows. It is resolved with a pre-query, then applied as `in('budget_id', …)`:
 
 1. Read budget rows from **`v_budget_progress`** (the same view the Budgets page and the transaction budget picker use), not the `budgets` table directly, so the filter offers exactly the budgets surfaced elsewhere in the app: `v_budget_progress.select('budget_id').eq('budget_name', name)`.
 2. When a **date range** is also active, the budget rows are narrowed to the months the range spans: `gte('year_month', fromYM)` / `lte('year_month', toYM)`, where `fromYM`/`toYM` are the `YYYY-MM` prefixes of the date bounds. (Example: a 2026-05-30 → 2026-06-03 range matches budget rows in `2026-05` and `2026-06`.) With no date range, every period of that name is included.
@@ -924,7 +879,7 @@ Amounts are filtered in **minor units** (`bigint`) — the client converts the u
 The list of selectable budget **names** for the filter UI is likewise read from `v_budget_progress` (distinct `budget_name`), scoped by the same optional month range so the options reflect the active date filter.
 4. If a junction pre-query returns no IDs, the list is empty — short-circuit without issuing the main query.
 
-This keeps filtering server-side and index-assisted on the junction tables (`transaction_categories`/`transaction_tags` are keyed on `(transaction_id, …)`), avoids over-fetching, and needs no embedded-resource filter syntax. For a single-user app the row counts are small enough that the un-indexed `description ilike` and `amount` range scans are not a concern; both are natural candidates for a trigram / btree index should multi-user scale ever be introduced (P1).
+This keeps filtering server-side and index-assisted on the tag junction (`transaction_tags` is keyed on `(transaction_id, tag_id)`), avoids over-fetching, and needs no embedded-resource filter syntax. For a single-user app the row counts are small enough that the un-indexed `description ilike` and `amount` range scans are not a concern; both are natural candidates for a trigram / btree index should multi-user scale ever be introduced (P1).
 
 ---
 

@@ -26,14 +26,13 @@ Transactions are the core records of money moving in, out, or between accounts.
 
 - A transaction is either an **income** or an **expense**
 - A transaction can be a **transfer** between two accounts
-- A transaction can be linked to a **budget** (optional, at most one per transaction) via an explicit dropdown on the transaction. The dropdown offers budgets matching the transaction's currency and month. Linking is manual — there is no category-to-budget mapping in P0.
+- A transaction can be linked to a **budget** (optional, at most one per transaction) via an explicit dropdown on the transaction. The dropdown offers budgets matching the transaction's month. Linking is manual — there is no category-to-budget mapping in P0.
 - A transaction can be linked to a **fixed expense** (optional, at most one per transaction). This indicates payment of that fixed expense for the given month.
 - A transaction can have:
-  - Multiple categories / tags
+  - A single **category** (optional, at most one per transaction) and multiple **tags**
   - A description
   - A date
   - An amount
-  - A currency
 
 **Filtering & Search**
 
@@ -44,13 +43,13 @@ The transaction list can be narrowed by any combination of the following filters
 - **Account**: a specific account (matches whether it is the source or the transfer destination)
 - **Status**: confirmed, pending, or dismissed
 - **Date range**: a from/to range, with quick presets (this month, last month, last 3 months, this year, all time)
-- **Categories**: one or more categories — a transaction matches if it carries **any** of the selected categories
+- **Categories**: one or more categories — a transaction matches if its category is **any** of the selected ones
 - **Tags**: one or more tags — a transaction matches if it carries **any** of the selected tags
 - **Amount range**: a minimum and/or maximum amount
 - **Budget**: a specific budget by **name**. The list offers all existing budgets across every period (matched by name, since a budget name spans multiple monthly entries). When a **date range** is also active, the available budgets are limited to those that exist within the selected range's months (e.g., a 30 May – 3 June range offers budgets present in May or June). Selecting a budget shows transactions linked to that budget's name within the selected date range, or across all dates when no date range is set.
 - **Fixed-expense link**: "linked to a fixed expense" (paid) or "not linked" (unpaid)
 
-Combination semantics: filters across different dimensions are combined with **AND**; multiple selections within a single multi-select dimension (categories, tags) are combined with **OR**. Example: `type = expense` **AND** category ∈ {Food, Travel}.
+Combination semantics: filters across different dimensions are combined with **AND**; multiple selections within a single multi-select dimension (categories, tags) are combined with **OR**. Example: `type = expense` **AND** category ∈ {Food, Travel} (a transaction has at most one category, so this matches when that one category is Food or Travel).
 
 Active filters are shown as removable chips with a "Clear all" action, alongside a count of matching transactions. For P0, filters are not persisted across sessions (they reset on reload).
 
@@ -59,13 +58,12 @@ Active filters are shown as removable chips with a "Clear all" action, alongside
 Budgets allow the user to set spending limits for a given period and track remaining allowance.
 
 - User can have multiple budgets
-- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **currency**, a **periodic amount**, and a computed **remaining amount**
+- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **periodic amount**, and a computed **remaining amount**
 - For P0, budget period is fixed to **monthly**
 
 **Identity**
 
-- A budget is identified by its **name + currency** together. Budgets sharing the same name across periods are treated as the same budget only when their currency also matches.
-  - Example: "Food" in USD and "Food" in EUR are two distinct budgets with independent carry-over chains.
+- A budget is identified by its **name**. Budgets sharing the same name across periods are treated as the same budget (one carry-over lineage). The app is single-currency, so all budgets share the user's default currency.
 - The name is chosen at the user's discretion and should be kept simple and consistent so the same budget can be matched across periods.
 
 **Amounts**
@@ -89,18 +87,18 @@ Budgets allow the user to set spending limits for a given period and track remai
   - `remaining[n] = effective[n] − spent[n]`
   - Example (surplus): "Food" May = $300, $10 remaining → June periodic $400 → June effective = $410. If June then has $50 remaining, July's carry-in is $50.
   - Example (overspend): "Food" May = $300, overspent by $20 → June periodic $400 → June effective = $380.
-- Carry-in comes from the **immediately preceding period only**, within the same name + currency lineage.
-- A **gap resets carry-over**: if the immediately preceding period has no budget of the same name + currency, this period starts fresh with carry-in = 0. (Removing a budget for a month then re-adding it is the deliberate way to reset accumulated surplus/debt.)
+- Carry-in comes from the **immediately preceding period only**, within the same name lineage.
+- A **gap resets carry-over**: if the immediately preceding period has no budget of the same name, this period starts fresh with carry-in = 0. (Removing a budget for a month then re-adding it is the deliberate way to reset accumulated surplus/debt.)
 - The first period of a lineage (or the first after a gap) has carry-in = 0.
 
 ### Fixed Expenses
 
 Fixed expenses are recurring costs the user expects to pay on a regular basis (e.g., rent, subscriptions).
 
-- Each fixed expense is a self-contained row representing one expense for one specific month, with a name, year_month, amount (can be approximate), currency, and due day
+- Each fixed expense is a self-contained row representing one expense for one specific month, with a name, year_month, amount (can be approximate), and due day
 - For P0, fixed expense recurrence is fixed to **monthly**
-- **Copy from Previous Month**: the user can copy all fixed expenses from the previous month to the current month, preserving names, amounts, currencies, and due days. This is the primary way to carry forward recurring expenses into a new month.
-- User can **edit** the name, amount, currency, or due day of any fixed expense
+- **Copy from Previous Month**: the user can copy all fixed expenses from the previous month to the current month, preserving names, amounts, and due days. This is the primary way to carry forward recurring expenses into a new month.
+- User can **edit** the name, amount, or due day of any fixed expense
 - User can **delete** individual fixed expense entries
 - Fixed expenses are **month-specific**: each row is tied to the exact month it applies to. The amount or existence can change between months without affecting historical records.
   - Example: Fixed expense "Gym" = $50/month starting May 2026, increased to $60 in August 2026, then cancelled in October 2026. Records for May–September remain intact.
@@ -121,7 +119,7 @@ The user can set a default currency used across the app.
 
 - A **currencies** table in the database stores all supported ISO 4217 currency codes — platforms read from this table instead of hardcoding
 - User can select a **default currency** in settings
-- The default currency is used when creating new accounts, transactions, budgets, and fixed expenses
+- The app is **single-currency**: the default currency applies to every amount across the app — accounts, transactions, budgets, and fixed expenses do not carry their own currency
 - All amounts on the dashboard and aggregation views are displayed in the default currency
 
 ### Dashboard
@@ -130,7 +128,7 @@ A central overview screen that gives the user a quick snapshot of their financia
 
 - **Monthly Cash Flow**: Income vs. expenses for the current month
 - **Budget Progress**: Progress bars for each active budget showing amount spent vs. periodic limit
-- **Spending by Category**: Breakdown of expenses by category/tag for the current period
+- **Spending by Category**: Breakdown of expenses by category for the current period
 - **Recent Transactions**: Quick-access list of the latest transactions (e.g., last 5–10)
 
 ---
