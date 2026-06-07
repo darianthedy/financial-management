@@ -7,7 +7,7 @@ import { toMinorUnits } from "@/lib/utils/currency";
 export type TransactionWithRelations = Transaction & {
   accounts: { name: string } | null;
   transfer_accounts: { name: string } | null;
-  categories: Category[];
+  category: Category | null;
   tags: Tag[];
   budget: { name: string } | null;
 };
@@ -70,33 +70,20 @@ async function resolveBudgetIds(
 }
 
 /**
- * Category and tag filters live in junction tables (there is no category_id/
- * tag_id column on transactions). Collect the matching transaction IDs — OR
- * within a dimension, AND (intersect) across dimensions — so the caller can
- * constrain the main query with `.in("id", ids)`. Returns null when neither
- * dimension is filtered (no restriction). See System Design §4.9.
+ * The tag filter lives in a junction table (there is no tag_id column on
+ * transactions). Collect the matching transaction IDs — OR within the selected
+ * tags — so the caller can constrain the main query with `.in("id", ids)`.
+ * Returns null when no tag is filtered (no restriction). Categories are NOT
+ * here: category is a column on transactions and filters directly. See System
+ * Design §4.9.
  */
-async function resolveJunctionIds(
-  categoryIds?: string[],
-  tagIds?: string[],
-): Promise<string[] | null> {
-  let ids: string[] | null = null;
-  if (categoryIds?.length) {
-    const { data } = await supabase
-      .from("transaction_categories")
-      .select("transaction_id")
-      .in("category_id", categoryIds);
-    ids = [...new Set((data ?? []).map((r) => r.transaction_id))];
-  }
-  if (tagIds?.length) {
-    const { data } = await supabase
-      .from("transaction_tags")
-      .select("transaction_id")
-      .in("tag_id", tagIds);
-    const tagTxnIds = new Set((data ?? []).map((r) => r.transaction_id));
-    ids = ids === null ? [...tagTxnIds] : ids.filter((id) => tagTxnIds.has(id));
-  }
-  return ids;
+async function resolveTagTxnIds(tagIds?: string[]): Promise<string[] | null> {
+  if (!tagIds?.length) return null;
+  const { data } = await supabase
+    .from("transaction_tags")
+    .select("transaction_id")
+    .in("tag_id", tagIds);
+  return [...new Set((data ?? []).map((r) => r.transaction_id))];
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
@@ -138,6 +125,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
     if (filters.search) q = q.ilike("description", `%${filters.search}%`);
     if (filters.amountMin != null) q = q.gte("amount", filters.amountMin);
     if (filters.amountMax != null) q = q.lte("amount", filters.amountMax);
+    // Category is single-select on the row: a transaction matches if its one
+    // category is any of the selected (OR-within).
+    if (filters.categoryIds?.length) q = q.in("category_id", filters.categoryIds);
     if (filters.budgetName) {
       const budgetIds = await resolveBudgetIds(
         filters.budgetName,
@@ -157,9 +147,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
       q = q.is("fixed_expense_id", null);
     }
 
-    // Category & tag filters are resolved via the junction tables, then applied
-    // as an id restriction on the main query. An empty result short-circuits.
-    const restrictIds = await resolveJunctionIds(filters.categoryIds, filters.tagIds);
+    // The tag filter is resolved via the junction table, then applied as an id
+    // restriction on the main query. An empty result short-circuits.
+    const restrictIds = await resolveTagTxnIds(filters.tagIds);
     if (restrictIds !== null) {
       if (restrictIds.length === 0) {
         setTransactions([]);
@@ -187,25 +177,22 @@ export function useTransactions(filters: TransactionFilters = {}) {
       ...new Set(rows.map((r) => r.budget_id).filter(Boolean)),
     ] as string[];
 
-    // Fetch account names, budget names, and junction rows in parallel.
-    const [accountResult, budgetResult, catResult, tagResult] = await Promise.all([
+    // Single category per transaction (column, not junction).
+    const catIds = [
+      ...new Set(rows.map((r) => r.category_id).filter(Boolean)),
+    ] as string[];
+
+    // Fetch account names, budget names, categories, and tag rows in parallel.
+    const [accountResult, budgetResult, categoryResult, tagResult] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name").in("id", accountIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
       budgetIds.length
         ? supabase.from("budgets").select("id, name").in("id", budgetIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
-      ids.length
-        ? (supabase
-            .from("transaction_categories")
-            .select("transaction_id, categories(*)")
-            .in("transaction_id", ids) as unknown as Promise<{
-            data: Array<{
-              transaction_id: string;
-              categories: Category | null;
-            }> | null;
-          }>)
-        : Promise.resolve({ data: [] as Array<{ transaction_id: string; categories: Category | null }> }),
+      catIds.length
+        ? supabase.from("categories").select("*").in("id", catIds)
+        : Promise.resolve({ data: [] as Category[] }),
       ids.length
         ? (supabase
             .from("transaction_tags")
@@ -222,13 +209,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
     const budgetNameById = new Map(
       (budgetResult.data ?? []).map((b) => [b.id, b.name]),
     );
-
-    const catsByTxn = new Map<string, Category[]>();
-    for (const link of catResult.data ?? []) {
-      const cats = catsByTxn.get(link.transaction_id) ?? [];
-      if (link.categories) cats.push(link.categories);
-      catsByTxn.set(link.transaction_id, cats);
-    }
+    const categoryById = new Map(
+      (categoryResult.data ?? []).map((c) => [c.id, c]),
+    );
 
     const tagsByTxn = new Map<string, Tag[]>();
     for (const link of tagResult.data ?? []) {
@@ -244,7 +227,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
         transfer_accounts: r.transfer_account_id
           ? { name: accountNameById.get(r.transfer_account_id) ?? "" }
           : null,
-        categories: catsByTxn.get(r.id) ?? [],
+        category: r.category_id ? categoryById.get(r.category_id) ?? null : null,
         tags: tagsByTxn.get(r.id) ?? [],
         budget: r.budget_id ? { name: budgetNameById.get(r.budget_id) ?? "" } : null,
       })),
@@ -287,15 +270,12 @@ async function currentUserId(): Promise<string> {
   return user.id;
 }
 
-async function writeJunctionRows(txnId: string, categoryIds: string[], tagIds: string[]) {
-  await Promise.all([
-    ...(categoryIds.length
-      ? [supabase.from("transaction_categories").insert(categoryIds.map((id) => ({ transaction_id: txnId, category_id: id }))).then()]
-      : []),
-    ...(tagIds.length
-      ? [supabase.from("transaction_tags").insert(tagIds.map((id) => ({ transaction_id: txnId, tag_id: id }))).then()]
-      : []),
-  ]);
+async function writeTagRows(txnId: string, tagIds: string[]) {
+  if (!tagIds.length) return;
+  const { error } = await supabase
+    .from("transaction_tags")
+    .insert(tagIds.map((id) => ({ transaction_id: txnId, tag_id: id })));
+  if (error) throw error;
 }
 
 export async function createTransaction(values: TransactionFormValues, decimalPlaces = 2) {
@@ -311,11 +291,12 @@ export async function createTransaction(values: TransactionFormValues, decimalPl
       description: values.description ?? null,
       date: values.date,
       budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
+      category_id: values.type === "transfer" ? null : (values.category_id ?? null),
     })
     .select("id")
     .single();
   if (error) throw error;
-  await writeJunctionRows(data.id, values.category_ids ?? [], values.tag_ids ?? []);
+  await writeTagRows(data.id, values.tag_ids ?? []);
 }
 
 export async function updateTransaction(id: string, values: TransactionFormValues, decimalPlaces = 2) {
@@ -327,13 +308,11 @@ export async function updateTransaction(id: string, values: TransactionFormValue
     description: values.description ?? null,
     date: values.date,
     budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
+    category_id: values.type === "transfer" ? null : (values.category_id ?? null),
   }).eq("id", id);
   if (error) throw error;
-  await Promise.all([
-    supabase.from("transaction_categories").delete().eq("transaction_id", id),
-    supabase.from("transaction_tags").delete().eq("transaction_id", id),
-  ]);
-  await writeJunctionRows(id, values.category_ids ?? [], values.tag_ids ?? []);
+  await supabase.from("transaction_tags").delete().eq("transaction_id", id);
+  await writeTagRows(id, values.tag_ids ?? []);
 }
 
 export async function deleteTransaction(id: string) {

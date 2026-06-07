@@ -11,7 +11,7 @@ export const transactionFormSchema = z
     date: z.string().min(1, "Date is required"),
     description: z.string().max(500).nullable().optional(),
     budget_id: z.string().uuid().nullable().optional(),
-    category_ids: z.array(z.string().uuid()).default([]),
+    category_id: z.string().uuid().nullable().optional(),
     tag_ids: z.array(z.string().uuid()).default([]),
   })
   .superRefine((val, ctx) => {

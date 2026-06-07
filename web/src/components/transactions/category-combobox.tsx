@@ -5,17 +5,19 @@ import type { Category } from "@/lib/types/database";
 
 interface Props {
   categories: Category[];
-  value: string[];
-  onChange: (ids: string[]) => void;
+  /** The selected category id, or null when none is chosen. */
+  value: string | null;
+  onChange: (id: string | null) => void;
   /** Persists a brand-new category and returns the created row. */
   onCreate: (name: string) => Promise<Category>;
 }
 
 /**
- * Autocomplete + create combobox for categories. Typing filters existing
- * categories; selecting one adds it as a chip. If the typed name has no exact
- * match, an inline "Create" option persists a new category on the fly.
- * Supports multiple categories (the data model is many-to-many).
+ * Autocomplete + create combobox for a single category. Typing filters existing
+ * categories; selecting one sets it as the (single) value, shown as a chip. If
+ * the typed name has no exact match, an inline "Create" option persists a new
+ * category on the fly. A transaction has at most one category, so selecting a
+ * new one replaces the current selection.
  */
 export function CategoryCombobox({ categories, value, onChange, onCreate }: Props) {
   const [query, setQuery] = useState("");
@@ -28,13 +30,13 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
     () => new Map(categories.map((c) => [c.id, c])),
     [categories],
   );
-  const selected = value.map((id) => byId.get(id)).filter(Boolean) as Category[];
+  const selected = value ? byId.get(value) ?? null : null;
 
   const trimmed = query.trim();
   const matches = useMemo(() => {
     const q = trimmed.toLowerCase();
     return categories.filter(
-      (c) => !value.includes(c.id) && (!q || c.name.toLowerCase().includes(q)),
+      (c) => c.id !== value && (!q || c.name.toLowerCase().includes(q)),
     );
   }, [categories, value, trimmed]);
 
@@ -60,29 +62,29 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  function addCategory(id: string) {
-    if (!value.includes(id)) onChange([...value, id]);
+  function selectCategory(id: string) {
+    onChange(id);
     setQuery("");
-    setOpen(true);
+    setOpen(false);
   }
 
-  function removeCategory(id: string) {
-    onChange(value.filter((v) => v !== id));
+  function clearCategory() {
+    onChange(null);
   }
 
-  async function createAndAdd(name: string) {
+  async function createAndSelect(name: string) {
     const trimmedName = name.trim();
     if (!trimmedName || creating) return;
     setCreating(true);
     try {
       const created = await onCreate(trimmedName);
-      addCategory(created.id);
+      selectCategory(created.id);
     } catch {
       // Likely a duplicate from a race; fall back to any existing match.
       const existing = categories.find(
         (c) => c.name.toLowerCase() === trimmedName.toLowerCase(),
       );
-      if (existing) addCategory(existing.id);
+      if (existing) selectCategory(existing.id);
     } finally {
       setCreating(false);
     }
@@ -90,9 +92,9 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
 
   function selectHighlighted() {
     if (highlight < matches.length) {
-      addCategory(matches[highlight].id);
+      selectCategory(matches[highlight].id);
     } else if (showCreate) {
-      createAndAdd(trimmed);
+      createAndSelect(trimmed);
     }
   }
 
@@ -115,38 +117,33 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
         setOpen(false);
         break;
       case "Backspace":
-        if (query === "" && value.length > 0) {
-          removeCategory(value[value.length - 1]);
-        }
+        if (query === "" && value) clearCategory();
         break;
     }
   }
 
   return (
     <div ref={containerRef} className="relative flex flex-col gap-1.5">
-      {selected.length > 0 && (
+      {selected && (
         <div className="flex flex-wrap gap-1.5">
-          {selected.map((c) => (
-            <span
-              key={c.id}
-              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"
-              style={
-                c.color
-                  ? { borderColor: c.color, color: c.color }
-                  : undefined
-              }
+          <span
+            className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+            style={
+              selected.color
+                ? { borderColor: selected.color, color: selected.color }
+                : undefined
+            }
+          >
+            {selected.name}
+            <button
+              type="button"
+              onClick={clearCategory}
+              className="opacity-60 hover:opacity-100"
+              aria-label={`Remove ${selected.name}`}
             >
-              {c.name}
-              <button
-                type="button"
-                onClick={() => removeCategory(c.id)}
-                className="opacity-60 hover:opacity-100"
-                aria-label={`Remove ${c.name}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
+              <X className="h-3 w-3" />
+            </button>
+          </span>
         </div>
       )}
 
@@ -158,7 +155,7 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder="Search or create a category…"
+        placeholder={selected ? "Change category…" : "Search or create a category…"}
         role="combobox"
         aria-expanded={open}
         autoComplete="off"
@@ -171,7 +168,7 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
               <button
                 type="button"
                 onMouseEnter={() => setHighlight(i)}
-                onClick={() => addCategory(c.id)}
+                onClick={() => selectCategory(c.id)}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
                   highlight === i ? "bg-[var(--color-muted)]" : ""
                 }`}
@@ -183,7 +180,7 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
                   />
                 )}
                 <span className="flex-1 truncate">{c.name}</span>
-                {value.includes(c.id) && <Check className="h-3.5 w-3.5" />}
+                {value === c.id && <Check className="h-3.5 w-3.5" />}
               </button>
             </li>
           ))}
@@ -192,7 +189,7 @@ export function CategoryCombobox({ categories, value, onChange, onCreate }: Prop
               <button
                 type="button"
                 onMouseEnter={() => setHighlight(matches.length)}
-                onClick={() => createAndAdd(trimmed)}
+                onClick={() => createAndSelect(trimmed)}
                 disabled={creating}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
                   highlight === matches.length ? "bg-[var(--color-muted)]" : ""

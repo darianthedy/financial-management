@@ -36,6 +36,7 @@ type TransactionRow = {
   description: string | null;
   date: string;
   budget_id: string | null;
+  category_id: string | null;
   scheduled_txn_id: string | null;
   fixed_expense_id: string | null;
   created_at: string;
@@ -58,7 +59,6 @@ type TagRow = {
   created_at: string;
 };
 
-type TransactionCategoryRow = { transaction_id: string; category_id: string };
 type TransactionTagRow = { transaction_id: string; tag_id: string };
 
 type CurrencyRow = {
@@ -155,6 +155,7 @@ export interface Database {
           description?: string | null;
           date?: string;
           budget_id?: string | null;
+          category_id?: string | null;
           scheduled_txn_id?: string | null;
           fixed_expense_id?: string | null;
         };
@@ -167,6 +168,7 @@ export interface Database {
           description?: string | null;
           date?: string;
           budget_id?: string | null;
+          category_id?: string | null;
           fixed_expense_id?: string | null;
         };
         Relationships: [];
@@ -181,12 +183,6 @@ export interface Database {
         Row: TagRow;
         Insert: { id?: string; user_id: string; name: string };
         Update: { name?: string };
-        Relationships: [];
-      };
-      transaction_categories: {
-        Row: TransactionCategoryRow;
-        Insert: TransactionCategoryRow;
-        Update: Partial<TransactionCategoryRow>;
         Relationships: [];
       };
       transaction_tags: {
