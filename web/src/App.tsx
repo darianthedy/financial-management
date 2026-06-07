@@ -8,6 +8,8 @@ import AccountDetailPage from "@/pages/account-detail";
 import TransactionsPage from "@/pages/transactions";
 import TransactionFormPage from "@/pages/transaction-form";
 import BudgetsPage from "@/pages/budgets";
+import CategoriesPage from "@/pages/categories";
+import TagsPage from "@/pages/tags";
 import SettingsPage from "@/pages/settings";
 import PlaceholderPage from "@/pages/placeholder";
 
@@ -28,6 +30,8 @@ export default function App() {
             <Route path="/transactions/new" element={<TransactionFormPage />} />
             <Route path="/transactions/:id/edit" element={<TransactionFormPage />} />
             <Route path="/budgets" element={<BudgetsPage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/tags" element={<TagsPage />} />
             <Route
               path="/fixed-expenses"
               element={<PlaceholderPage title="Fixed Expenses" />}
