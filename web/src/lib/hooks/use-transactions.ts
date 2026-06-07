@@ -5,7 +5,7 @@ import type { TransactionFormValues } from "@/lib/validations/transaction";
 import { toMinorUnits } from "@/lib/utils/currency";
 
 export type TransactionWithRelations = Transaction & {
-  accounts: { name: string } | null;
+  accounts: { name: string; image_url: string | null } | null;
   transfer_accounts: { name: string } | null;
   category: Category | null;
   tags: Tag[];
@@ -185,8 +185,10 @@ export function useTransactions(filters: TransactionFilters = {}) {
     // Fetch account names, budget names, categories, and tag rows in parallel.
     const [accountResult, budgetResult, categoryResult, tagResult] = await Promise.all([
       accountIds.length
-        ? supabase.from("accounts").select("id, name").in("id", accountIds)
-        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+        ? supabase.from("accounts").select("id, name, image_url").in("id", accountIds)
+        : Promise.resolve({
+            data: [] as Array<{ id: string; name: string; image_url: string | null }>,
+          }),
       budgetIds.length
         ? supabase.from("budgets").select("id, name").in("id", budgetIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
@@ -203,8 +205,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
         : Promise.resolve({ data: [] as Array<{ transaction_id: string; tags: Tag | null }> }),
     ]);
 
-    const accountNameById = new Map(
-      (accountResult.data ?? []).map((a) => [a.id, a.name]),
+    const accountById = new Map(
+      (accountResult.data ?? []).map((a) => [a.id, a]),
     );
     const budgetNameById = new Map(
       (budgetResult.data ?? []).map((b) => [b.id, b.name]),
@@ -223,9 +225,14 @@ export function useTransactions(filters: TransactionFilters = {}) {
     setTransactions(
       rows.map((r) => ({
         ...r,
-        accounts: r.account_id ? { name: accountNameById.get(r.account_id) ?? "" } : null,
+        accounts: r.account_id
+          ? {
+              name: accountById.get(r.account_id)?.name ?? "",
+              image_url: accountById.get(r.account_id)?.image_url ?? null,
+            }
+          : null,
         transfer_accounts: r.transfer_account_id
-          ? { name: accountNameById.get(r.transfer_account_id) ?? "" }
+          ? { name: accountById.get(r.transfer_account_id)?.name ?? "" }
           : null,
         category: r.category_id ? categoryById.get(r.category_id) ?? null : null,
         tags: tagsByTxn.get(r.id) ?? [],

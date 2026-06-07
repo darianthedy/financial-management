@@ -908,6 +908,8 @@ CREATE POLICY "account_images_owner_insert"
 
 **Client responsibilities.** The upload happens on form submit (so cancelling never orphans a file). The client downsizes the picked image to ≤256px and re-encodes it to WebP before upload, keeping objects to a few KB — well within the free-tier 1 GB and avoiding the paid image-transform add-on. When an image is replaced or removed, the previous object is deleted best-effort after the row save succeeds.
 
+**Where the image surfaces.** The account list card, the account detail header, and the form preview render it via the shared `AccountAvatar` (image, else type icon). The **transaction list and dashboard "recent transactions"** reuse the account image too: their avatar shows the logo when the linked account has one (keeping the small transaction-direction badge), and falls back to colored initials otherwise — so the queries that hydrate transaction rows select `accounts.image_url` alongside the name.
+
 ---
 
 ## 5. P1 Extension Points

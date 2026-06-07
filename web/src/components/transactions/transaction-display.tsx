@@ -15,7 +15,7 @@ import type { Category, Tag, TransactionType } from "@/lib/types/database";
 export type TxnDisplay = {
   type: TransactionType;
   description: string | null;
-  accounts: { name: string } | null;
+  accounts: { name: string; image_url?: string | null } | null;
   transfer_accounts: { name: string } | null;
   category: Category | null;
   tags: Tag[];
@@ -71,8 +71,8 @@ export function deriveTitle(txn: TxnDisplay): {
   return { title: TYPE_LABEL[txn.type], usedCategoryId: null, titleIsDescription: false };
 }
 
-// Deterministic avatar background so an account keeps the same color everywhere
-// (we have no per-account color/image yet — initials stand in for now).
+// Deterministic avatar background for accounts without a custom image: the same
+// name always maps to the same color, and initials stand in for the logo.
 const AVATAR_COLORS = [
   "#2563eb", "#db2777", "#0891b2", "#16a34a",
   "#d97706", "#7c3aed", "#dc2626", "#0d9488",
@@ -89,14 +89,19 @@ function initials(name: string): string {
   return parts.map((w) => w[0]).join("").toUpperCase() || "?";
 }
 
-/** Account avatar: colored initials with a small transaction-direction badge. */
+/**
+ * Account avatar with a small transaction-direction badge. Shows the account's
+ * custom image when set, otherwise colored initials.
+ */
 export function AccountAvatar({
   name,
   type,
+  imageUrl,
   size = "md",
 }: {
   name: string;
   type: TransactionType;
+  imageUrl?: string | null;
   size?: "sm" | "md";
 }) {
   const Icon = directionIcon(type);
@@ -107,9 +112,19 @@ export function AccountAvatar({
         "relative flex shrink-0 items-center justify-center rounded-full font-bold text-white",
         dims,
       )}
-      style={{ backgroundColor: colorForAccount(name) }}
+      style={imageUrl ? undefined : { backgroundColor: colorForAccount(name) }}
     >
-      {initials(name)}
+      {imageUrl ? (
+        // rounded-full on the img itself clips the logo to the circle while
+        // leaving the direction badge (positioned outside) un-clipped.
+        <img
+          src={imageUrl}
+          alt={`${name} logo`}
+          className="h-full w-full rounded-full bg-[var(--color-muted)] object-contain p-0.5"
+        />
+      ) : (
+        initials(name)
+      )}
       <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-card)] ring-1 ring-[var(--color-border)]">
         <Icon className={cn("h-2.5 w-2.5", amountColor(type))} />
       </span>

@@ -42,6 +42,7 @@ export function RecentTransactionsCard({ transactions }: Props) {
                   <AccountAvatar
                     name={txn.accounts?.name ?? "?"}
                     type={txn.type}
+                    imageUrl={txn.accounts?.image_url}
                     size="sm"
                   />
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">

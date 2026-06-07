@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { MonthlyCashflow, SpendingByCategory, Transaction, BudgetProgress, Category, Tag } from "@/lib/types/database";
 
 export type RecentTransaction = Transaction & {
-  accounts: { name: string } | null;
+  accounts: { name: string; image_url: string | null } | null;
   transfer_accounts: { name: string } | null;
   category: Category | null;
   tags: Tag[];
@@ -68,8 +68,10 @@ export function useDashboard(yearMonth: string) {
 
     const [accountRes, budgetRes, categoryRes, tagRes] = await Promise.all([
       accountIds.length
-        ? supabase.from("accounts").select("id, name").in("id", accountIds)
-        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+        ? supabase.from("accounts").select("id, name, image_url").in("id", accountIds)
+        : Promise.resolve({
+            data: [] as Array<{ id: string; name: string; image_url: string | null }>,
+          }),
       budgetIds.length
         ? supabase.from("budgets").select("id, name").in("id", budgetIds)
         : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
@@ -86,7 +88,7 @@ export function useDashboard(yearMonth: string) {
         : Promise.resolve({ data: [] as Array<{ transaction_id: string; tags: Tag | null }> }),
     ]);
 
-    const nameById = new Map((accountRes.data ?? []).map((a) => [a.id, a.name]));
+    const accountById = new Map((accountRes.data ?? []).map((a) => [a.id, a]));
     const budgetNameById = new Map((budgetRes.data ?? []).map((b) => [b.id, b.name]));
     const categoryById = new Map((categoryRes.data ?? []).map((c) => [c.id, c]));
     const tagsByTxn = new Map<string, Tag[]>();
@@ -102,9 +104,12 @@ export function useDashboard(yearMonth: string) {
     setRecentTransactions(
       txns.map((t) => ({
         ...t,
-        accounts: { name: nameById.get(t.account_id) ?? "" },
+        accounts: {
+          name: accountById.get(t.account_id)?.name ?? "",
+          image_url: accountById.get(t.account_id)?.image_url ?? null,
+        },
         transfer_accounts: t.transfer_account_id
-          ? { name: nameById.get(t.transfer_account_id) ?? "" }
+          ? { name: accountById.get(t.transfer_account_id)?.name ?? "" }
           : null,
         category: t.category_id ? categoryById.get(t.category_id) ?? null : null,
         tags: tagsByTxn.get(t.id) ?? [],

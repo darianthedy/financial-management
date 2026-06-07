@@ -33,17 +33,20 @@ export default function TransactionFormPage() {
           ? supabase.from("categories").select("*").eq("id", txnData.category_id).maybeSingle()
           : Promise.resolve({ data: null as import("@/lib/types/database").Category | null }),
         supabase.from("transaction_tags").select("transaction_id, tags(*)").eq("transaction_id", txnData.id) as unknown as Promise<{ data: Array<{ transaction_id: string; tags: import("@/lib/types/database").Tag | null }> | null }>,
-        supabase.from("accounts").select("id, name").in("id", [txnData.account_id, txnData.transfer_account_id].filter(Boolean) as string[]),
+        supabase.from("accounts").select("id, name, image_url").in("id", [txnData.account_id, txnData.transfer_account_id].filter(Boolean) as string[]),
         txnData.budget_id
           ? supabase.from("budgets").select("name").eq("id", txnData.budget_id).maybeSingle()
           : Promise.resolve({ data: null as { name: string } | null }),
       ]);
 
-      const nameById = new Map((accountRows ?? []).map((a) => [a.id, a.name]));
+      const accountById = new Map((accountRows ?? []).map((a) => [a.id, a]));
       setTransaction({
         ...txnData,
-        accounts: { name: nameById.get(txnData.account_id) ?? "" },
-        transfer_accounts: txnData.transfer_account_id ? { name: nameById.get(txnData.transfer_account_id) ?? "" } : null,
+        accounts: {
+          name: accountById.get(txnData.account_id)?.name ?? "",
+          image_url: accountById.get(txnData.account_id)?.image_url ?? null,
+        },
+        transfer_accounts: txnData.transfer_account_id ? { name: accountById.get(txnData.transfer_account_id)?.name ?? "" } : null,
         category: categoryRow ?? null,
         tags: (tagLinks ?? []).map((t) => t.tags).filter(Boolean) as import("@/lib/types/database").Tag[],
         budget: budgetRow ? { name: budgetRow.name } : null,
