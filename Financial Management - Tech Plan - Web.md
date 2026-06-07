@@ -102,8 +102,9 @@ src/
 │   │   ├── transaction-list.tsx
 │   │   └── transaction-row.tsx
 │   ├── accounts/
+│   │   ├── account-avatar.tsx        # Circular avatar: uploaded image, else type icon
 │   │   ├── account-card.tsx
-│   │   └── account-form.tsx
+│   │   └── account-form.tsx          # Includes the avatar upload/remove control
 │   ├── budgets/
 │   │   ├── budget-card.tsx          # Shows effective amount + carry-over badge (from v_budget_progress)
 │   │   └── budget-form.tsx          # Name, currency, periodic amount (no carry-over toggle)
@@ -113,6 +114,8 @@ src/
 ├── lib/
 │   ├── supabase/
 │   │   └── client.ts               # Browser Supabase client (single file — no server client)
+│   ├── storage/
+│   │   └── account-images.ts       # Resize→WebP upload + best-effort delete (account-images bucket)
 │   ├── types/
 │   │   └── database.ts             # Generated Supabase types
 │   ├── utils/
@@ -535,6 +538,7 @@ const { data } = await supabase
 - Clicking an account shows its transactions filtered by `account_id`.
 - Add/edit account via dialog form.
 - Archive (soft-delete) instead of hard-delete.
+- **Account avatar:** each card (and the detail header) shows the account's uploaded image via the shared `AccountAvatar`, falling back to a type-based icon when `image_url` is null. The form's upload control stages the picked file locally (object-URL preview) and uploads to the `account-images` bucket on submit through `lib/storage/account-images.ts` — see System Design §4.10. The image is downsized to ≤256px WebP client-side; the replaced/removed object is deleted best-effort after the row save succeeds.
 
 ### 7.3 Transactions Page
 
