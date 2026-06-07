@@ -19,6 +19,7 @@ Accounts represent any source or store of money the user wants to track — not 
 - User can have multiple accounts and add/remove them as needed
 - An account can represent a bank account, credit card, digital wallet, cash, or any other financial store
 - Each account has a name, starting balance, and current balance
+- Each account can have an optional **custom image** (e.g. a bank or card logo) shown as its avatar. The image is uploaded by the user; when none is set, an icon based on the account type is shown instead
 
 ### Transactions
 

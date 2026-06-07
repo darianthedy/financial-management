@@ -49,8 +49,8 @@
 │   └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │   ┌──────────────────────────────────────────────────────────┐  │
-│   │              Supabase Storage (P1)                        │  │
-│   │           (receipt images / attachments)                  │  │
+│   │                  Supabase Storage                         │  │
+│   │   account avatar images (P0) · receipt images (P1)        │  │
 │   └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │   ┌──────────────────────────────────────────────────────────┐  │
@@ -69,7 +69,7 @@ This architecture has **no custom backend server** (no Express, FastAPI, etc.). 
 - **Business logic** (balance updates, validation) → Postgres triggers and constraints.
 - **Scheduled jobs** (auto-record transactions) → `pg_cron` + Edge Functions (serverless, not a separate server).
 - **Realtime sync** → Supabase Realtime over WebSocket.
-- **File storage** (P1) → Supabase Storage.
+- **File storage** → Supabase Storage (account avatar images in P0; receipt images in P1).
 
 A custom backend would only be needed if future requirements exceed what Edge Functions can handle (e.g., long-running jobs > 150s, or complex multi-service orchestration). For P0 and P1, this is not the case.
 
@@ -104,6 +104,7 @@ A custom backend would only be needed if future requirements exceed what Edge Fu
   │ symbol           │   └──────────────────┘   │ name             │
   │ decimal_places   │                          │ type             │
   └──────────────────┘                          │ starting_balance │
+                                                │ image_url        │
                                                 └──────────────────┘
   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
   │    categories    │   │       tags       │   │     budgets      │
@@ -222,6 +223,7 @@ CREATE TABLE accounts (
   name          TEXT NOT NULL,
   type          account_type NOT NULL DEFAULT 'other',
   starting_balance BIGINT NOT NULL DEFAULT 0,
+  image_url     TEXT,                              -- public URL of the avatar in Supabase Storage (nullable)
   is_archived   BOOLEAN NOT NULL DEFAULT FALSE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -718,7 +720,7 @@ GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 |---|---|---|---|
 | 1 | `currencies` | Reference table of supported ISO 4217 currency codes | `code` (PK), `name`, `symbol`, `decimal_places` |
 | 2 | `user_settings` | Per-user preferences (e.g., default currency) | `user_id` (PK), `default_currency` |
-| 3 | `accounts` | Bank accounts, wallets, cash, credit cards | `name`, `type`, `starting_balance` |
+| 3 | `accounts` | Bank accounts, wallets, cash, credit cards | `name`, `type`, `starting_balance`, `image_url` (avatar) |
 | 3b | `account_monthly_balances` | End-of-month running balance per account | `account_id` (PK), `year_month` (PK), `balance` |
 | 4 | `categories` | Expense/income categories (Food, Salary…) | `name`, `icon`, `color` |
 | 5 | `tags` | Free-form labels on transactions | `name` |
@@ -880,6 +882,31 @@ The list of selectable budget **names** for the filter UI is likewise read from 
 4. If a junction pre-query returns no IDs, the list is empty — short-circuit without issuing the main query.
 
 This keeps filtering server-side and index-assisted on the tag junction (`transaction_tags` is keyed on `(transaction_id, tag_id)`), avoids over-fetching, and needs no embedded-resource filter syntax. For a single-user app the row counts are small enough that the un-indexed `description ilike` and `amount` range scans are not a concern; both are natural candidates for a trigram / btree index should multi-user scale ever be introduced (P1).
+
+### 4.10 Account Avatar Images (Supabase Storage)
+
+Accounts can carry a custom avatar image (e.g. a bank or card logo). Images live in a **public** Supabase Storage bucket named `account-images`; the resulting public URL is stored in `accounts.image_url`. When `image_url` is null, clients fall back to an icon derived from `account_type`.
+
+**Why a public bucket.** Reads are open so a stored permanent URL renders directly in an `<img>` with no signed-URL refresh. Object paths are laid out as `{user_id}/{uuid}.webp`, so the first path segment identifies the owner, and the random filename keeps URLs unguessable. Writes (insert/update/delete) are restricted to the owner's own folder via RLS on `storage.objects`:
+
+```sql
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('account-images', 'account-images', TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+-- Public read; owner-only writes scoped by the first path segment.
+CREATE POLICY "account_images_public_read"
+  ON storage.objects FOR SELECT USING (bucket_id = 'account-images');
+
+CREATE POLICY "account_images_owner_insert"
+  ON storage.objects FOR INSERT WITH CHECK (
+    bucket_id = 'account-images'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+-- ...matching owner-only UPDATE and DELETE policies.
+```
+
+**Client responsibilities.** The upload happens on form submit (so cancelling never orphans a file). The client downsizes the picked image to ≤256px and re-encodes it to WebP before upload, keeping objects to a few KB — well within the free-tier 1 GB and avoiding the paid image-transform add-on. When an image is replaced or removed, the previous object is deleted best-effort after the row save succeeds.
 
 ---
 

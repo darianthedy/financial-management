@@ -74,6 +74,7 @@ export async function createAccount(values: AccountFormValues, decimalPlaces = 2
     name: values.name,
     type: values.type,
     starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
+    image_url: values.image_url ?? null,
   });
   if (error) throw error;
 }
@@ -89,6 +90,7 @@ export async function updateAccount(
       name: values.name,
       type: values.type,
       starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
+      image_url: values.image_url ?? null,
     })
     .eq("id", id);
   if (error) throw error;

@@ -7,6 +7,7 @@ import {
   type AccountWithBalance,
 } from "@/lib/hooks/use-accounts";
 import { AccountForm } from "@/components/accounts/account-form";
+import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/misc";
 import { CenteredSpinner } from "@/components/ui/misc";
@@ -57,6 +58,13 @@ export default function AccountDetailPage() {
           </Link>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
+              <AccountAvatar
+                type={account.type}
+                imageUrl={account.image_url}
+                name={account.name}
+                className="h-8 w-8"
+                iconClassName="h-4 w-4"
+              />
               <h1 className="truncate text-2xl font-semibold">{account.name}</h1>
               <Badge className="shrink-0">{accountTypeLabel(account.type)}</Badge>
             </div>
