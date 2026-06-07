@@ -361,7 +361,8 @@ export async function createTag(name: string): Promise<Tag> {
 
 // Mirrors the donut palette in spending-by-category so newly created
 // categories get a stable, distinguishable color in the dashboard chart.
-const CATEGORY_COLORS = [
+// Exported for the category-management color-swatch picker.
+export const CATEGORY_COLORS = [
   "#6366f1", "#f59e0b", "#10b981", "#ef4444",
   "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
 ];
@@ -394,6 +395,3 @@ export async function createCategory(
   if (error) throw error;
   return data;
 }
-
-// Shared palette for category color swatches; mirrors the dashboard donut.
-export { CATEGORY_COLORS };
