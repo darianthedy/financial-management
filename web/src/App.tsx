@@ -11,6 +11,7 @@ import BudgetsPage from "@/pages/budgets";
 import CategoriesPage from "@/pages/categories";
 import TagsPage from "@/pages/tags";
 import SettingsPage from "@/pages/settings";
+import ScheduledPage from "@/pages/scheduled";
 import PlaceholderPage from "@/pages/placeholder";
 
 const basename = import.meta.env.BASE_URL;
@@ -36,10 +37,7 @@ export default function App() {
               path="/fixed-expenses"
               element={<PlaceholderPage title="Fixed Expenses" />}
             />
-            <Route
-              path="/scheduled"
-              element={<PlaceholderPage title="Scheduled" />}
-            />
+            <Route path="/scheduled" element={<ScheduledPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>

@@ -44,6 +44,20 @@ type TransactionRow = {
   updated_at: string;
 };
 
+type ScheduledTransactionRow = {
+  id: string;
+  user_id: string;
+  account_id: string;
+  type: TransactionType;
+  amount: number;
+  description: string | null;
+  recurrence: RecurrenceType;
+  next_due_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 type CategoryRow = {
   id: string;
   user_id: string;
@@ -142,6 +156,30 @@ export interface Database {
           name?: string;
           year_month?: string;
           periodic_amount?: number;
+        };
+        Relationships: [];
+      };
+      scheduled_transactions: {
+        Row: ScheduledTransactionRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          account_id: string;
+          type: TransactionType;
+          amount: number;
+          description?: string | null;
+          recurrence?: RecurrenceType;
+          next_due_date: string;
+          is_active?: boolean;
+        };
+        Update: {
+          account_id?: string;
+          type?: TransactionType;
+          amount?: number;
+          description?: string | null;
+          recurrence?: RecurrenceType;
+          next_due_date?: string;
+          is_active?: boolean;
         };
         Relationships: [];
       };
@@ -263,6 +301,8 @@ export interface Database {
 // Convenience aliases
 export type Account = Database["public"]["Tables"]["accounts"]["Row"];
 export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
+export type ScheduledTransaction =
+  Database["public"]["Tables"]["scheduled_transactions"]["Row"];
 export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Tag = Database["public"]["Tables"]["tags"]["Row"];
