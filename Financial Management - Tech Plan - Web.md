@@ -539,6 +539,7 @@ const { data } = await supabase
 - Add/edit account via dialog form.
 - Archive (soft-delete) instead of hard-delete.
 - **Account avatar:** each card (and the detail header) shows the account's uploaded image via the shared `AccountAvatar`, falling back to a type-based icon when `image_url` is null. The form's upload control stages the picked file locally (object-URL preview) and uploads to the `account-images` bucket on submit through `lib/storage/account-images.ts` — see System Design §4.10. The image is downsized to ≤256px WebP client-side; the replaced/removed object is deleted best-effort after the row save succeeds.
+- **Transaction-list avatars reuse the image:** the transaction row (`transaction-display.tsx`) and the dashboard's recent-transactions card show the linked account's logo when present — keeping the transaction-direction badge — and fall back to colored initials otherwise. `use-transactions` and `use-dashboard` therefore select `image_url` in their account lookup and carry it through to the row's `accounts` shape.
 
 ### 7.3 Transactions Page
 
