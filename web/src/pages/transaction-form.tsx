@@ -28,7 +28,7 @@ export default function TransactionFormPage() {
         .maybeSingle();
       if (!txnData) { setLoading(false); return; }
 
-      const [{ data: categoryRow }, { data: tagLinks }, { data: accountRows }, { data: budgetRow }] = await Promise.all([
+      const [{ data: categoryRow }, { data: tagLinks }, { data: accountRows }, { data: budgetRow }, { data: fixedExpenseRow }] = await Promise.all([
         txnData.category_id
           ? supabase.from("categories").select("*").eq("id", txnData.category_id).maybeSingle()
           : Promise.resolve({ data: null as import("@/lib/types/database").Category | null }),
@@ -36,6 +36,9 @@ export default function TransactionFormPage() {
         supabase.from("accounts").select("id, name, image_url").in("id", [txnData.account_id, txnData.transfer_account_id].filter(Boolean) as string[]),
         txnData.budget_id
           ? supabase.from("budgets").select("name").eq("id", txnData.budget_id).maybeSingle()
+          : Promise.resolve({ data: null as { name: string } | null }),
+        txnData.fixed_expense_id
+          ? supabase.from("fixed_expenses").select("name").eq("id", txnData.fixed_expense_id).maybeSingle()
           : Promise.resolve({ data: null as { name: string } | null }),
       ]);
 
@@ -50,6 +53,7 @@ export default function TransactionFormPage() {
         category: categoryRow ?? null,
         tags: (tagLinks ?? []).map((t) => t.tags).filter(Boolean) as import("@/lib/types/database").Tag[],
         budget: budgetRow ? { name: budgetRow.name } : null,
+        fixedExpense: fixedExpenseRow ? { name: fixedExpenseRow.name } : null,
       });
       setLoading(false);
     })();
