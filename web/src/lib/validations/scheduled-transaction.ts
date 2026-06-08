@@ -15,6 +15,12 @@ export const scheduledTransactionFormSchema = z.object({
   recurrence: z.literal("monthly").default("monthly"),
   next_due_date: z.string().min(1, "Next due date is required"),
   is_active: z.boolean().default(true),
+  // Single category, same as a regular transaction.
+  category_id: z.string().uuid().nullable().optional(),
+  // Budget LINEAGE by name (not a row id): budgets are month-scoped, so the
+  // generator resolves this name to the due month's budget at run time.
+  budget_name: z.string().nullable().optional(),
+  tag_ids: z.array(z.string().uuid()).default([]),
 });
 
 export type ScheduledTransactionFormValues = z.infer<

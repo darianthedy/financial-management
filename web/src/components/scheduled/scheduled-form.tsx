@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -17,6 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverAnchor,
+} from "@/components/ui/popover";
+import { Plus, ChevronDown, X } from "lucide-react";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import {
   scheduledTransactionFormSchema,
@@ -27,10 +33,19 @@ import {
   updateScheduledTransaction,
   type ScheduledTransactionWithAccount,
 } from "@/lib/hooks/use-scheduled-transactions";
+import {
+  fetchCategories,
+  fetchTags,
+  createTag,
+} from "@/lib/hooks/use-transactions";
+import { fetchBudgetsForMonth } from "@/lib/hooks/use-budgets";
+import { CategoryForm } from "@/components/transactions/category-form";
+import { BudgetForm } from "@/components/budgets/budget-form";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
-import { toDisplayAmount, currencyDecimals } from "@/lib/utils/currency";
-import { todayIso } from "@/lib/utils/date";
+import { toDisplayAmount, currencyDecimals, formatCurrency } from "@/lib/utils/currency";
+import { todayIso, yearMonthOf } from "@/lib/utils/date";
+import type { Category, Tag, BudgetProgress } from "@/lib/types/database";
 
 interface Props {
   open: boolean;
@@ -44,10 +59,25 @@ const TYPES = [
   { value: "expense", label: "Expense" },
 ] as const;
 
+// Sentinel option values for the budget/category pickers (Radix Select
+// disallows "").
+const BUDGET_NONE = "__none__";
+const BUDGET_CREATE = "__create__";
+const CATEGORY_NONE = "__none__";
+const CATEGORY_CREATE = "__create__";
+
 export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props) {
   const { accounts } = useAccounts();
   const { defaultCurrency, decimalsFor } = useCurrencies();
   const [submitError, setSubmitError] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [tagQuery, setTagQuery] = useState("");
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
+  const [budgetOptions, setBudgetOptions] = useState<BudgetProgress[]>([]);
+  const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
   const isEdit = !!scheduled;
 
   const {
@@ -59,6 +89,7 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
     formState: { errors, isSubmitting },
   } = useForm<ScheduledTransactionFormValues>({
     // Cast: zodResolver's inferred type clashes with the schema defaults.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(scheduledTransactionFormSchema) as any,
     defaultValues: {
       account_id: "",
@@ -68,11 +99,16 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
       recurrence: "monthly",
       next_due_date: todayIso(),
       is_active: true,
+      category_id: null,
+      budget_name: null,
+      tag_ids: [],
     },
   });
 
   useEffect(() => {
     if (!open) return;
+    fetchCategories().then(setCategories);
+    fetchTags().then(setAllTags);
     reset(
       scheduled
         ? {
@@ -86,6 +122,9 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             recurrence: "monthly",
             next_due_date: scheduled.next_due_date,
             is_active: scheduled.is_active,
+            category_id: scheduled.category_id,
+            budget_name: scheduled.budget_name,
+            tag_ids: scheduled.tags.map((t) => t.id),
           }
         : {
             account_id: "",
@@ -95,14 +134,78 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             recurrence: "monthly",
             next_due_date: todayIso(),
             is_active: true,
+            category_id: null,
+            budget_name: null,
+            tag_ids: [],
           },
     );
+    setTagQuery("");
     setSubmitError("");
   }, [open, scheduled, defaultCurrency, reset]);
 
   const type = watch("type");
   const accountId = watch("account_id");
   const isActive = watch("is_active");
+  const dueDate = watch("next_due_date");
+  const categoryId = watch("category_id") ?? null;
+  const budgetName = watch("budget_name") ?? null;
+  const tagIds = watch("tag_ids") ?? [];
+
+  // Budgets linkable for the due month, so the picker shows the same lineages the
+  // generator will resolve against. The schedule stores the budget *name*.
+  const budgetMonth = yearMonthOf(dueDate);
+  const loadBudgets = useCallback(() => {
+    if (!budgetMonth) {
+      setBudgetOptions([]);
+      return;
+    }
+    fetchBudgetsForMonth(budgetMonth).then(setBudgetOptions);
+  }, [budgetMonth]);
+
+  useEffect(() => {
+    loadBudgets();
+  }, [loadBudgets]);
+
+  // The stored lineage may not have a row in the due month yet; keep it
+  // selectable so editing doesn't silently drop the link.
+  const budgetMissingFromMonth =
+    !!budgetName && !budgetOptions.some((b) => b.budget_name === budgetName);
+
+  // Tags actually attached, shown as removable chips.
+  const selectedTags = allTags.filter((t) => tagIds.includes(t.id));
+  const tagQ = tagQuery.trim().toLowerCase();
+  const filteredTags = allTags.filter(
+    (t) => !tagIds.includes(t.id) && t.name.toLowerCase().includes(tagQ),
+  );
+  const canCreateTag =
+    tagQ.length > 0 && !allTags.some((t) => t.name.toLowerCase() === tagQ);
+
+  function addTag(id: string) {
+    if (!tagIds.includes(id)) setValue("tag_ids", [...tagIds, id]);
+    setTagQuery("");
+    tagInputRef.current?.focus();
+  }
+
+  function removeTag(id: string) {
+    setValue(
+      "tag_ids",
+      tagIds.filter((t) => t !== id),
+    );
+  }
+
+  async function createAndAddTag() {
+    const name = tagQuery.trim();
+    if (!name) return;
+    try {
+      const tag = await createTag(name);
+      setAllTags((prev) => [...prev, tag]);
+      setValue("tag_ids", [...tagIds, tag.id]);
+      setTagQuery("");
+      tagInputRef.current?.focus();
+    } catch {
+      // Tag might already exist; ignore.
+    }
+  }
 
   async function onSubmit(values: ScheduledTransactionFormValues) {
     try {
@@ -129,7 +232,10 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             {isEdit ? "Edit scheduled transaction" : "New scheduled transaction"}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex max-h-[75vh] flex-col gap-5 overflow-y-auto"
+        >
           {/* Type */}
           <div className="flex flex-col gap-1.5">
             <Label>Type</Label>
@@ -224,6 +330,156 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             />
           </div>
 
+          {/* Budget — linked by lineage (name). The generator resolves it to the
+              due month's budget; months without one are generated unlinked. */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="budget_name">Budget</Label>
+            <Select
+              value={budgetName ?? BUDGET_NONE}
+              onValueChange={(v) => {
+                if (!v) return;
+                if (v === BUDGET_CREATE) {
+                  setBudgetFormOpen(true);
+                  return;
+                }
+                setValue("budget_name", v === BUDGET_NONE ? null : v);
+              }}
+            >
+              <SelectTrigger id="budget_name">
+                <SelectValue placeholder="No budget" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={BUDGET_NONE}>No budget</SelectItem>
+                {budgetMissingFromMonth && (
+                  <SelectItem value={budgetName!}>
+                    {budgetName} · none this month
+                  </SelectItem>
+                )}
+                {budgetOptions.map((b) => (
+                  <SelectItem key={b.budget_id} value={b.budget_name}>
+                    {b.budget_name} · {formatCurrency(b.effective_amount)}
+                  </SelectItem>
+                ))}
+                <SelectItem value={BUDGET_CREATE}>
+                  + Create budget for this month
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Category */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="category_id">Category</Label>
+            <Select
+              value={categoryId ?? CATEGORY_NONE}
+              onValueChange={(v) => {
+                if (!v) return;
+                if (v === CATEGORY_CREATE) {
+                  setCategoryFormOpen(true);
+                  return;
+                }
+                setValue("category_id", v === CATEGORY_NONE ? null : v);
+              }}
+            >
+              <SelectTrigger id="category_id">
+                <SelectValue placeholder="No category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CATEGORY_NONE}>No category</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CATEGORY_CREATE}>+ Create category</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tags */}
+          <div className="flex flex-col gap-1.5">
+            <Label>Tags</Label>
+
+            {selectedTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedTags.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => removeTag(t.id)}
+                    className="flex items-center gap-1 rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-primary-foreground)] transition-colors hover:opacity-90"
+                  >
+                    {t.name}
+                    <X className="h-3 w-3" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+              <PopoverAnchor asChild>
+                <div className="relative">
+                  <Input
+                    ref={tagInputRef}
+                    placeholder="Add tag"
+                    value={tagQuery}
+                    onChange={(e) => {
+                      setTagQuery(e.target.value);
+                      setTagPopoverOpen(true);
+                    }}
+                    onFocus={() => setTagPopoverOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (filteredTags.length > 0) addTag(filteredTags[0].id);
+                        else if (canCreateTag) createAndAddTag();
+                      }
+                    }}
+                    className="pr-9"
+                  />
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+                </div>
+              </PopoverAnchor>
+              <PopoverContent
+                align="start"
+                sideOffset={4}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onInteractOutside={(e) => {
+                  if (e.target === tagInputRef.current) e.preventDefault();
+                }}
+                className="w-[var(--radix-popover-trigger-width)] p-1"
+              >
+                <div className="max-h-56 overflow-y-auto">
+                  {filteredTags.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => addTag(t.id)}
+                      className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-[var(--color-muted)]"
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                  {canCreateTag && (
+                    <button
+                      type="button"
+                      onClick={createAndAddTag}
+                      className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-[var(--color-muted)]"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" />
+                      Create “{tagQuery.trim()}”
+                    </button>
+                  )}
+                  {filteredTags.length === 0 && !canCreateTag && (
+                    <div className="px-2 py-1.5 text-sm text-[var(--color-muted-foreground)]">
+                      {allTags.length === 0 ? "No tags yet" : "All tags selected"}
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           {/* Active */}
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
@@ -251,6 +507,31 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <BudgetForm
+        open={budgetFormOpen}
+        onOpenChange={setBudgetFormOpen}
+        yearMonth={budgetMonth}
+        onSaved={(id) => {
+          // Resolve the freshly created row back to its lineage name to store.
+          fetchBudgetsForMonth(budgetMonth).then((opts) => {
+            setBudgetOptions(opts);
+            const created = opts.find((b) => b.budget_id === id);
+            if (created) setValue("budget_name", created.budget_name);
+          });
+        }}
+      />
+
+      <CategoryForm
+        open={categoryFormOpen}
+        onOpenChange={setCategoryFormOpen}
+        onSaved={(category) => {
+          setCategories((prev) =>
+            [...prev, category].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          setValue("category_id", category.id);
+        }}
+      />
     </Dialog>
   );
 }

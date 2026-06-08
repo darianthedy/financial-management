@@ -54,6 +54,8 @@ type ScheduledTransactionRow = {
   recurrence: RecurrenceType;
   next_due_date: string;
   is_active: boolean;
+  category_id: string | null;
+  budget_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -75,6 +77,11 @@ type TagRow = {
 };
 
 type TransactionTagRow = { transaction_id: string; tag_id: string };
+
+type ScheduledTransactionTagRow = {
+  scheduled_transaction_id: string;
+  tag_id: string;
+};
 
 type CurrencyRow = {
   code: string;
@@ -171,6 +178,8 @@ export interface Database {
           recurrence?: RecurrenceType;
           next_due_date: string;
           is_active?: boolean;
+          category_id?: string | null;
+          budget_name?: string | null;
         };
         Update: {
           account_id?: string;
@@ -180,6 +189,8 @@ export interface Database {
           recurrence?: RecurrenceType;
           next_due_date?: string;
           is_active?: boolean;
+          category_id?: string | null;
+          budget_name?: string | null;
         };
         Relationships: [];
       };
@@ -230,6 +241,12 @@ export interface Database {
         Row: TransactionTagRow;
         Insert: TransactionTagRow;
         Update: Partial<TransactionTagRow>;
+        Relationships: [];
+      };
+      scheduled_transaction_tags: {
+        Row: ScheduledTransactionTagRow;
+        Insert: ScheduledTransactionTagRow;
+        Update: Partial<ScheduledTransactionTagRow>;
         Relationships: [];
       };
       currencies: {

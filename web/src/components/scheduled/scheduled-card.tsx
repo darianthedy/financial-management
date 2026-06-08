@@ -30,6 +30,8 @@ export function ScheduledCard({
   const sign = type === "income" ? 1 : -1;
   const title = description?.trim() || (type === "income" ? "Income" : "Expense");
   const accountName = scheduled.accounts?.name ?? "?";
+  const category = scheduled.category;
+  const tags = scheduled.tags ?? [];
 
   return (
     <Card className={cn(!is_active && "opacity-60")}>
@@ -94,6 +96,28 @@ export function ScheduledCard({
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         </div>
+
+        {(category || tags.length > 0) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {category && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-xs">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: category.color ?? "var(--color-muted-foreground)" }}
+                />
+                {category.name}
+              </span>
+            )}
+            {tags.map((t) => (
+              <span
+                key={t.id}
+                className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-muted-foreground)]"
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-[var(--color-muted-foreground)]">
