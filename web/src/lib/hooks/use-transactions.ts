@@ -299,6 +299,8 @@ export async function createTransaction(values: TransactionFormValues, decimalPl
       date: values.date,
       budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
       category_id: values.type === "transfer" ? null : (values.category_id ?? null),
+      fixed_expense_id:
+        values.type === "expense" ? (values.fixed_expense_id ?? null) : null,
     })
     .select("id")
     .single();
@@ -316,6 +318,8 @@ export async function updateTransaction(id: string, values: TransactionFormValue
     date: values.date,
     budget_id: values.type === "transfer" ? null : (values.budget_id ?? null),
     category_id: values.type === "transfer" ? null : (values.category_id ?? null),
+    fixed_expense_id:
+      values.type === "expense" ? (values.fixed_expense_id ?? null) : null,
   }).eq("id", id);
   if (error) throw error;
   await supabase.from("transaction_tags").delete().eq("transaction_id", id);

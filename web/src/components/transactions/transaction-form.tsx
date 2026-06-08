@@ -33,10 +33,17 @@ import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { fetchBudgetsForMonth } from "@/lib/hooks/use-budgets";
 import { BudgetForm } from "@/components/budgets/budget-form";
+import { fetchFixedExpensesForMonth } from "@/lib/hooks/use-fixed-expenses";
+import { FixedExpenseForm } from "@/components/fixed-expenses/fixed-expense-form";
 import { todayIso, yearMonthOf } from "@/lib/utils/date";
 import { toDisplayAmount, formatCurrency } from "@/lib/utils/currency";
 import type { TransactionWithRelations } from "@/lib/hooks/use-transactions";
-import type { Category, Tag, BudgetProgress } from "@/lib/types/database";
+import type {
+  Category,
+  Tag,
+  BudgetProgress,
+  FixedExpense,
+} from "@/lib/types/database";
 
 interface Props {
   transaction?: TransactionWithRelations | null;
@@ -57,6 +64,8 @@ const BUDGET_NONE = "__none__";
 const BUDGET_CREATE = "__create__";
 const CATEGORY_NONE = "__none__";
 const CATEGORY_CREATE = "__create__";
+const FIXED_NONE = "__none__";
+const FIXED_CREATE = "__create__";
 
 export function TransactionForm({
   transaction,
@@ -75,6 +84,10 @@ export function TransactionForm({
   const [budgetOptions, setBudgetOptions] = useState<BudgetProgress[]>([]);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
   const [categoryFormOpen, setCategoryFormOpen] = useState(false);
+  const [fixedExpenseOptions, setFixedExpenseOptions] = useState<FixedExpense[]>(
+    [],
+  );
+  const [fixedExpenseFormOpen, setFixedExpenseFormOpen] = useState(false);
 
   // Prefill values for edit mode. Using react-hook-form's `values` prop (rather
   // than reset() in an effect) syncs during render, so prefill is deterministic
@@ -94,6 +107,7 @@ export function TransactionForm({
             description: transaction.description ?? "",
             budget_id: transaction.budget_id ?? null,
             category_id: transaction.category?.id ?? null,
+            fixed_expense_id: transaction.fixed_expense_id ?? null,
             tag_ids: transaction.tags.map((t) => t.id),
           }
         : undefined,
@@ -118,6 +132,7 @@ export function TransactionForm({
       description: "",
       budget_id: null,
       category_id: null,
+      fixed_expense_id: null,
       tag_ids: [],
     },
     values,
@@ -134,6 +149,7 @@ export function TransactionForm({
   const date = watch("date");
   const budgetId = watch("budget_id") ?? null;
   const categoryId = watch("category_id") ?? null;
+  const fixedExpenseId = watch("fixed_expense_id") ?? null;
   const tagIds = watch("tag_ids") ?? [];
 
   // Budgets that can be linked: same month (derived from the date).
@@ -149,6 +165,19 @@ export function TransactionForm({
   useEffect(() => {
     loadBudgets();
   }, [loadBudgets]);
+
+  // Fixed expenses that can be linked: the date's month, expense type only.
+  const loadFixedExpenses = useCallback(() => {
+    if (type !== "expense") {
+      setFixedExpenseOptions([]);
+      return;
+    }
+    fetchFixedExpensesForMonth(budgetMonth).then(setFixedExpenseOptions);
+  }, [type, budgetMonth]);
+
+  useEffect(() => {
+    loadFixedExpenses();
+  }, [loadFixedExpenses]);
 
   // Tags actually attached to the transaction, shown as removable chips.
   const selectedTags = allTags.filter((t) => tagIds.includes(t.id));
@@ -220,6 +249,8 @@ export function TransactionForm({
                 setValue("type", t.value);
                 if (t.value !== "transfer") setValue("transfer_account_id", null);
                 else setValue("budget_id", null);
+                // Fixed-expense link is expense-only.
+                if (t.value !== "expense") setValue("fixed_expense_id", null);
               }}
               className={`flex-1 rounded-[var(--radius)] border px-3 py-2 text-sm font-medium transition-colors ${
                 type === t.value
@@ -390,6 +421,39 @@ export function TransactionForm({
         </div>
       )}
 
+      {/* Fixed expense (expense only) — linking marks that expense paid */}
+      {type === "expense" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="fixed_expense_id">Fixed expense</Label>
+          <Select
+            value={fixedExpenseId ?? FIXED_NONE}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v === FIXED_CREATE) {
+                setFixedExpenseFormOpen(true);
+                return;
+              }
+              setValue("fixed_expense_id", v === FIXED_NONE ? null : v);
+            }}
+          >
+            <SelectTrigger id="fixed_expense_id">
+              <SelectValue placeholder="Not a fixed expense" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FIXED_NONE}>Not a fixed expense</SelectItem>
+              {fixedExpenseOptions.map((fe) => (
+                <SelectItem key={fe.id} value={fe.id}>
+                  {fe.name} · {formatCurrency(fe.amount)}
+                </SelectItem>
+              ))}
+              <SelectItem value={FIXED_CREATE}>
+                + Create fixed expense for this month
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Tags */}
       <div className="flex flex-col gap-1.5">
         <Label>Tags</Label>
@@ -516,6 +580,16 @@ export function TransactionForm({
             [...prev, category].sort((a, b) => a.name.localeCompare(b.name)),
           );
           setValue("category_id", category.id);
+        }}
+      />
+
+      <FixedExpenseForm
+        open={fixedExpenseFormOpen}
+        onOpenChange={setFixedExpenseFormOpen}
+        yearMonth={budgetMonth}
+        onSaved={(id) => {
+          loadFixedExpenses();
+          if (id) setValue("fixed_expense_id", id);
         }}
       />
     </>

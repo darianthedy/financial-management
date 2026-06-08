@@ -12,6 +12,9 @@ export const transactionFormSchema = z
     description: z.string().max(500).nullable().optional(),
     budget_id: z.string().uuid().nullable().optional(),
     category_id: z.string().uuid().nullable().optional(),
+    // Links this expense to a fixed expense for its month (indicates payment).
+    // Expense-only; cleared for income/transfer.
+    fixed_expense_id: z.string().uuid().nullable().optional(),
     tag_ids: z.array(z.string().uuid()).default([]),
   })
   .superRefine((val, ctx) => {

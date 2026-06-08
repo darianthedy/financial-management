@@ -12,7 +12,7 @@ import CategoriesPage from "@/pages/categories";
 import TagsPage from "@/pages/tags";
 import SettingsPage from "@/pages/settings";
 import ScheduledPage from "@/pages/scheduled";
-import PlaceholderPage from "@/pages/placeholder";
+import FixedExpensesPage from "@/pages/fixed-expenses";
 
 const basename = import.meta.env.BASE_URL;
 
@@ -33,10 +33,7 @@ export default function App() {
             <Route path="/budgets" element={<BudgetsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/tags" element={<TagsPage />} />
-            <Route
-              path="/fixed-expenses"
-              element={<PlaceholderPage title="Fixed Expenses" />}
-            />
+            <Route path="/fixed-expenses" element={<FixedExpensesPage />} />
             <Route path="/scheduled" element={<ScheduledPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

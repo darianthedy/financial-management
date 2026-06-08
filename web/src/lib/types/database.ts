@@ -117,6 +117,22 @@ type BudgetRow = {
   updated_at: string;
 };
 
+// Flat, self-contained fixed-expense entry. Identity = (name + year_month). One
+// row per expense per month. Paid status is derived from linked transactions
+// (transactions.fixed_expense_id), not stored here. App is single-currency, so
+// there is no per-row currency column.
+type FixedExpenseRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  year_month: string;
+  amount: number;
+  due_day: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 // ---- Database interface (supabase-js 2.x GenericSchema shape) ----
 
 export interface Database {
@@ -163,6 +179,26 @@ export interface Database {
           name?: string;
           year_month?: string;
           periodic_amount?: number;
+        };
+        Relationships: [];
+      };
+      fixed_expenses: {
+        Row: FixedExpenseRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          year_month: string;
+          amount: number;
+          due_day: number;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          year_month?: string;
+          amount?: number;
+          due_day?: number;
+          is_active?: boolean;
         };
         Relationships: [];
       };
@@ -321,6 +357,8 @@ export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type ScheduledTransaction =
   Database["public"]["Tables"]["scheduled_transactions"]["Row"];
 export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
+export type FixedExpense =
+  Database["public"]["Tables"]["fixed_expenses"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Tag = Database["public"]["Tables"]["tags"]["Row"];
 export type Currency = Database["public"]["Tables"]["currencies"]["Row"];
