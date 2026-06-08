@@ -10,6 +10,7 @@ export type TransactionWithRelations = Transaction & {
   category: Category | null;
   tags: Tag[];
   budget: { name: string } | null;
+  fixedExpense: { name: string } | null;
 };
 
 export type TransactionType = "income" | "expense" | "transfer";
@@ -182,8 +183,14 @@ export function useTransactions(filters: TransactionFilters = {}) {
       ...new Set(rows.map((r) => r.category_id).filter(Boolean)),
     ] as string[];
 
-    // Fetch account names, budget names, categories, and tag rows in parallel.
-    const [accountResult, budgetResult, categoryResult, tagResult] = await Promise.all([
+    // Fixed expenses linked to these transactions (for the row's "Fixed" chip).
+    const fixedExpenseIds = [
+      ...new Set(rows.map((r) => r.fixed_expense_id).filter(Boolean)),
+    ] as string[];
+
+    // Fetch account names, budget names, categories, fixed-expense names, and
+    // tag rows in parallel.
+    const [accountResult, budgetResult, categoryResult, fixedExpenseResult, tagResult] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name, image_url").in("id", accountIds)
         : Promise.resolve({
@@ -195,6 +202,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
       catIds.length
         ? supabase.from("categories").select("*").in("id", catIds)
         : Promise.resolve({ data: [] as Category[] }),
+      fixedExpenseIds.length
+        ? supabase.from("fixed_expenses").select("id, name").in("id", fixedExpenseIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
       ids.length
         ? (supabase
             .from("transaction_tags")
@@ -213,6 +223,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
     );
     const categoryById = new Map(
       (categoryResult.data ?? []).map((c) => [c.id, c]),
+    );
+    const fixedExpenseNameById = new Map(
+      (fixedExpenseResult.data ?? []).map((f) => [f.id, f.name]),
     );
 
     const tagsByTxn = new Map<string, Tag[]>();
@@ -237,6 +250,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
         category: r.category_id ? categoryById.get(r.category_id) ?? null : null,
         tags: tagsByTxn.get(r.id) ?? [],
         budget: r.budget_id ? { name: budgetNameById.get(r.budget_id) ?? "" } : null,
+        fixedExpense: r.fixed_expense_id
+          ? { name: fixedExpenseNameById.get(r.fixed_expense_id) ?? "" }
+          : null,
       })),
     );
     setLoading(false);

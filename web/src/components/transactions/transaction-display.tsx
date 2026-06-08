@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { Category, Tag, TransactionType } from "@/lib/types/database";
 
@@ -20,6 +20,7 @@ export type TxnDisplay = {
   category: Category | null;
   tags: Tag[];
   budget: { name: string } | null;
+  fixedExpense: { name: string } | null;
 };
 
 export function directionIcon(type: TransactionType) {
@@ -149,10 +150,19 @@ export function TransactionChips({
   const category =
     txn.category && txn.category.id !== excludeCategoryId ? txn.category : null;
   const tags = txn.tags;
-  if (!dest && !category && tags.length === 0) return null;
+  const fixedExpense = txn.fixedExpense;
+  if (!dest && !category && tags.length === 0 && !fixedExpense) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+      {fixedExpense && (
+        // A linked fixed expense: the receipt icon mirrors the Fixed Expenses
+        // nav entry, and the accent tint sets it apart from category/tag chips.
+        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">
+          <Receipt className="h-3 w-3" />
+          {fixedExpense.name}
+        </span>
+      )}
       {dest && (
         <span className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-0.5 text-xs font-medium">
           → {dest}
