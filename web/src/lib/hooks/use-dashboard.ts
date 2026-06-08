@@ -8,6 +8,7 @@ export type RecentTransaction = Transaction & {
   category: Category | null;
   tags: Tag[];
   budget: { name: string } | null;
+  fixedExpense: { name: string } | null;
 };
 
 export function useDashboard(yearMonth: string) {
@@ -65,8 +66,11 @@ export function useDashboard(yearMonth: string) {
     const catIds = [
       ...new Set(txns.map((t) => t.category_id).filter(Boolean)),
     ] as string[];
+    const fixedExpenseIds = [
+      ...new Set(txns.map((t) => t.fixed_expense_id).filter(Boolean)),
+    ] as string[];
 
-    const [accountRes, budgetRes, categoryRes, tagRes] = await Promise.all([
+    const [accountRes, budgetRes, categoryRes, fixedExpenseRes, tagRes] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name, image_url").in("id", accountIds)
         : Promise.resolve({
@@ -78,6 +82,9 @@ export function useDashboard(yearMonth: string) {
       catIds.length
         ? supabase.from("categories").select("*").in("id", catIds)
         : Promise.resolve({ data: [] as Category[] }),
+      fixedExpenseIds.length
+        ? supabase.from("fixed_expenses").select("id, name").in("id", fixedExpenseIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
       txnIds.length
         ? (supabase
             .from("transaction_tags")
@@ -91,6 +98,9 @@ export function useDashboard(yearMonth: string) {
     const accountById = new Map((accountRes.data ?? []).map((a) => [a.id, a]));
     const budgetNameById = new Map((budgetRes.data ?? []).map((b) => [b.id, b.name]));
     const categoryById = new Map((categoryRes.data ?? []).map((c) => [c.id, c]));
+    const fixedExpenseNameById = new Map(
+      (fixedExpenseRes.data ?? []).map((f) => [f.id, f.name]),
+    );
     const tagsByTxn = new Map<string, Tag[]>();
     for (const link of tagRes.data ?? []) {
       const tags = tagsByTxn.get(link.transaction_id) ?? [];
@@ -114,6 +124,9 @@ export function useDashboard(yearMonth: string) {
         category: t.category_id ? categoryById.get(t.category_id) ?? null : null,
         tags: tagsByTxn.get(t.id) ?? [],
         budget: t.budget_id ? { name: budgetNameById.get(t.budget_id) ?? "" } : null,
+        fixedExpense: t.fixed_expense_id
+          ? { name: fixedExpenseNameById.get(t.fixed_expense_id) ?? "" }
+          : null,
       })),
     );
     setLoading(false);
