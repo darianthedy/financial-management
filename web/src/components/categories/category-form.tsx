@@ -76,7 +76,7 @@ export function CategoryForm({ open, onOpenChange, category, onSaved }: Props) {
 
           <div className="flex flex-col gap-1.5">
             <Label>Color</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {CATEGORY_COLORS.map((c) => (
                 <button
                   key={c}
@@ -92,6 +92,32 @@ export function CategoryForm({ open, onOpenChange, category, onSaved }: Props) {
                   style={{ backgroundColor: c }}
                 />
               ))}
+              <label
+                aria-label="Custom color"
+                className={cn(
+                  "relative h-7 w-7 cursor-pointer rounded-full border-2 transition",
+                  !CATEGORY_COLORS.includes(color)
+                    ? "border-[var(--color-foreground)] scale-110"
+                    : "border-[var(--color-border)]",
+                )}
+                style={{
+                  backgroundColor: CATEGORY_COLORS.includes(color)
+                    ? "transparent"
+                    : color,
+                }}
+              >
+                {CATEGORY_COLORS.includes(color) && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-base leading-none text-[var(--color-muted-foreground)]">
+                    +
+                  </span>
+                )}
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                />
+              </label>
             </div>
           </div>
 
