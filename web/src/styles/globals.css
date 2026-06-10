@@ -66,3 +66,17 @@ body {
     Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * Prevent iOS Safari from zooming the page when a form control is focused.
+ * The browser auto-zooms whenever a focused field has a font-size below 16px,
+ * so on touch devices we floor inputs/selects/textareas at 16px while leaving
+ * the smaller desktop typography untouched.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
