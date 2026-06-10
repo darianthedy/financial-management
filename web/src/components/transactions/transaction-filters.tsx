@@ -297,6 +297,66 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               )}
             </div>
 
+            <FilterField label="Date">
+              <div className="flex flex-wrap gap-1.5">
+                {presets.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => patch({ dateFrom: p.from, dateTo: p.to })}
+                    className={`rounded-full border px-2 py-1 text-xs ${
+                      activePreset?.label === p.label
+                        ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                        : "border-[var(--color-border)] text-[var(--color-muted-foreground)]"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+                {(filters.dateFrom || filters.dateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => clear("dateFrom", "dateTo")}
+                    className="rounded-full border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted-foreground)]"
+                  >
+                    All time
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  type="date"
+                  value={filters.dateFrom ?? ""}
+                  onChange={(e) =>
+                    e.target.value ? patch({ dateFrom: e.target.value }) : clear("dateFrom")
+                  }
+                  aria-label="From date"
+                  className="min-w-0"
+                />
+                <span className="hidden text-[var(--color-muted-foreground)] sm:inline">
+                  –
+                </span>
+                <Input
+                  type="date"
+                  value={filters.dateTo ?? ""}
+                  onChange={(e) =>
+                    e.target.value ? patch({ dateTo: e.target.value }) : clear("dateTo")
+                  }
+                  aria-label="To date"
+                  className="min-w-0"
+                />
+              </div>
+            </FilterField>
+
+            <FilterField label="Status">
+              <MultiSelect
+                placeholder="All statuses"
+                options={STATUS_OPTIONS}
+                value={filters.statuses ?? []}
+                onChange={(v) => setArray("statuses", v)}
+              />
+            </FilterField>
+
             <FilterField label="Type">
               <MultiSelect
                 placeholder="All types"
@@ -313,62 +373,6 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                 value={filters.accountIds ?? []}
                 onChange={(v) => setArray("accountIds", v)}
               />
-            </FilterField>
-
-            <FilterField label="Status">
-              <MultiSelect
-                placeholder="All statuses"
-                options={STATUS_OPTIONS}
-                value={filters.statuses ?? []}
-                onChange={(v) => setArray("statuses", v)}
-              />
-            </FilterField>
-
-            <FilterField label="Date">
-              <div className="flex flex-wrap gap-1.5">
-                {presets.map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => patch({ dateFrom: p.from, dateTo: p.to })}
-                    className={`rounded-full border px-2.5 py-1 text-xs ${
-                      activePreset?.label === p.label
-                        ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                        : "border-[var(--color-border)] text-[var(--color-muted-foreground)]"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-                {(filters.dateFrom || filters.dateTo) && (
-                  <button
-                    type="button"
-                    onClick={() => clear("dateFrom", "dateTo")}
-                    className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted-foreground)]"
-                  >
-                    All time
-                  </button>
-                )}
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={filters.dateFrom ?? ""}
-                  onChange={(e) =>
-                    e.target.value ? patch({ dateFrom: e.target.value }) : clear("dateFrom")
-                  }
-                  aria-label="From date"
-                />
-                <span className="text-[var(--color-muted-foreground)]">–</span>
-                <Input
-                  type="date"
-                  value={filters.dateTo ?? ""}
-                  onChange={(e) =>
-                    e.target.value ? patch({ dateTo: e.target.value }) : clear("dateTo")
-                  }
-                  aria-label="To date"
-                />
-              </div>
             </FilterField>
 
             <FilterField label={`Amount (${defaultCurrency})`}>
@@ -405,32 +409,6 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               </div>
             </FilterField>
 
-            {categories.length > 0 && (
-              <FilterField label="Categories">
-                <MultiSelect
-                  placeholder="All categories"
-                  options={categories.map((c) => ({
-                    value: c.id,
-                    label: c.name,
-                    color: c.color,
-                  }))}
-                  value={filters.categoryIds ?? []}
-                  onChange={(v) => setArray("categoryIds", v)}
-                />
-              </FilterField>
-            )}
-
-            {tags.length > 0 && (
-              <FilterField label="Tags">
-                <MultiSelect
-                  placeholder="All tags"
-                  options={tags.map((t) => ({ value: t.id, label: `#${t.name}` }))}
-                  value={filters.tagIds ?? []}
-                  onChange={(v) => setArray("tagIds", v)}
-                />
-              </FilterField>
-            )}
-
             <FilterField label="Budget">
               <Select
                 value={filters.budgetName ?? "all"}
@@ -451,6 +429,21 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                 </SelectContent>
               </Select>
             </FilterField>
+
+            {categories.length > 0 && (
+              <FilterField label="Categories">
+                <MultiSelect
+                  placeholder="All categories"
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    color: c.color,
+                  }))}
+                  value={filters.categoryIds ?? []}
+                  onChange={(v) => setArray("categoryIds", v)}
+                />
+              </FilterField>
+            )}
 
             <FilterField label="Fixed expense">
               <Select
@@ -473,6 +466,17 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                 </SelectContent>
               </Select>
             </FilterField>
+
+            {tags.length > 0 && (
+              <FilterField label="Tags">
+                <MultiSelect
+                  placeholder="All tags"
+                  options={tags.map((t) => ({ value: t.id, label: `#${t.name}` }))}
+                  value={filters.tagIds ?? []}
+                  onChange={(v) => setArray("tagIds", v)}
+                />
+              </FilterField>
+            )}
 
             {/* A "Sort" section can be added here alongside the Filter one. */}
           </PopoverContent>
