@@ -48,6 +48,10 @@ import type {
 interface Props {
   transaction?: TransactionWithRelations | null;
   defaultAccountId?: string;
+  /** Pre-select a fixed expense to link (from the fixed-expenses page). Expense only. */
+  defaultFixedExpenseId?: string;
+  /** Pre-fill the date (e.g. to match a pre-linked fixed expense's month). */
+  defaultDate?: string;
   onSaved?: () => void;
   onCancel?: () => void;
 }
@@ -70,6 +74,8 @@ const FIXED_CREATE = "__create__";
 export function TransactionForm({
   transaction,
   defaultAccountId,
+  defaultFixedExpenseId,
+  defaultDate,
   onSaved,
   onCancel,
 }: Props) {
@@ -129,11 +135,11 @@ export function TransactionForm({
       account_id: defaultAccountId ?? "",
       transfer_account_id: null,
       amount: 0,
-      date: todayIso(),
+      date: defaultDate ?? todayIso(),
       description: "",
       budget_id: null,
       category_id: null,
-      fixed_expense_id: null,
+      fixed_expense_id: defaultFixedExpenseId ?? null,
       tag_ids: [],
     },
     values,

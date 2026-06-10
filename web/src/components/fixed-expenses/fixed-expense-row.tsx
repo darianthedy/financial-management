@@ -1,4 +1,11 @@
-import { MoreVertical, Pencil, Trash2, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Check,
+  ArrowLeftRight,
+} from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -11,28 +18,22 @@ interface Props {
   onRemove?: () => void;
 }
 
-function ordinal(day: number): string {
-  const rem10 = day % 10;
-  const rem100 = day % 100;
-  if (rem10 === 1 && rem100 !== 11) return `${day}st`;
-  if (rem10 === 2 && rem100 !== 12) return `${day}nd`;
-  if (rem10 === 3 && rem100 !== 13) return `${day}rd`;
-  return `${day}th`;
-}
-
 export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
-  const { name, amount, due_day, paid } = fixedExpense;
+  const navigate = useNavigate();
+  const { id, name, amount, year_month, paid } = fixedExpense;
+
+  // Pre-link a new transaction to this fixed expense. Dating it in the expense's
+  // month makes the transaction form list it as a linkable option (the picker
+  // is scoped to the date's month) and pre-selects it.
+  function addTransaction() {
+    navigate(`/transactions/new?fixedExpenseId=${id}&date=${year_month}-01`);
+  }
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-col gap-1">
-            <span className="truncate font-medium">{name}</span>
-            <span className="text-xs text-[var(--color-muted-foreground)]">
-              Due {ordinal(due_day)}
-            </span>
-          </div>
+          <span className="min-w-0 truncate font-medium">{name}</span>
           <span className="shrink-0 text-nowrap font-semibold">
             {formatCurrency(amount)}
           </span>
@@ -47,8 +48,14 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
               <DropdownMenu.Content
                 sideOffset={4}
                 align="end"
-                className="z-50 min-w-36 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-md"
+                className="z-50 min-w-44 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-md"
               >
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
+                  onSelect={() => addTransaction()}
+                >
+                  <ArrowLeftRight className="h-4 w-4" /> Add transaction
+                </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
                   onSelect={() => onEdit?.()}

@@ -53,7 +53,7 @@ export function FixedExpenseForm({
     formState: { errors, isSubmitting },
   } = useForm<FixedExpenseFormValues>({
     resolver: zodResolver(fixedExpenseFormSchema),
-    defaultValues: { name: "", amount: 0, due_day: 1 },
+    defaultValues: { name: "", amount: 0 },
   });
 
   useEffect(() => {
@@ -66,9 +66,8 @@ export function FixedExpenseForm({
               fixedExpense.amount,
               currencyDecimals(defaultCurrency),
             ),
-            due_day: fixedExpense.due_day,
           }
-        : { name: "", amount: 0, due_day: 1 },
+        : { name: "", amount: 0 },
     );
     setSubmitError("");
   }, [open, fixedExpense, defaultCurrency, reset]);
@@ -108,34 +107,20 @@ export function FixedExpenseForm({
             <FieldError message={errors.name?.message} />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="amount">Amount</Label>
-              <CurrencyAmountInput
-                id="amount"
-                value={watch("amount")}
-                decimals={decimalsFor(defaultCurrency)}
-                onChange={(v) =>
-                  setValue("amount", v, {
-                    shouldDirty: true,
-                    shouldValidate: !!errors.amount,
-                  })
-                }
-              />
-              <FieldError message={errors.amount?.message} />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="due_day">Due day</Label>
-              <Input
-                id="due_day"
-                type="number"
-                min={1}
-                max={31}
-                {...register("due_day", { valueAsNumber: true })}
-              />
-              <FieldError message={errors.due_day?.message} />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="amount">Amount</Label>
+            <CurrencyAmountInput
+              id="amount"
+              value={watch("amount")}
+              decimals={decimalsFor(defaultCurrency)}
+              onChange={(v) =>
+                setValue("amount", v, {
+                  shouldDirty: true,
+                  shouldValidate: !!errors.amount,
+                })
+              }
+            />
+            <FieldError message={errors.amount?.message} />
           </div>
 
           <FieldError message={submitError} />

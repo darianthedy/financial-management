@@ -1,6 +1,11 @@
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Info, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { BudgetProgress } from "@/lib/types/database";
 import { cn } from "@/lib/utils/cn";
@@ -28,21 +33,34 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             <span className="truncate font-medium">{budget.budget_name}</span>
             {carry_over_amount !== 0 && (
-              <span
-                className={cn(
-                  "text-xs",
-                  carry_over_amount > 0
-                    ? "text-[var(--color-success)]"
-                    : "text-[var(--color-danger)]",
-                )}
-              >
-                {carry_over_amount > 0
-                  ? `+${formatCurrency(carry_over_amount)} carried over`
-                  : `${formatCurrency(carry_over_amount)} overspent`}
-              </span>
+              <Popover>
+                {/* Negative margin keeps the icon visually compact while the
+                    padding gives an adequate (~40px) tap target on mobile. */}
+                <PopoverTrigger className="-m-2 shrink-0 rounded-full p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]">
+                  <Info className="h-4 w-4" />
+                  <span className="sr-only">Budget carry-over details</span>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-auto max-w-[16rem] p-3 text-sm"
+                >
+                  <span
+                    className={cn(
+                      "font-medium",
+                      carry_over_amount > 0
+                        ? "text-[var(--color-success)]"
+                        : "text-[var(--color-danger)]",
+                    )}
+                  >
+                    {carry_over_amount > 0
+                      ? `+${formatCurrency(carry_over_amount)} carried over`
+                      : `${formatCurrency(carry_over_amount)} overspent`}
+                  </span>
+                </PopoverContent>
+              </Popover>
             )}
           </div>
           <DropdownMenu.Root>
