@@ -27,6 +27,7 @@ import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { fetchBudgetNames } from "@/lib/hooks/use-budgets";
+import { fetchFixedExpenseNames } from "@/lib/hooks/use-fixed-expenses";
 import {
   fetchCategories,
   fetchTags,
@@ -73,6 +74,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [budgetNames, setBudgetNames] = useState<string[]>([]);
+  const [fixedExpenseNames, setFixedExpenseNames] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -86,6 +88,14 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
   useEffect(() => {
     fetchBudgetNames(dateFrom?.slice(0, 7), dateTo?.slice(0, 7)).then(
       setBudgetNames,
+    );
+  }, [dateFrom, dateTo]);
+
+  // Fixed-expense options likewise follow the date range: only fixed expenses
+  // present in the range's months are offered.
+  useEffect(() => {
+    fetchFixedExpenseNames(dateFrom?.slice(0, 7), dateTo?.slice(0, 7)).then(
+      setFixedExpenseNames,
     );
   }, [dateFrom, dateTo]);
 
@@ -133,7 +143,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
       "categoryIds",
       "tagIds",
       "budgetName",
-      "fixedExpenseLinked",
+      "fixedExpenseName",
     );
   }
 
@@ -162,12 +172,13 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
     filters.budgetName && !budgetNames.includes(filters.budgetName)
       ? [filters.budgetName, ...budgetNames]
       : budgetNames;
-  const fixedValue =
-    filters.fixedExpenseLinked === true
-      ? "linked"
-      : filters.fixedExpenseLinked === false
-        ? "unlinked"
-        : "all";
+  // Keep a selected fixed expense visible even if the current date range no
+  // longer lists it, so the Select doesn't render blank.
+  const fixedExpenseOptions =
+    filters.fixedExpenseName &&
+    !fixedExpenseNames.includes(filters.fixedExpenseName)
+      ? [filters.fixedExpenseName, ...fixedExpenseNames]
+      : fixedExpenseNames;
 
   const panelCount = countPanelFilters(filters);
   const fmtAmt = (minor: number) => formatCurrency(minor, defaultCurrency);
@@ -233,11 +244,11 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
       label: `Budget: ${filters.budgetName}`,
       onRemove: () => clear("budgetName"),
     });
-  if (filters.fixedExpenseLinked != null)
+  if (filters.fixedExpenseName)
     chips.push({
       key: "fixed",
-      label: filters.fixedExpenseLinked ? "Paid (fixed)" : "Unpaid (fixed)",
-      onRemove: () => clear("fixedExpenseLinked"),
+      label: `Fixed: ${filters.fixedExpenseName}`,
+      onRemove: () => clear("fixedExpenseName"),
     });
   if (filters.search)
     chips.push({
@@ -454,22 +465,23 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
 
             <FilterField label="Fixed expense">
               <Select
-                value={fixedValue}
+                value={filters.fixedExpenseName ?? "all"}
                 onValueChange={(v) =>
-                  v === "linked"
-                    ? patch({ fixedExpenseLinked: true })
-                    : v === "unlinked"
-                      ? patch({ fixedExpenseLinked: false })
-                      : clear("fixedExpenseLinked")
+                  v === "all"
+                    ? clear("fixedExpenseName")
+                    : patch({ fixedExpenseName: v })
                 }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Any (all)</SelectItem>
-                  <SelectItem value="linked">Linked (paid)</SelectItem>
-                  <SelectItem value="unlinked">Not linked (unpaid)</SelectItem>
+                  <SelectItem value="all">All fixed expenses</SelectItem>
+                  {fixedExpenseOptions.map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </FilterField>

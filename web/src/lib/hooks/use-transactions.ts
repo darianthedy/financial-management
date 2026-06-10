@@ -42,8 +42,13 @@ export interface TransactionFilters {
    * range is also set, only budget rows whose month falls within that range count.
    */
   budgetName?: string;
-  /** true = linked to a fixed expense (paid); false = not linked (unpaid). */
-  fixedExpenseLinked?: boolean;
+  /**
+   * Match transactions linked to a fixed expense with this name, across every
+   * month (fixed-expense identity is name + year_month; this matches by name
+   * only). When a date range is also set, only fixed-expense rows whose month
+   * falls within that range count.
+   */
+  fixedExpenseName?: string;
 }
 
 /**
@@ -68,6 +73,25 @@ async function resolveBudgetIds(
   if (toYM) q = q.lte("year_month", toYM);
   const { data } = await q;
   return (data ?? []).map((r) => r.budget_id);
+}
+
+/**
+ * Resolve a fixed-expense NAME to the set of fixed_expenses row IDs to match
+ * against transactions.fixed_expense_id. Fixed expenses are month-specific rows,
+ * so one name spans many rows; an optional [fromYM, toYM] month range (derived
+ * from the date filter) narrows it to those periods. year_month is 'YYYY-MM', so
+ * lexical gte/lte works.
+ */
+async function resolveFixedExpenseIds(
+  name: string,
+  fromYM?: string,
+  toYM?: string,
+): Promise<string[]> {
+  let q = supabase.from("fixed_expenses").select("id").eq("name", name);
+  if (fromYM) q = q.gte("year_month", fromYM);
+  if (toYM) q = q.lte("year_month", toYM);
+  const { data } = await q;
+  return (data ?? []).map((r) => r.id);
 }
 
 /**
@@ -142,10 +166,18 @@ export function useTransactions(filters: TransactionFilters = {}) {
       }
       q = q.in("budget_id", budgetIds);
     }
-    if (filters.fixedExpenseLinked === true) {
-      q = q.not("fixed_expense_id", "is", null);
-    } else if (filters.fixedExpenseLinked === false) {
-      q = q.is("fixed_expense_id", null);
+    if (filters.fixedExpenseName) {
+      const fixedExpenseIds = await resolveFixedExpenseIds(
+        filters.fixedExpenseName,
+        filters.dateFrom?.slice(0, 7),
+        filters.dateTo?.slice(0, 7),
+      );
+      if (fixedExpenseIds.length === 0) {
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
+      q = q.in("fixed_expense_id", fixedExpenseIds);
     }
 
     // The tag filter is resolved via the junction table, then applied as an id
@@ -270,7 +302,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     filters.amountMin,
     filters.amountMax,
     filters.budgetName,
-    filters.fixedExpenseLinked,
+    filters.fixedExpenseName,
     categoryKey,
     tagKey,
   ]);

@@ -59,8 +59,7 @@ export function parseFilters(params: URLSearchParams): TransactionFilters {
   if (budget) f.budgetName = budget;
 
   const fixed = params.get("fixed");
-  if (fixed === "linked") f.fixedExpenseLinked = true;
-  else if (fixed === "unlinked") f.fixedExpenseLinked = false;
+  if (fixed) f.fixedExpenseName = fixed;
 
   return f;
 }
@@ -78,8 +77,7 @@ export function serializeFilters(f: TransactionFilters): Record<string, string> 
   if (f.categoryIds?.length) p.cat = f.categoryIds.join(",");
   if (f.tagIds?.length) p.tag = f.tagIds.join(",");
   if (f.budgetName) p.budget = f.budgetName;
-  if (f.fixedExpenseLinked === true) p.fixed = "linked";
-  else if (f.fixedExpenseLinked === false) p.fixed = "unlinked";
+  if (f.fixedExpenseName) p.fixed = f.fixedExpenseName;
   return p;
 }
 
@@ -97,6 +95,6 @@ export function countPanelFilters(f: TransactionFilters): number {
   if (f.categoryIds?.length) n++;
   if (f.tagIds?.length) n++;
   if (f.budgetName) n++;
-  if (f.fixedExpenseLinked != null) n++;
+  if (f.fixedExpenseName) n++;
   return n;
 }

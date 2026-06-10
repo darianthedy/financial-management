@@ -127,7 +127,6 @@ type FixedExpenseRow = {
   name: string;
   year_month: string;
   amount: number;
-  due_day: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -190,14 +189,12 @@ export interface Database {
           name: string;
           year_month: string;
           amount: number;
-          due_day: number;
           is_active?: boolean;
         };
         Update: {
           name?: string;
           year_month?: string;
           amount?: number;
-          due_day?: number;
           is_active?: boolean;
         };
         Relationships: [];

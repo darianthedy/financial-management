@@ -50,7 +50,6 @@ export function useFixedExpenses(yearMonth: string) {
       .select("*")
       .eq("user_id", user.id)
       .eq("year_month", yearMonth)
-      .order("due_day", { ascending: true })
       .order("name", { ascending: true });
 
     const list = rows ?? [];
@@ -125,7 +124,6 @@ export async function createFixedExpense(
       name: values.name.trim(),
       year_month: yearMonth,
       amount: toMinorUnits(values.amount, decimalPlaces),
-      due_day: values.due_day,
     })
     .select("id")
     .single();
@@ -144,7 +142,6 @@ export async function updateFixedExpense(
     .update({
       name: values.name.trim(),
       amount: toMinorUnits(values.amount, decimalPlaces),
-      due_day: values.due_day,
     })
     .eq("id", id);
   if (error) throw error;
@@ -158,7 +155,7 @@ export async function deleteFixedExpense(id: string) {
 
 /**
  * Copy every fixed expense from the previous month into `yearMonth`, preserving
- * name, amount, due_day, and is_active. Entries whose name already exists in the
+ * name, amount, and is_active. Entries whose name already exists in the
  * target month are skipped (the UNIQUE (user_id, name, year_month) constraint).
  * Returns the number of rows created.
  */
@@ -169,7 +166,7 @@ export async function copyFromPreviousMonth(yearMonth: string): Promise<number> 
   const [{ data: prevRows }, { data: currentRows }] = await Promise.all([
     supabase
       .from("fixed_expenses")
-      .select("name, amount, due_day, is_active")
+      .select("name, amount, is_active")
       .eq("user_id", user_id)
       .eq("year_month", prevMonth),
     supabase
@@ -187,7 +184,6 @@ export async function copyFromPreviousMonth(yearMonth: string): Promise<number> 
       name: r.name,
       year_month: yearMonth,
       amount: r.amount,
-      due_day: r.due_day,
       is_active: r.is_active,
     }));
 
@@ -195,6 +191,32 @@ export async function copyFromPreviousMonth(yearMonth: string): Promise<number> 
   const { error } = await supabase.from("fixed_expenses").insert(toInsert);
   if (error) throw error;
   return toInsert.length;
+}
+
+/**
+ * Distinct fixed-expense names, used by the transaction filter's fixed-expense
+ * picker. Fixed expenses are month-specific rows, so one name spans many months;
+ * an optional [fromYM, toYM] range (from the date filter) narrows to names
+ * present in those months. year_month is 'YYYY-MM', so lexical gte/lte works.
+ */
+export async function fetchFixedExpenseNames(
+  fromYM?: string,
+  toYM?: string,
+): Promise<string[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  let q = supabase
+    .from("fixed_expenses")
+    .select("name")
+    .eq("user_id", user.id);
+  if (fromYM) q = q.gte("year_month", fromYM);
+  if (toYM) q = q.lte("year_month", toYM);
+  const { data } = await q;
+  return [...new Set((data ?? []).map((r) => r.name))].sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 /**
@@ -213,7 +235,6 @@ export async function fetchFixedExpensesForMonth(
     .select("*")
     .eq("user_id", user.id)
     .eq("year_month", yearMonth)
-    .order("due_day", { ascending: true })
     .order("name", { ascending: true });
   return data ?? [];
 }
