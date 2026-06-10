@@ -94,6 +94,7 @@ type CurrencyRow = {
 type UserSettingsRow = {
   user_id: string;
   default_currency: string;
+  default_account_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -293,8 +294,15 @@ export interface Database {
       };
       user_settings: {
         Row: UserSettingsRow;
-        Insert: { user_id: string; default_currency?: string };
-        Update: { default_currency?: string };
+        Insert: {
+          user_id: string;
+          default_currency?: string;
+          default_account_id?: string | null;
+        };
+        Update: {
+          default_currency?: string;
+          default_account_id?: string | null;
+        };
         Relationships: [];
       };
     };

@@ -67,16 +67,24 @@ async function currentUserId(): Promise<string> {
 }
 
 /** Account mutations. Balances are maintained by DB triggers — never written here. */
-export async function createAccount(values: AccountFormValues, decimalPlaces = 2) {
+export async function createAccount(
+  values: AccountFormValues,
+  decimalPlaces = 2,
+): Promise<string> {
   const user_id = await currentUserId();
-  const { error } = await supabase.from("accounts").insert({
-    user_id,
-    name: values.name,
-    type: values.type,
-    starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
-    image_url: values.image_url ?? null,
-  });
+  const { data, error } = await supabase
+    .from("accounts")
+    .insert({
+      user_id,
+      name: values.name,
+      type: values.type,
+      starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
+      image_url: values.image_url ?? null,
+    })
+    .select("id")
+    .single();
   if (error) throw error;
+  return data.id;
 }
 
 export async function updateAccount(
@@ -101,6 +109,37 @@ export async function archiveAccount(id: string) {
     .from("accounts")
     .update({ is_archived: true })
     .eq("id", id);
+  if (error) throw error;
+}
+
+/**
+ * The user's preferred default account for new transactions, or null. Stored on
+ * user_settings alongside default_currency (the app's preference store).
+ */
+export async function fetchDefaultAccountId(): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("user_settings")
+    .select("default_account_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return data?.default_account_id ?? null;
+}
+
+/** Persist the preferred default account; pass null to clear it. */
+export async function updateDefaultAccountId(
+  accountId: string | null,
+): Promise<void> {
+  const user_id = await currentUserId();
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id, default_account_id: accountId },
+      { onConflict: "user_id" },
+    );
   if (error) throw error;
 }
 
