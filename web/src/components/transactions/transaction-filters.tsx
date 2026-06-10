@@ -304,7 +304,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                     key={p.label}
                     type="button"
                     onClick={() => patch({ dateFrom: p.from, dateTo: p.to })}
-                    className={`rounded-full border px-2 py-1 text-xs ${
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
                       activePreset?.label === p.label
                         ? "border-[var(--color-primary)] text-[var(--color-primary)]"
                         : "border-[var(--color-border)] text-[var(--color-muted-foreground)]"
@@ -317,13 +317,13 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                   <button
                     type="button"
                     onClick={() => clear("dateFrom", "dateTo")}
-                    className="rounded-full border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted-foreground)]"
+                    className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted-foreground)]"
                   >
                     All time
                   </button>
                 )}
               </div>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="mt-2 flex items-center gap-2">
                 <Input
                   type="date"
                   value={filters.dateFrom ?? ""}
@@ -331,11 +331,9 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                     e.target.value ? patch({ dateFrom: e.target.value }) : clear("dateFrom")
                   }
                   aria-label="From date"
-                  className="min-w-0"
+                  className="min-w-0 appearance-none"
                 />
-                <span className="hidden text-[var(--color-muted-foreground)] sm:inline">
-                  –
-                </span>
+                <span className="text-[var(--color-muted-foreground)]">–</span>
                 <Input
                   type="date"
                   value={filters.dateTo ?? ""}
@@ -343,7 +341,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                     e.target.value ? patch({ dateTo: e.target.value }) : clear("dateTo")
                   }
                   aria-label="To date"
-                  className="min-w-0"
+                  className="min-w-0 appearance-none"
                 />
               </div>
             </FilterField>
