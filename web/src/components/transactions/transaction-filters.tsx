@@ -297,33 +297,6 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               )}
             </div>
 
-            <FilterField label="Type">
-              <MultiSelect
-                placeholder="All types"
-                options={TYPE_OPTIONS}
-                value={filters.types ?? []}
-                onChange={(v) => setArray("types", v)}
-              />
-            </FilterField>
-
-            <FilterField label="Account">
-              <MultiSelect
-                placeholder="All accounts"
-                options={accounts.map((a) => ({ value: a.id, label: a.name }))}
-                value={filters.accountIds ?? []}
-                onChange={(v) => setArray("accountIds", v)}
-              />
-            </FilterField>
-
-            <FilterField label="Status">
-              <MultiSelect
-                placeholder="All statuses"
-                options={STATUS_OPTIONS}
-                value={filters.statuses ?? []}
-                onChange={(v) => setArray("statuses", v)}
-              />
-            </FilterField>
-
             <FilterField label="Date">
               <div className="flex flex-wrap gap-1.5">
                 {presets.map((p) => (
@@ -358,6 +331,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                     e.target.value ? patch({ dateFrom: e.target.value }) : clear("dateFrom")
                   }
                   aria-label="From date"
+                  className="min-w-0 appearance-none"
                 />
                 <span className="text-[var(--color-muted-foreground)]">–</span>
                 <Input
@@ -367,8 +341,36 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                     e.target.value ? patch({ dateTo: e.target.value }) : clear("dateTo")
                   }
                   aria-label="To date"
+                  className="min-w-0 appearance-none"
                 />
               </div>
+            </FilterField>
+
+            <FilterField label="Status">
+              <MultiSelect
+                placeholder="All statuses"
+                options={STATUS_OPTIONS}
+                value={filters.statuses ?? []}
+                onChange={(v) => setArray("statuses", v)}
+              />
+            </FilterField>
+
+            <FilterField label="Type">
+              <MultiSelect
+                placeholder="All types"
+                options={TYPE_OPTIONS}
+                value={filters.types ?? []}
+                onChange={(v) => setArray("types", v)}
+              />
+            </FilterField>
+
+            <FilterField label="Account">
+              <MultiSelect
+                placeholder="All accounts"
+                options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+                value={filters.accountIds ?? []}
+                onChange={(v) => setArray("accountIds", v)}
+              />
             </FilterField>
 
             <FilterField label={`Amount (${defaultCurrency})`}>
@@ -405,32 +407,6 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               </div>
             </FilterField>
 
-            {categories.length > 0 && (
-              <FilterField label="Categories">
-                <MultiSelect
-                  placeholder="All categories"
-                  options={categories.map((c) => ({
-                    value: c.id,
-                    label: c.name,
-                    color: c.color,
-                  }))}
-                  value={filters.categoryIds ?? []}
-                  onChange={(v) => setArray("categoryIds", v)}
-                />
-              </FilterField>
-            )}
-
-            {tags.length > 0 && (
-              <FilterField label="Tags">
-                <MultiSelect
-                  placeholder="All tags"
-                  options={tags.map((t) => ({ value: t.id, label: `#${t.name}` }))}
-                  value={filters.tagIds ?? []}
-                  onChange={(v) => setArray("tagIds", v)}
-                />
-              </FilterField>
-            )}
-
             <FilterField label="Budget">
               <Select
                 value={filters.budgetName ?? "all"}
@@ -451,6 +427,21 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                 </SelectContent>
               </Select>
             </FilterField>
+
+            {categories.length > 0 && (
+              <FilterField label="Categories">
+                <MultiSelect
+                  placeholder="All categories"
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    color: c.color,
+                  }))}
+                  value={filters.categoryIds ?? []}
+                  onChange={(v) => setArray("categoryIds", v)}
+                />
+              </FilterField>
+            )}
 
             <FilterField label="Fixed expense">
               <Select
@@ -473,6 +464,17 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                 </SelectContent>
               </Select>
             </FilterField>
+
+            {tags.length > 0 && (
+              <FilterField label="Tags">
+                <MultiSelect
+                  placeholder="All tags"
+                  options={tags.map((t) => ({ value: t.id, label: `#${t.name}` }))}
+                  value={filters.tagIds ?? []}
+                  onChange={(v) => setArray("tagIds", v)}
+                />
+              </FilterField>
+            )}
 
             {/* A "Sort" section can be added here alongside the Filter one. */}
           </PopoverContent>
