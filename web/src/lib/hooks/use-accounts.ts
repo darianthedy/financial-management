@@ -104,6 +104,37 @@ export async function archiveAccount(id: string) {
   if (error) throw error;
 }
 
+/**
+ * The user's preferred default account for new transactions, or null. Stored on
+ * user_settings alongside default_currency (the app's preference store).
+ */
+export async function fetchDefaultAccountId(): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("user_settings")
+    .select("default_account_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return data?.default_account_id ?? null;
+}
+
+/** Persist the preferred default account; pass null to clear it. */
+export async function updateDefaultAccountId(
+  accountId: string | null,
+): Promise<void> {
+  const user_id = await currentUserId();
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id, default_account_id: accountId },
+      { onConflict: "user_id" },
+    );
+  if (error) throw error;
+}
+
 export async function getAccount(id: string): Promise<AccountWithBalance | null> {
   const [{ data: account }, { data: balance }] = await Promise.all([
     supabase.from("accounts").select("*").eq("id", id).maybeSingle(),

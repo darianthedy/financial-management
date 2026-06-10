@@ -29,7 +29,7 @@ import {
   fetchTags,
   createTag,
 } from "@/lib/hooks/use-transactions";
-import { useAccounts } from "@/lib/hooks/use-accounts";
+import { useAccounts, fetchDefaultAccountId } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { fetchBudgetsForMonth } from "@/lib/hooks/use-budgets";
 import { BudgetForm } from "@/components/budgets/budget-form";
@@ -119,6 +119,7 @@ export function TransactionForm({
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,6 +143,23 @@ export function TransactionForm({
   useEffect(() => {
     fetchCategories().then(setCategories);
     fetchTags().then(setAllTags);
+  }, []);
+
+  // New transactions: pre-select the user's default account preference. Skip in
+  // edit mode and when the URL already pinned an account (e.g. opened from an
+  // account page), and don't clobber a choice made while this was loading.
+  useEffect(() => {
+    if (transaction || defaultAccountId) return;
+    let active = true;
+    fetchDefaultAccountId().then((id) => {
+      if (active && id && !getValues("account_id")) {
+        setValue("account_id", id);
+      }
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const type = watch("type");
@@ -379,7 +397,7 @@ export function TransactionForm({
               <SelectItem value={BUDGET_NONE}>No budget</SelectItem>
               {budgetOptions.map((b) => (
                 <SelectItem key={b.budget_id} value={b.budget_id}>
-                  {b.budget_name} · {formatCurrency(b.effective_amount)}
+                  {b.budget_name} · {formatCurrency(b.remaining)} left
                 </SelectItem>
               ))}
               <SelectItem value={BUDGET_CREATE}>
@@ -412,7 +430,16 @@ export function TransactionForm({
               <SelectItem value={CATEGORY_NONE}>No category</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.name}
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor:
+                          c.color ?? "var(--color-muted-foreground)",
+                      }}
+                    />
+                    {c.name}
+                  </span>
                 </SelectItem>
               ))}
               <SelectItem value={CATEGORY_CREATE}>+ Create category</SelectItem>
@@ -467,10 +494,11 @@ export function TransactionForm({
                 key={t.id}
                 type="button"
                 onClick={() => removeTag(t.id)}
-                className="flex items-center gap-1 rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-primary-foreground)] transition-colors hover:opacity-90"
+                aria-label={`Remove tag ${t.name}`}
+                className="flex min-h-8 items-center gap-1 rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] py-1 pl-3 pr-2.5 text-xs font-medium text-[var(--color-primary-foreground)] transition-colors hover:opacity-90"
               >
                 {t.name}
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             ))}
           </div>
@@ -485,6 +513,14 @@ export function TransactionForm({
                 ref={tagInputRef}
                 placeholder="Add tag"
                 value={tagQuery}
+                // Mobile keyboards otherwise auto-capitalize/correct tag names and
+                // suggest unrelated words; turn those off and let Enter add a tag
+                // without dismissing the keyboard.
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                enterKeyHint="done"
                 onChange={(e) => {
                   setTagQuery(e.target.value);
                   setTagPopoverOpen(true);
@@ -513,13 +549,15 @@ export function TransactionForm({
             }}
             className="w-[var(--radix-popover-trigger-width)] p-1"
           >
-            <div className="max-h-56 overflow-y-auto">
+            {/* overscroll-contain keeps a flick from scrolling the page behind
+                the list; min-h-11 rows give finger-friendly tap targets. */}
+            <div className="max-h-64 overflow-y-auto overscroll-contain">
               {filteredTags.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => addTag(t.id)}
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-[var(--color-muted)]"
+                  className="flex min-h-11 w-full items-center rounded-sm px-3 py-2 text-left text-sm outline-none hover:bg-[var(--color-muted)] active:bg-[var(--color-muted)]"
                 >
                   {t.name}
                 </button>
@@ -528,14 +566,14 @@ export function TransactionForm({
                 <button
                   type="button"
                   onClick={createAndAddTag}
-                  className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-[var(--color-muted)]"
+                  className="flex min-h-11 w-full items-center gap-1.5 rounded-sm px-3 py-2 text-left text-sm outline-none hover:bg-[var(--color-muted)] active:bg-[var(--color-muted)]"
                 >
-                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <Plus className="h-4 w-4 shrink-0" />
                   Create “{tagQuery.trim()}”
                 </button>
               )}
               {filteredTags.length === 0 && !canCreateTag && (
-                <div className="px-2 py-1.5 text-sm text-[var(--color-muted-foreground)]">
+                <div className="px-3 py-2 text-sm text-[var(--color-muted-foreground)]">
                   {allTags.length === 0 ? "No tags yet" : "All tags selected"}
                 </div>
               )}
