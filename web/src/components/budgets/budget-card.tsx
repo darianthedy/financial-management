@@ -37,9 +37,11 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
             <span className="truncate font-medium">{budget.budget_name}</span>
             {carry_over_amount !== 0 && (
               <Popover>
-                {/* Negative margin keeps the icon visually compact while the
-                    padding gives an adequate (~40px) tap target on mobile. */}
-                <PopoverTrigger className="-m-2 shrink-0 rounded-full p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]">
+                {/* Vertical negative margin keeps the row from growing while the
+                    padding gives a comfortable tap target on mobile. No
+                    horizontal negative margin, so the hover/press background
+                    never bleeds under the budget name. */}
+                <PopoverTrigger className="-my-2 shrink-0 rounded-full p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]">
                   <Info className="h-4 w-4" />
                   <span className="sr-only">Budget carry-over details</span>
                 </PopoverTrigger>
