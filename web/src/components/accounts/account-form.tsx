@@ -28,7 +28,12 @@ import {
   accountFormSchema,
   type AccountFormValues,
 } from "@/lib/validations/account";
-import { createAccount, updateAccount } from "@/lib/hooks/use-accounts";
+import {
+  createAccount,
+  updateAccount,
+  fetchDefaultAccountId,
+  updateDefaultAccountId,
+} from "@/lib/hooks/use-accounts";
 import type { Account } from "@/lib/types/database";
 import { toDisplayAmount, currencyDecimals } from "@/lib/utils/currency";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
@@ -44,6 +49,13 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
   const { defaultCurrency, decimalsFor } = useCurrencies();
   const [submitError, setSubmitError] = useState("");
   const isEdit = !!account;
+
+  // "Default account" preference (stored on user_settings). There is only ever
+  // one default, so checking it here replaces whatever was default before.
+  // currentDefaultId is the default at open time, so we know whether unchecking
+  // should clear it (this account was the default) or leave it alone.
+  const [isDefault, setIsDefault] = useState(false);
+  const [currentDefaultId, setCurrentDefaultId] = useState<string | null>(null);
 
   // Image is handled outside react-hook-form: we stage the picked File and a
   // preview URL, then upload on submit (so cancelling never orphans a file).
@@ -111,6 +123,15 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
     setImageFile(null);
     setImageRemoved(false);
     setImagePreview(account?.image_url ?? null);
+
+    // Reflect the stored default: pre-check the box when editing the account
+    // that's currently the default.
+    setIsDefault(false);
+    setCurrentDefaultId(null);
+    fetchDefaultAccountId().then((id) => {
+      setCurrentDefaultId(id);
+      setIsDefault(!!account && account.id === id);
+    });
   }, [open, account, defaultCurrency, reset]);
 
   // Release any object URL when the form unmounts.
@@ -126,8 +147,22 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
       else if (imageRemoved) image_url = null;
 
       const payload = { ...values, image_url };
-      if (account) await updateAccount(account.id, payload, decimals);
-      else await createAccount(payload, decimals);
+      let accountId: string;
+      if (account) {
+        await updateAccount(account.id, payload, decimals);
+        accountId = account.id;
+      } else {
+        accountId = await createAccount(payload, decimals);
+      }
+
+      // Persist the default-account preference. Setting it replaces any prior
+      // default; only clear it when this account was the default and got
+      // unchecked (never touch another account's default).
+      if (isDefault) {
+        if (currentDefaultId !== accountId) await updateDefaultAccountId(accountId);
+      } else if (currentDefaultId === accountId) {
+        await updateDefaultAccountId(null);
+      }
 
       // Drop the replaced/removed image only once the save succeeded.
       if (previousUrl && previousUrl !== image_url) {
@@ -234,6 +269,22 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
               }
             />
             <FieldError message={errors.starting_balance?.message} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+                className="h-4 w-4 cursor-pointer rounded border-[var(--color-input)] accent-[var(--color-primary)]"
+              />
+              Set as default account
+            </label>
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              Pre-selected when you add a new transaction. Only one account can be
+              the default.
+            </p>
           </div>
 
           <FieldError message={submitError} />
