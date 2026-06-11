@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
 import { PaceGaugeCard } from "@/components/dashboard/pace-gauge";
+import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
 import { UntrackedSpendingCard } from "@/components/dashboard/untracked-spending";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
@@ -17,8 +18,13 @@ import {
 
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
-  const { untrackedSpending, budgetProgress, recentTransactions, loading } =
-    useDashboard(yearMonth);
+  const {
+    untrackedSpending,
+    fixedExpenses,
+    budgetProgress,
+    recentTransactions,
+    loading,
+  } = useDashboard(yearMonth);
 
   return (
     <div className="space-y-6">
@@ -58,9 +64,11 @@ export default function DashboardPage() {
               <PaceGaugeCard budgets={budgetProgress} yearMonth={yearMonth} />
             </div>
           )}
-          <div className="md:col-span-2">
-            <UntrackedSpendingCard spending={untrackedSpending} />
-          </div>
+          <PlannedExpensesCard
+            budgets={budgetProgress}
+            fixedExpenses={fixedExpenses}
+          />
+          <UntrackedSpendingCard spending={untrackedSpending} />
           <div className="md:col-span-2">
             <BudgetProgressCard budgets={budgetProgress} />
           </div>

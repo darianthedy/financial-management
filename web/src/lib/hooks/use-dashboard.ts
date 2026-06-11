@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Transaction, BudgetProgress, Category, Tag } from "@/lib/types/database";
+import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
 import { monthDateRange } from "@/lib/utils/date";
 
 export type RecentTransaction = Transaction & {
@@ -37,6 +38,7 @@ function pctUsed(b: BudgetProgress): number {
 
 export function useDashboard(yearMonth: string) {
   const [untrackedSpending, setUntrackedSpending] = useState<UntrackedCategorySpend[]>([]);
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseWithStatus[]>([]);
   const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,7 @@ export function useDashboard(yearMonth: string) {
     const { start, endExclusive } = monthDateRange(yearMonth);
     const [
       { data: budgetRows },
+      { data: fxRows },
       { data: untrackedRows },
       { data: txnRows },
     ] = await Promise.all([
@@ -53,6 +56,11 @@ export function useDashboard(yearMonth: string) {
         .from("v_budget_progress")
         .select("*")
         .eq("year_month", yearMonth),
+      supabase
+        .from("fixed_expenses")
+        .select("*")
+        .eq("year_month", yearMonth)
+        .order("name", { ascending: true }),
       // Untracked spend: confirmed expenses with no budget and no fixed expense.
       supabase
         .from("transactions")
@@ -111,8 +119,11 @@ export function useDashboard(yearMonth: string) {
     const fixedExpenseIds = [
       ...new Set(txns.map((t) => t.fixed_expense_id).filter(Boolean)),
     ] as string[];
+    // Planned fixed expenses for the month; their paid status comes from any
+    // transaction linking back via fixed_expense_id (amounts need not match).
+    const fxIds = (fxRows ?? []).map((f) => f.id);
 
-    const [accountRes, budgetRes, categoryRes, fixedExpenseRes, tagRes] = await Promise.all([
+    const [accountRes, budgetRes, categoryRes, fixedExpenseRes, tagRes, fxLinkRes] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name, image_url").in("id", accountIds)
         : Promise.resolve({
@@ -135,6 +146,14 @@ export function useDashboard(yearMonth: string) {
             data: Array<{ transaction_id: string; tags: Tag | null }> | null;
           }>)
         : Promise.resolve({ data: [] as Array<{ transaction_id: string; tags: Tag | null }> }),
+      fxIds.length
+        ? supabase
+            .from("transactions")
+            .select("fixed_expense_id, amount")
+            .in("fixed_expense_id", fxIds)
+        : Promise.resolve({
+            data: [] as Array<{ fixed_expense_id: string | null; amount: number }>,
+          }),
     ]);
 
     const accountById = new Map((accountRes.data ?? []).map((a) => [a.id, a]));
@@ -173,6 +192,24 @@ export function useDashboard(yearMonth: string) {
     untracked.sort((a, b) => b.total_amount - a.total_amount);
 
     setUntrackedSpending(untracked);
+
+    // Derive each fixed expense's paid status from its linked transactions.
+    const paidTotalById = new Map<string, number>();
+    for (const link of fxLinkRes.data ?? []) {
+      if (!link.fixed_expense_id) continue;
+      paidTotalById.set(
+        link.fixed_expense_id,
+        (paidTotalById.get(link.fixed_expense_id) ?? 0) + link.amount,
+      );
+    }
+    setFixedExpenses(
+      (fxRows ?? []).map((f) => ({
+        ...f,
+        paid: paidTotalById.has(f.id),
+        paid_total: paidTotalById.get(f.id) ?? 0,
+      })),
+    );
+
     // Surface the budgets that need attention first: most-over and
     // closest-to-the-limit lead, instead of an alphabetical wall.
     setBudgetProgress([...(budgetRows ?? [])].sort((a, b) => pctUsed(b) - pctUsed(a)));
@@ -203,9 +240,10 @@ export function useDashboard(yearMonth: string) {
       .channel("dashboard-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => fetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "budgets" }, () => fetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "fixed_expenses" }, () => fetch())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { untrackedSpending, budgetProgress, recentTransactions, loading, refetch: fetch };
+  return { untrackedSpending, fixedExpenses, budgetProgress, recentTransactions, loading, refetch: fetch };
 }
