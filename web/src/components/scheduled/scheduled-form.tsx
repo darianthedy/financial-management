@@ -39,13 +39,20 @@ import {
   createTag,
 } from "@/lib/hooks/use-transactions";
 import { fetchBudgetsForMonth } from "@/lib/hooks/use-budgets";
+import { fetchFixedExpensesForMonth } from "@/lib/hooks/use-fixed-expenses";
 import { CategoryForm } from "@/components/transactions/category-form";
 import { BudgetForm } from "@/components/budgets/budget-form";
+import { FixedExpenseForm } from "@/components/fixed-expenses/fixed-expense-form";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { toDisplayAmount, currencyDecimals, formatCurrency } from "@/lib/utils/currency";
 import { todayIso, yearMonthOf } from "@/lib/utils/date";
-import type { Category, Tag, BudgetProgress } from "@/lib/types/database";
+import type {
+  Category,
+  Tag,
+  BudgetProgress,
+  FixedExpense,
+} from "@/lib/types/database";
 
 interface Props {
   open: boolean;
@@ -65,6 +72,8 @@ const BUDGET_NONE = "__none__";
 const BUDGET_CREATE = "__create__";
 const CATEGORY_NONE = "__none__";
 const CATEGORY_CREATE = "__create__";
+const FIXED_NONE = "__none__";
+const FIXED_CREATE = "__create__";
 
 export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props) {
   const { accounts } = useAccounts();
@@ -78,6 +87,10 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
   const [budgetOptions, setBudgetOptions] = useState<BudgetProgress[]>([]);
   const [budgetFormOpen, setBudgetFormOpen] = useState(false);
   const [categoryFormOpen, setCategoryFormOpen] = useState(false);
+  const [fixedExpenseOptions, setFixedExpenseOptions] = useState<FixedExpense[]>(
+    [],
+  );
+  const [fixedExpenseFormOpen, setFixedExpenseFormOpen] = useState(false);
   const isEdit = !!scheduled;
 
   const {
@@ -101,6 +114,7 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
       is_active: true,
       category_id: null,
       budget_name: null,
+      fixed_expense_name: null,
       tag_ids: [],
     },
   });
@@ -124,6 +138,7 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             is_active: scheduled.is_active,
             category_id: scheduled.category_id,
             budget_name: scheduled.budget_name,
+            fixed_expense_name: scheduled.fixed_expense_name,
             tag_ids: scheduled.tags.map((t) => t.id),
           }
         : {
@@ -136,6 +151,7 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             is_active: true,
             category_id: null,
             budget_name: null,
+            fixed_expense_name: null,
             tag_ids: [],
           },
     );
@@ -149,6 +165,7 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
   const dueDate = watch("next_due_date");
   const categoryId = watch("category_id") ?? null;
   const budgetName = watch("budget_name") ?? null;
+  const fixedExpenseName = watch("fixed_expense_name") ?? null;
   const tagIds = watch("tag_ids") ?? [];
 
   // Budgets linkable for the due month, so the picker shows the same lineages the
@@ -170,6 +187,26 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
   // selectable so editing doesn't silently drop the link.
   const budgetMissingFromMonth =
     !!budgetName && !budgetOptions.some((b) => b.budget_name === budgetName);
+
+  // Fixed expenses are month-scoped too; load the due month's so the picker
+  // shows the same lineages the generator will resolve against (by name).
+  const loadFixedExpenses = useCallback(() => {
+    if (!budgetMonth) {
+      setFixedExpenseOptions([]);
+      return;
+    }
+    fetchFixedExpensesForMonth(budgetMonth).then(setFixedExpenseOptions);
+  }, [budgetMonth]);
+
+  useEffect(() => {
+    loadFixedExpenses();
+  }, [loadFixedExpenses]);
+
+  // Keep a stored lineage selectable even if the due month has no row yet, so
+  // editing doesn't silently drop the link.
+  const fixedExpenseMissingFromMonth =
+    !!fixedExpenseName &&
+    !fixedExpenseOptions.some((fe) => fe.name === fixedExpenseName);
 
   // Tags actually attached, shown as removable chips.
   const selectedTags = allTags.filter((t) => tagIds.includes(t.id));
@@ -244,7 +281,11 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
                 <button
                   key={t.value}
                   type="button"
-                  onClick={() => setValue("type", t.value)}
+                  onClick={() => {
+                    setValue("type", t.value);
+                    // Fixed expenses apply to expenses only; drop the link on income.
+                    if (t.value !== "expense") setValue("fixed_expense_name", null);
+                  }}
                   className={`flex-1 rounded-[var(--radius)] border px-3 py-2 text-sm font-medium transition-colors ${
                     type === t.value
                       ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
@@ -396,6 +437,49 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             </Select>
           </div>
 
+          {/* Fixed expense (expense only) — linked by lineage (name). The
+              generator resolves it to the due month's fixed expense; months
+              without one are generated unlinked. Linking marks it paid. */}
+          {type === "expense" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fixed_expense_name">Fixed expense</Label>
+              <Select
+                value={fixedExpenseName ?? FIXED_NONE}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  if (v === FIXED_CREATE) {
+                    setFixedExpenseFormOpen(true);
+                    return;
+                  }
+                  setValue(
+                    "fixed_expense_name",
+                    v === FIXED_NONE ? null : v,
+                  );
+                }}
+              >
+                <SelectTrigger id="fixed_expense_name">
+                  <SelectValue placeholder="Not a fixed expense" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FIXED_NONE}>Not a fixed expense</SelectItem>
+                  {fixedExpenseMissingFromMonth && (
+                    <SelectItem value={fixedExpenseName!}>
+                      {fixedExpenseName} · none this month
+                    </SelectItem>
+                  )}
+                  {fixedExpenseOptions.map((fe) => (
+                    <SelectItem key={fe.id} value={fe.name}>
+                      {fe.name} · {formatCurrency(fe.amount)}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={FIXED_CREATE}>
+                    + Create fixed expense for this month
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Tags */}
           <div className="flex flex-col gap-1.5">
             <Label>Tags</Label>
@@ -530,6 +614,20 @@ export function ScheduledForm({ open, onOpenChange, scheduled, onSaved }: Props)
             [...prev, category].sort((a, b) => a.name.localeCompare(b.name)),
           );
           setValue("category_id", category.id);
+        }}
+      />
+
+      <FixedExpenseForm
+        open={fixedExpenseFormOpen}
+        onOpenChange={setFixedExpenseFormOpen}
+        yearMonth={budgetMonth}
+        onSaved={(id) => {
+          // Resolve the freshly created row back to its lineage name to store.
+          fetchFixedExpensesForMonth(budgetMonth).then((opts) => {
+            setFixedExpenseOptions(opts);
+            const created = opts.find((fe) => fe.id === id);
+            if (created) setValue("fixed_expense_name", created.name);
+          });
         }}
       />
     </Dialog>

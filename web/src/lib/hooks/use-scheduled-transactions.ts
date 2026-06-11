@@ -162,6 +162,7 @@ export async function createScheduledTransaction(
       is_active: values.is_active,
       category_id: values.category_id ?? null,
       budget_name: values.budget_name ?? null,
+      fixed_expense_name: values.fixed_expense_name ?? null,
     })
     .select("id")
     .single();
@@ -186,6 +187,7 @@ export async function updateScheduledTransaction(
       is_active: values.is_active,
       category_id: values.category_id ?? null,
       budget_name: values.budget_name ?? null,
+      fixed_expense_name: values.fixed_expense_name ?? null,
     })
     .eq("id", id);
   if (error) throw error;
