@@ -115,12 +115,36 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
 
             {fixedExpenses.length > 0 && (
               <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-                  Fixed Expenses
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                    Fixed Expenses
+                  </p>
+                  <div className="flex items-center gap-3 text-xs">
+                    {fixedExpenses.some((f) => !f.paid) && (
+                      <span className="flex items-center gap-1 text-[var(--color-muted-foreground)]">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        {formatCurrency(
+                          fixedExpenses
+                            .filter((f) => !f.paid)
+                            .reduce((s, f) => s + f.amount, 0),
+                        )}
+                      </span>
+                    )}
+                    {fixedExpenses.some((f) => f.paid) && (
+                      <span className="flex items-center gap-1 text-[var(--color-success)]">
+                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                        {formatCurrency(
+                          fixedExpenses
+                            .filter((f) => f.paid)
+                            .reduce((s, f) => s + f.amount, 0),
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {[...fixedExpenses]
                   .sort((a, b) => {
-                    if (a.paid !== b.paid) return a.paid ? -1 : 1;
+                    if (a.paid !== b.paid) return a.paid ? 1 : -1;
                     return b.amount - a.amount;
                   })
                   .map((f) => (
