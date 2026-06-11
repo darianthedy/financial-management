@@ -3,18 +3,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
-import { PaceGaugeCard } from "@/components/dashboard/pace-gauge";
 import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
 import { UntrackedSpendingCard } from "@/components/dashboard/untracked-spending";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
-import {
-  getCurrentYearMonth,
-  navigateMonth,
-  formatYearMonth,
-  isCurrentYearMonth,
-} from "@/lib/utils/date";
+import { getCurrentYearMonth, navigateMonth, formatYearMonth } from "@/lib/utils/date";
 
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
@@ -59,14 +53,10 @@ export default function DashboardPage() {
           <div className="md:col-span-2">
             <VerdictBanner budgets={budgetProgress} />
           </div>
-          {isCurrentYearMonth(yearMonth) && (
-            <div className="md:col-span-2">
-              <PaceGaugeCard budgets={budgetProgress} yearMonth={yearMonth} />
-            </div>
-          )}
           <PlannedExpensesCard
             budgets={budgetProgress}
             fixedExpenses={fixedExpenses}
+            yearMonth={yearMonth}
           />
           <UntrackedSpendingCard spending={untrackedSpending} />
           <div className="md:col-span-2">

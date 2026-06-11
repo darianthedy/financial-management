@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { formatCurrency } from "@/lib/utils/currency";
+import { monthElapsedFraction } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 import type { BudgetProgress } from "@/lib/types/database";
 import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
@@ -8,17 +9,27 @@ import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
 interface Props {
   budgets: BudgetProgress[];
   fixedExpenses: FixedExpenseWithStatus[];
+  yearMonth: string;
 }
 
 /**
  * What the user has planned to spend this month: every budget (with progress)
  * and every fixed expense (with paid status). The headline sums both into a
  * single "planned" figure so the user sees their committed total at a glance.
+ *
+ * Budget bars are pace-aware: for the in-progress month the fill is colored by
+ * the PROJECTED month-end (spend so far extrapolated over the elapsed fraction),
+ * and a tick marks where linear pace should be today. Past months fall back to
+ * actual over/under.
  */
-export function PlannedExpensesCard({ budgets, fixedExpenses }: Props) {
+export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props) {
   const plannedTotal =
     budgets.reduce((s, b) => s + b.effective_amount, 0) +
     fixedExpenses.reduce((s, f) => s + f.amount, 0);
+
+  const fractionElapsed = monthElapsedFraction(yearMonth);
+  // Only show the pace tick mid-month; at 0 (future) or 1 (past) it's noise.
+  const showPaceMarker = fractionElapsed > 0 && fractionElapsed < 1;
 
   const isEmpty = budgets.length === 0 && fixedExpenses.length === 0;
 
@@ -57,6 +68,12 @@ export function PlannedExpensesCard({ budgets, fixedExpenses }: Props) {
                       : b.spent > 0
                         ? 100
                         : 0;
+                  // Color by projected month-end pace when we can project;
+                  // otherwise fall back to whether it's actually over.
+                  const canProject = fractionElapsed > 0 && b.effective_amount > 0;
+                  const projectedOver = canProject
+                    ? b.spent / fractionElapsed > b.effective_amount
+                    : overspent;
                   return (
                     <div key={b.budget_id} className="flex flex-col gap-1">
                       <div className="flex items-center justify-between gap-2 text-sm">
@@ -72,16 +89,22 @@ export function PlannedExpensesCard({ budgets, fixedExpenses }: Props) {
                           {formatCurrency(b.spent)} / {formatCurrency(b.effective_amount)}
                         </span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-muted)]">
+                      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-muted)]">
                         <div
                           className={cn(
                             "h-full rounded-full",
-                            overspent
+                            projectedOver
                               ? "bg-[var(--color-danger)]"
                               : "bg-[var(--color-primary)]",
                           )}
                           style={{ width: `${pct}%` }}
                         />
+                        {showPaceMarker && (
+                          <div
+                            className="absolute inset-y-0 w-0.5 bg-[var(--color-card-foreground)]"
+                            style={{ left: `${fractionElapsed * 100}%` }}
+                          />
+                        )}
                       </div>
                     </div>
                   );
