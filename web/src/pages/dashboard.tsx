@@ -5,7 +5,6 @@ import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
 import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
 import { UnplannedExpensesCard } from "@/components/dashboard/unplanned-expenses";
-import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
 import { getCurrentYearMonth, navigateMonth, formatYearMonth } from "@/lib/utils/date";
@@ -59,9 +58,6 @@ export default function DashboardPage() {
             yearMonth={yearMonth}
           />
           <UnplannedExpensesCard spending={unplannedExpenses} />
-          <div className="md:col-span-2">
-            <BudgetProgressCard budgets={budgetProgress} />
-          </div>
           <div className="md:col-span-2">
             <RecentTransactionsCard transactions={recentTransactions} />
           </div>
