@@ -11,9 +11,8 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner, EmptyState } from "@/components/ui/misc";
 
 interface Props {
-  accountId?: string;
-  filters?: Omit<TransactionFilters, "accountId">;
-  /** When true the "Add transaction" button links to /transactions/new with an account pre-selected. */
+  filters?: TransactionFilters;
+  /** When true the "Add transaction" button links to /transactions/new. */
   showAddButton?: boolean;
   /** Hide the list's own "Transactions" heading (e.g. when the page already has one). */
   hideHeader?: boolean;
@@ -23,7 +22,6 @@ interface Props {
 }
 
 export function TransactionList({
-  accountId,
   filters = {},
   showAddButton = true,
   hideHeader = false,
@@ -31,10 +29,7 @@ export function TransactionList({
   onMutated,
 }: Props) {
   const navigate = useNavigate();
-  const { transactions, loading, refetch } = useTransactions({
-    accountId,
-    ...filters,
-  });
+  const { transactions, loading, refetch } = useTransactions(filters);
 
   // Report rows only once a fetch settles, so the page summary keeps the last
   // result during a refetch instead of flashing an empty/stale set.
@@ -60,13 +55,7 @@ export function TransactionList({
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
-                navigate(
-                  accountId
-                    ? `/transactions/new?accountId=${accountId}`
-                    : "/transactions/new",
-                )
-              }
+              onClick={() => navigate("/transactions/new")}
             >
               <Plus className="h-4 w-4" /> Add
             </Button>
