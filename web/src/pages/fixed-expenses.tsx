@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, ChevronLeft, ChevronRight, CopyPlus } from "lucide-react";
 import {
   useFixedExpenses,
@@ -10,6 +10,7 @@ import { FixedExpenseRow } from "@/components/fixed-expenses/fixed-expense-row";
 import { FixedExpenseForm } from "@/components/fixed-expenses/fixed-expense-form";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner, EmptyState } from "@/components/ui/misc";
+import { formatCurrency } from "@/lib/utils/currency";
 import {
   getCurrentYearMonth,
   navigateMonth,
@@ -24,6 +25,22 @@ export default function FixedExpensesPage() {
     null,
   );
   const [copying, setCopying] = useState(false);
+
+  // Split into unpaid / paid, each sorted highest amount to lowest, with totals.
+  const { unpaid, paid, unpaidTotal, paidTotal } = useMemo(() => {
+    const byAmountDesc = (a: FixedExpenseWithStatus, b: FixedExpenseWithStatus) =>
+      b.amount - a.amount;
+    const unpaid = fixedExpenses.filter((fe) => !fe.paid).sort(byAmountDesc);
+    const paid = fixedExpenses.filter((fe) => fe.paid).sort(byAmountDesc);
+    const sum = (list: FixedExpenseWithStatus[]) =>
+      list.reduce((total, fe) => total + fe.amount, 0);
+    return {
+      unpaid,
+      paid,
+      unpaidTotal: sum(unpaid),
+      paidTotal: sum(paid),
+    };
+  }, [fixedExpenses]);
 
   function openCreate() {
     setEditTarget(null);
@@ -115,15 +132,32 @@ export default function FixedExpensesPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {fixedExpenses.map((fe) => (
-            <FixedExpenseRow
-              key={fe.id}
-              fixedExpense={fe}
-              onEdit={() => openEdit(fe)}
-              onRemove={() => handleRemove(fe)}
-            />
-          ))}
+        <div className="space-y-6">
+          {[
+            { key: "unpaid", label: "Unpaid", items: unpaid, total: unpaidTotal },
+            { key: "paid", label: "Paid", items: paid, total: paidTotal },
+          ]
+            .filter((section) => section.items.length > 0)
+            .map((section) => (
+              <div key={section.key} className="space-y-3">
+                <div className="flex items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-muted)] px-4 py-2 text-sm">
+                  <span className="font-medium">{section.label} total</span>
+                  <span className="font-semibold">
+                    {formatCurrency(section.total)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {section.items.map((fe) => (
+                    <FixedExpenseRow
+                      key={fe.id}
+                      fixedExpense={fe}
+                      onEdit={() => openEdit(fe)}
+                      onRemove={() => handleRemove(fe)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
         </div>
       )}
 

@@ -3,13 +3,13 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  Check,
+  CheckCircle2,
+  Clock,
   ArrowLeftRight,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/currency";
-import { cn } from "@/lib/utils/cn";
 import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
 
 interface Props {
@@ -40,24 +40,24 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
       className="cursor-pointer transition-shadow hover:shadow-md"
       onClick={viewTransactions}
     >
-      <CardContent className="flex items-start justify-between gap-3 p-4">
-        {/* Left: name + paid/unpaid status, stacked. */}
-        <div className="flex min-w-0 flex-col gap-2">
+      <CardContent className="flex items-center justify-between gap-3 p-4">
+        {/* Left: paid/unpaid icon + name, inline to keep the row compact. */}
+        <div className="flex min-w-0 items-center gap-2">
+          {paid ? (
+            <CheckCircle2
+              className="h-4 w-4 shrink-0 text-[var(--color-success)]"
+              aria-label="Paid"
+            />
+          ) : (
+            <Clock
+              className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]"
+              aria-label="Unpaid"
+            />
+          )}
           <span className="truncate font-medium">{name}</span>
-          <span
-            className={cn(
-              "inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-              paid
-                ? "bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]"
-                : "border border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
-            )}
-          >
-            {paid && <Check className="h-3 w-3" />}
-            {paid ? "Paid" : "Unpaid"}
-          </span>
         </div>
 
-        {/* Right: amount + actions menu, aligned with the name. */}
+        {/* Right: amount + actions menu. */}
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-nowrap font-semibold">
             {formatCurrency(amount)}
