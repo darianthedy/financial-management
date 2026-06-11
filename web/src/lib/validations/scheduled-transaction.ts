@@ -20,6 +20,10 @@ export const scheduledTransactionFormSchema = z.object({
   // Budget LINEAGE by name (not a row id): budgets are month-scoped, so the
   // generator resolves this name to the due month's budget at run time.
   budget_name: z.string().nullable().optional(),
+  // Fixed-expense LINEAGE by name (not a row id): fixed expenses are
+  // month-scoped, so the generator resolves this name to the due month's fixed
+  // expense at run time. Expense schedules only.
+  fixed_expense_name: z.string().nullable().optional(),
   tag_ids: z.array(z.string().uuid()).default([]),
 });
 

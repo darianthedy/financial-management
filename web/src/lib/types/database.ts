@@ -56,6 +56,7 @@ type ScheduledTransactionRow = {
   is_active: boolean;
   category_id: string | null;
   budget_name: string | null;
+  fixed_expense_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -214,6 +215,7 @@ export interface Database {
           is_active?: boolean;
           category_id?: string | null;
           budget_name?: string | null;
+          fixed_expense_name?: string | null;
         };
         Update: {
           account_id?: string;
@@ -225,6 +227,7 @@ export interface Database {
           is_active?: boolean;
           category_id?: string | null;
           budget_name?: string | null;
+          fixed_expense_name?: string | null;
         };
         Relationships: [];
       };
