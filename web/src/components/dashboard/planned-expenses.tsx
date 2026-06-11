@@ -34,6 +34,15 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
 
   const isEmpty = budgets.length === 0 && fixedExpenses.length === 0;
 
+  const unpaidFx = fixedExpenses
+    .filter((f) => !f.paid)
+    .sort((a, b) => b.amount - a.amount);
+  const paidFx = fixedExpenses
+    .filter((f) => f.paid)
+    .sort((a, b) => b.amount - a.amount);
+  const unpaidTotal = unpaidFx.reduce((s, f) => s + f.amount, 0);
+  const paidTotal = paidFx.reduce((s, f) => s + f.amount, 0);
+
   return (
     <Card>
       <CardHeader>
@@ -114,64 +123,56 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
             )}
 
             {fixedExpenses.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-                    Fixed Expenses
-                  </p>
-                  <div className="flex items-center gap-3 text-xs">
-                    {fixedExpenses.some((f) => !f.paid) && (
-                      <span className="flex items-center gap-1 text-[var(--color-muted-foreground)]">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        {formatCurrency(
-                          fixedExpenses
-                            .filter((f) => !f.paid)
-                            .reduce((s, f) => s + f.amount, 0),
-                        )}
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                  Fixed Expenses
+                </p>
+
+                {unpaidFx.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        Unpaid
                       </span>
-                    )}
-                    {fixedExpenses.some((f) => f.paid) && (
-                      <span className="flex items-center gap-1 text-[var(--color-success)]">
-                        <CheckCircle2 className="h-3 w-3 shrink-0" />
-                        {formatCurrency(
-                          fixedExpenses
-                            .filter((f) => f.paid)
-                            .reduce((s, f) => s + f.amount, 0),
-                        )}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {[...fixedExpenses]
-                  .sort((a, b) => {
-                    if (a.paid !== b.paid) return a.paid ? 1 : -1;
-                    return b.amount - a.amount;
-                  })
-                  .map((f) => (
-                    <div
-                      key={f.id}
-                      className="flex items-center justify-between gap-2 text-sm"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        {f.paid ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[var(--color-success)]" />
-                        ) : (
-                          <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
-                        )}
-                        <span
-                          className={cn(
-                            "truncate font-medium",
-                            !f.paid && "text-[var(--color-muted-foreground)]",
-                          )}
-                        >
-                          {f.name}
-                        </span>
-                      </span>
-                      <span className="text-nowrap font-semibold">
-                        {formatCurrency(f.amount)}
+                      <span className="text-nowrap text-base font-semibold">
+                        {formatCurrency(unpaidTotal)}
                       </span>
                     </div>
-                  ))}
+                    {unpaidFx.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between gap-2 pl-5 text-sm text-[var(--color-muted-foreground)]"
+                      >
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-nowrap">{formatCurrency(f.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {paidFx.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs text-[var(--color-success)]">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        Paid
+                      </span>
+                      <span className="text-nowrap text-base font-semibold text-[var(--color-success)]">
+                        {formatCurrency(paidTotal)}
+                      </span>
+                    </div>
+                    {paidFx.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between gap-2 pl-5 text-sm"
+                      >
+                        <span className="truncate font-medium">{f.name}</span>
+                        <span className="text-nowrap">{formatCurrency(f.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
