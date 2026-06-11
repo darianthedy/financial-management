@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, MoreVertical, Pencil, Trash2, Hash } from "lucide-react";
+import { Plus, MoreVertical, Pencil, Trash2, Tag as TagIcon } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useTags, deleteTag } from "@/lib/hooks/use-tags";
 import { TagForm } from "@/components/tags/tag-form";
@@ -58,7 +58,7 @@ export default function TagsPage() {
             <Card key={tag.id}>
               <CardContent className="flex items-center justify-between gap-2 p-4">
                 <div className="flex min-w-0 items-center gap-2">
-                  <Hash className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
+                  <TagIcon className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
                   <span className="truncate font-medium">{tag.name}</span>
                 </div>
                 <DropdownMenu.Root>

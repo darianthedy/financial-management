@@ -7,7 +7,7 @@ import {
   startOfYear,
   endOfYear,
 } from "date-fns";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, Tag as TagIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -183,8 +183,14 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
   const panelCount = countPanelFilters(filters);
   const fmtAmt = (minor: number) => formatCurrency(minor, defaultCurrency);
 
-  // Build the active-filter chip list (one chip per selected value).
-  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  // Build the active-filter chip list (one chip per selected value). An optional
+  // leading icon stands in for a textual prefix (e.g. tags use a tag icon).
+  const chips: {
+    key: string;
+    label: string;
+    icon?: React.ReactNode;
+    onRemove: () => void;
+  }[] = [];
   for (const t of filters.types ?? [])
     chips.push({
       key: `type-${t}`,
@@ -235,7 +241,8 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
   for (const id of filters.tagIds ?? [])
     chips.push({
       key: `tag-${id}`,
-      label: `#${tagName(id)}`,
+      label: tagName(id),
+      icon: <TagIcon className="h-3 w-3" />,
       onRemove: () => removeValue("tagIds", id),
     });
   if (filters.budgetName)
@@ -481,7 +488,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               <FilterField label="Tags">
                 <MultiSelect
                   placeholder="All tags"
-                  options={tags.map((t) => ({ value: t.id, label: `#${t.name}` }))}
+                  options={tags.map((t) => ({ value: t.id, label: t.name }))}
                   value={filters.tagIds ?? []}
                   onChange={(v) => setArray("tagIds", v)}
                 />
@@ -501,6 +508,7 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               key={c.key}
               className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-muted)] px-2.5 py-0.5 text-xs"
             >
+              {c.icon}
               {c.label}
               <button
                 type="button"

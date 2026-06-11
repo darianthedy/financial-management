@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverAnchor,
 } from "@/components/ui/popover";
-import { Plus, ChevronDown, X } from "lucide-react";
+import { Plus, ChevronDown, Tag as TagIcon, X } from "lucide-react";
 import {
   transactionFormSchema,
   type TransactionFormValues,
@@ -501,8 +501,9 @@ export function TransactionForm({
                 type="button"
                 onClick={() => removeTag(t.id)}
                 aria-label={`Remove tag ${t.name}`}
-                className="flex min-h-8 items-center gap-1 rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] py-1 pl-3 pr-2.5 text-xs font-medium text-[var(--color-primary-foreground)] transition-colors hover:opacity-90"
+                className="flex min-h-8 items-center gap-1 rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] py-1 pl-2.5 pr-2.5 text-xs font-medium text-[var(--color-primary-foreground)] transition-colors hover:opacity-90"
               >
+                <TagIcon className="h-3 w-3" />
                 {t.name}
                 <X className="h-3.5 w-3.5" />
               </button>
