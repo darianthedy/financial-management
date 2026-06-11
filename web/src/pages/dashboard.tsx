@@ -1,7 +1,8 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
+import { VerdictBanner } from "@/components/dashboard/verdict-banner";
 import { CashflowCard } from "@/components/dashboard/cashflow-card";
 import { SpendingByCategoryCard } from "@/components/dashboard/spending-by-category";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
@@ -44,6 +45,9 @@ export default function DashboardPage() {
         <CenteredSpinner />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <VerdictBanner budgets={budgetProgress} />
+          </div>
           <CashflowCard cashflow={cashflow} />
           <SpendingByCategoryCard data={spendingByCategory} />
           <div className="md:col-span-2">
