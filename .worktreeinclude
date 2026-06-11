@@ -1,0 +1,10 @@
+# Gitignored local files copied into each new git worktree (e.g. those created
+# by `claude --worktree` or the desktop app's per-session worktrees) so the app
+# runs without re-creating local config by hand.
+#
+# Uses .gitignore syntax. Only files that match a pattern AND are gitignored are
+# copied, so tracked files (like web/.env.example) are never duplicated.
+
+# Supabase / app environment (see web/.env.example for the expected keys).
+.env.local
+web/.env.local
