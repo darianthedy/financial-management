@@ -1,3 +1,4 @@
+import { CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -117,29 +118,36 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                 <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
                   Fixed Expenses
                 </p>
-                {fixedExpenses.map((f) => (
-                  <div
-                    key={f.id}
-                    className="flex items-center justify-between gap-2 text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="truncate font-medium">{f.name}</span>
-                      <span
-                        className={cn(
-                          "text-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                          f.paid
-                            ? "bg-[var(--color-success)]/15 text-[var(--color-success)]"
-                            : "bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
+                {[...fixedExpenses]
+                  .sort((a, b) => {
+                    if (a.paid !== b.paid) return a.paid ? -1 : 1;
+                    return b.amount - a.amount;
+                  })
+                  .map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {f.paid ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[var(--color-success)]" />
+                        ) : (
+                          <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted-foreground)]" />
                         )}
-                      >
-                        {f.paid ? "Paid" : "Unpaid"}
+                        <span
+                          className={cn(
+                            "truncate font-medium",
+                            !f.paid && "text-[var(--color-muted-foreground)]",
+                          )}
+                        >
+                          {f.name}
+                        </span>
                       </span>
-                    </span>
-                    <span className="text-nowrap font-semibold">
-                      {formatCurrency(f.amount)}
-                    </span>
-                  </div>
-                ))}
+                      <span className="text-nowrap font-semibold">
+                        {formatCurrency(f.amount)}
+                      </span>
+                    </div>
+                  ))}
               </div>
             )}
           </div>
