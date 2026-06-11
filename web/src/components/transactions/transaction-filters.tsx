@@ -7,16 +7,9 @@ import {
   startOfYear,
   endOfYear,
 } from "date-fns";
-import { Search, SlidersHorizontal, Tag as TagIcon, X } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Popover,
   PopoverContent,
@@ -31,6 +24,7 @@ import { fetchFixedExpenseNames } from "@/lib/hooks/use-fixed-expenses";
 import {
   fetchCategories,
   fetchTags,
+  NO_VALUE,
   type TransactionFilters,
   type TransactionType,
   type TransactionStatus,
@@ -63,8 +57,19 @@ const STATUS_OPTIONS: { value: TransactionStatus; label: string }[] = [
   { value: "dismissed", label: "Dismissed" },
 ];
 
-// Array-valued filter keys whose chips remove a single value at a time.
-type ArrayKey = "types" | "statuses" | "accountIds" | "categoryIds" | "tagIds";
+// The tri-state multi-select facets (see TransactionFilters). Each is an Excel-
+// style checklist: absent = every value checked ("All …"), a subset narrows it,
+// and empty = nothing checked.
+type FacetKey =
+  | "types"
+  | "statuses"
+  | "accountIds"
+  | "categoryIds"
+  | "tagIds"
+  | "budgetNames"
+  | "fixedExpenseNames";
+
+type Option = { value: string; label: string; color?: string | null };
 
 export function TransactionFiltersBar({ filters, onChange }: Props) {
   const { accounts } = useAccounts();
@@ -99,12 +104,6 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
     );
   }, [dateFrom, dateTo]);
 
-  const accountName = (id: string) =>
-    accounts.find((a) => a.id === id)?.name ?? "Account";
-  const categoryName = (id: string) =>
-    categories.find((c) => c.id === id)?.name ?? "Category";
-  const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? "Tag";
-
   function patch(next: Partial<TransactionFilters>) {
     onChange({ ...filters, ...next });
   }
@@ -116,18 +115,18 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
     onChange(next);
   }
 
-  // Set an array filter, dropping the key entirely when the selection is empty.
-  function setArray(key: ArrayKey, values: string[]) {
-    if (values.length) patch({ [key]: values } as Partial<TransactionFilters>);
-    else clear(key);
+  // The MultiSelect's checked set for a facet: when the facet is absent (the
+  // default), every option is checked ("All …"); otherwise the stored subset.
+  function facetValue(key: FacetKey, options: Option[]): string[] {
+    const stored = filters[key] as string[] | undefined;
+    return stored === undefined ? options.map((o) => o.value) : stored;
   }
 
-  function removeValue(key: ArrayKey, value: string) {
-    const cur = (filters[key] ?? []) as string[];
-    setArray(
-      key,
-      cur.filter((v) => v !== value),
-    );
+  // Commit a MultiSelect change. Selecting every option is the "no filter" state,
+  // so the facet is removed; any narrower selection (including none) is stored.
+  function setFacet(key: FacetKey, options: Option[], next: string[]) {
+    if (next.length === options.length) clear(key);
+    else onChange({ ...filters, [key]: next } as TransactionFilters);
   }
 
   // Clear every panel filter but leave the always-visible search intact.
@@ -142,8 +141,8 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
       "amountMax",
       "categoryIds",
       "tagIds",
-      "budgetName",
-      "fixedExpenseName",
+      "budgetNames",
+      "fixedExpenseNames",
     );
   }
 
@@ -166,49 +165,55 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
     (p) => p.from === filters.dateFrom && p.to === filters.dateTo,
   );
 
-  // Keep a selected budget visible even if the current date range no longer
-  // lists it, so the Select doesn't render blank.
-  const budgetOptions =
-    filters.budgetName && !budgetNames.includes(filters.budgetName)
-      ? [filters.budgetName, ...budgetNames]
-      : budgetNames;
-  // Keep a selected fixed expense visible even if the current date range no
-  // longer lists it, so the Select doesn't render blank.
-  const fixedExpenseOptions =
-    filters.fixedExpenseName &&
-    !fixedExpenseNames.includes(filters.fixedExpenseName)
-      ? [filters.fixedExpenseName, ...fixedExpenseNames]
-      : fixedExpenseNames;
+  // Option lists for each facet. The "noneable" facets lead with a NO_VALUE
+  // "(Blanks)" row; budgets/fixed expenses keep any selected name visible even if
+  // the current date range no longer lists it.
+  const accountOptions: Option[] = accounts.map((a) => ({
+    value: a.id,
+    label: a.name,
+  }));
+  const categoryOptions: Option[] = [
+    { value: NO_VALUE, label: "No category" },
+    ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
+  ];
+  const tagOptions: Option[] = [
+    { value: NO_VALUE, label: "No tags" },
+    ...tags.map((t) => ({ value: t.id, label: t.name })),
+  ];
+  const budgetOptions: Option[] = [
+    { value: NO_VALUE, label: "No budget" },
+    ...[...new Set([...(filters.budgetNames ?? []), ...budgetNames])]
+      .filter((n) => n !== NO_VALUE)
+      .map((n) => ({ value: n, label: n })),
+  ];
+  const fixedExpenseOptions: Option[] = [
+    { value: NO_VALUE, label: "No fixed expense" },
+    ...[...new Set([...(filters.fixedExpenseNames ?? []), ...fixedExpenseNames])]
+      .filter((n) => n !== NO_VALUE)
+      .map((n) => ({ value: n, label: n })),
+  ];
 
   const panelCount = countPanelFilters(filters);
   const fmtAmt = (minor: number) => formatCurrency(minor, defaultCurrency);
 
-  // Build the active-filter chip list (one chip per selected value). An optional
-  // leading icon stands in for a textual prefix (e.g. tags use a tag icon).
-  const chips: {
-    key: string;
-    label: string;
-    icon?: React.ReactNode;
-    onRemove: () => void;
-  }[] = [];
-  for (const t of filters.types ?? [])
-    chips.push({
-      key: `type-${t}`,
-      label: `Type: ${t}`,
-      onRemove: () => removeValue("types", t),
-    });
-  for (const id of filters.accountIds ?? [])
-    chips.push({
-      key: `account-${id}`,
-      label: `Account: ${accountName(id)}`,
-      onRemove: () => removeValue("accountIds", id),
-    });
-  for (const s of filters.statuses ?? [])
-    chips.push({
-      key: `status-${s}`,
-      label: `Status: ${s}`,
-      onRemove: () => removeValue("statuses", s),
-    });
+  // Active-filter chips. Each multi-select facet contributes a single summary
+  // chip (only when it's narrowed from "All"); date/amount/search are their own.
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  function facetChip(key: FacetKey, label: string, options: Option[]) {
+    const vals = filters[key] as string[] | undefined;
+    if (vals === undefined) return; // "All" → not an active filter
+    const nameOf = (v: string) => options.find((o) => o.value === v)?.label ?? v;
+    const text =
+      vals.length === 0
+        ? `${label}: none`
+        : vals.length === 1
+          ? `${label}: ${nameOf(vals[0])}`
+          : `${label}: ${vals.length} selected`;
+    chips.push({ key, label: text, onRemove: () => clear(key) });
+  }
+  facetChip("types", "Type", TYPE_OPTIONS);
+  facetChip("accountIds", "Account", accountOptions);
+  facetChip("statuses", "Status", STATUS_OPTIONS);
   if (filters.dateFrom || filters.dateTo)
     chips.push({
       key: "date",
@@ -232,31 +237,10 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
             : `≤ ${fmtAmt(filters.amountMax!)}`,
       onRemove: () => clear("amountMin", "amountMax"),
     });
-  for (const id of filters.categoryIds ?? [])
-    chips.push({
-      key: `cat-${id}`,
-      label: categoryName(id),
-      onRemove: () => removeValue("categoryIds", id),
-    });
-  for (const id of filters.tagIds ?? [])
-    chips.push({
-      key: `tag-${id}`,
-      label: tagName(id),
-      icon: <TagIcon className="h-3 w-3" />,
-      onRemove: () => removeValue("tagIds", id),
-    });
-  if (filters.budgetName)
-    chips.push({
-      key: "budget",
-      label: `Budget: ${filters.budgetName}`,
-      onRemove: () => clear("budgetName"),
-    });
-  if (filters.fixedExpenseName)
-    chips.push({
-      key: "fixed",
-      label: `Fixed: ${filters.fixedExpenseName}`,
-      onRemove: () => clear("fixedExpenseName"),
-    });
+  facetChip("categoryIds", "Category", categoryOptions);
+  facetChip("tagIds", "Tag", tagOptions);
+  facetChip("budgetNames", "Budget", budgetOptions);
+  facetChip("fixedExpenseNames", "Fixed", fixedExpenseOptions);
   if (filters.search)
     chips.push({
       key: "search",
@@ -360,8 +344,8 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               <MultiSelect
                 placeholder="All statuses"
                 options={STATUS_OPTIONS}
-                value={filters.statuses ?? []}
-                onChange={(v) => setArray("statuses", v)}
+                value={facetValue("statuses", STATUS_OPTIONS)}
+                onChange={(v) => setFacet("statuses", STATUS_OPTIONS, v)}
               />
             </FilterField>
 
@@ -369,17 +353,17 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               <MultiSelect
                 placeholder="All types"
                 options={TYPE_OPTIONS}
-                value={filters.types ?? []}
-                onChange={(v) => setArray("types", v)}
+                value={facetValue("types", TYPE_OPTIONS)}
+                onChange={(v) => setFacet("types", TYPE_OPTIONS, v)}
               />
             </FilterField>
 
             <FilterField label="Account">
               <MultiSelect
                 placeholder="All accounts"
-                options={accounts.map((a) => ({ value: a.id, label: a.name }))}
-                value={filters.accountIds ?? []}
-                onChange={(v) => setArray("accountIds", v)}
+                options={accountOptions}
+                value={facetValue("accountIds", accountOptions)}
+                onChange={(v) => setFacet("accountIds", accountOptions, v)}
               />
             </FilterField>
 
@@ -418,71 +402,43 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
             </FilterField>
 
             <FilterField label="Budget">
-              <Select
-                value={filters.budgetName ?? "all"}
-                onValueChange={(v) =>
-                  v === "all" ? clear("budgetName") : patch({ budgetName: v })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All budgets</SelectItem>
-                  {budgetOptions.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                placeholder="All budgets"
+                options={budgetOptions}
+                value={facetValue("budgetNames", budgetOptions)}
+                onChange={(v) => setFacet("budgetNames", budgetOptions, v)}
+              />
             </FilterField>
 
             {categories.length > 0 && (
               <FilterField label="Categories">
                 <MultiSelect
                   placeholder="All categories"
-                  options={categories.map((c) => ({
-                    value: c.id,
-                    label: c.name,
-                    color: c.color,
-                  }))}
-                  value={filters.categoryIds ?? []}
-                  onChange={(v) => setArray("categoryIds", v)}
+                  options={categoryOptions}
+                  value={facetValue("categoryIds", categoryOptions)}
+                  onChange={(v) => setFacet("categoryIds", categoryOptions, v)}
                 />
               </FilterField>
             )}
 
             <FilterField label="Fixed expense">
-              <Select
-                value={filters.fixedExpenseName ?? "all"}
-                onValueChange={(v) =>
-                  v === "all"
-                    ? clear("fixedExpenseName")
-                    : patch({ fixedExpenseName: v })
+              <MultiSelect
+                placeholder="All fixed expenses"
+                options={fixedExpenseOptions}
+                value={facetValue("fixedExpenseNames", fixedExpenseOptions)}
+                onChange={(v) =>
+                  setFacet("fixedExpenseNames", fixedExpenseOptions, v)
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All fixed expenses</SelectItem>
-                  {fixedExpenseOptions.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </FilterField>
 
             {tags.length > 0 && (
               <FilterField label="Tags">
                 <MultiSelect
                   placeholder="All tags"
-                  options={tags.map((t) => ({ value: t.id, label: t.name }))}
-                  value={filters.tagIds ?? []}
-                  onChange={(v) => setArray("tagIds", v)}
+                  options={tagOptions}
+                  value={facetValue("tagIds", tagOptions)}
+                  onChange={(v) => setFacet("tagIds", tagOptions, v)}
                 />
               </FilterField>
             )}
@@ -500,7 +456,6 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               key={c.key}
               className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-muted)] px-2.5 py-0.5 text-xs"
             >
-              {c.icon}
               {c.label}
               <button
                 type="button"
