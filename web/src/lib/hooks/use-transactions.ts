@@ -16,12 +16,27 @@ export type TransactionWithRelations = Transaction & {
 export type TransactionType = "income" | "expense" | "transfer";
 export type TransactionStatus = "confirmed" | "pending" | "dismissed";
 
+/**
+ * Sentinel value standing in for "no value" (an unset link / "(Blanks)") inside
+ * the category, tag, budget, and fixed-expense facets. It can appear in those
+ * filter arrays alongside real ids/names and matches rows where the column is
+ * NULL (or, for tags, rows with no tag links).
+ */
+export const NO_VALUE = "__none__";
+
+/**
+ * Each multi-select facet (accounts, types, statuses, categories, tags, budgets,
+ * fixed expenses) is tri-state:
+ *   - undefined  → no filter (every value allowed; the default "All …" state)
+ *   - non-empty  → match ANY of the listed values (OR within the facet)
+ *   - empty []   → match NOTHING (the user unchecked every option)
+ * The category/tag/budget/fixed arrays may include {@link NO_VALUE} to also match
+ * rows with no value for that facet.
+ */
 export interface TransactionFilters {
-  /** Multi-select accounts from the filter panel (matches account OR transfer). */
+  /** Accounts (matches account OR transfer side). */
   accountIds?: string[];
-  /** Match ANY of these transaction types. */
   types?: TransactionType[];
-  /** Match ANY of these statuses. */
   statuses?: TransactionStatus[];
   dateFrom?: string;
   dateTo?: string;
@@ -30,27 +45,27 @@ export interface TransactionFilters {
   /** Inclusive amount bounds in MINOR units (e.g. cents). */
   amountMin?: number;
   amountMax?: number;
-  /** Match transactions carrying ANY of these category IDs (OR within). */
+  /** Category IDs; may include {@link NO_VALUE} for uncategorized rows. */
   categoryIds?: string[];
-  /** Match transactions carrying ANY of these tag IDs (OR within). */
+  /** Tag IDs; may include {@link NO_VALUE} for untagged rows. */
   tagIds?: string[];
   /**
-   * Match transactions linked to a budget with this name, across every period
-   * (budget identity is name + year_month; this matches by name only). When a date
-   * range is also set, only budget rows whose month falls within that range count.
+   * Budget names (budget identity is name + year_month; this matches by name
+   * only, across every period). May include {@link NO_VALUE} for rows with no
+   * budget. When a date range is also set, only budget rows whose month falls
+   * within that range count.
    */
-  budgetName?: string;
+  budgetNames?: string[];
   /**
-   * Match transactions linked to a fixed expense with this name, across every
-   * month (fixed-expense identity is name + year_month; this matches by name
-   * only). When a date range is also set, only fixed-expense rows whose month
-   * falls within that range count.
+   * Fixed-expense names (matched by name across every month). May include
+   * {@link NO_VALUE} for rows with no fixed expense. When a date range is also
+   * set, only fixed-expense rows whose month falls within that range count.
    */
-  fixedExpenseName?: string;
+  fixedExpenseNames?: string[];
 }
 
 /**
- * Resolve a budget NAME to the set of budget row IDs to match against
+ * Resolve budget NAMES to the set of budget row IDs to match against
  * transactions.budget_id. Reads `v_budget_progress` (the same source the rest of
  * the app surfaces budgets from), so the ids line up with what budgets a
  * transaction can actually be linked to. Budgets are month-specific rows, so one
@@ -59,14 +74,14 @@ export interface TransactionFilters {
  * gte/lte works.
  */
 async function resolveBudgetIds(
-  name: string,
+  names: string[],
   fromYM?: string,
   toYM?: string,
 ): Promise<string[]> {
   let q = supabase
     .from("v_budget_progress")
     .select("budget_id")
-    .eq("budget_name", name);
+    .in("budget_name", names);
   if (fromYM) q = q.gte("year_month", fromYM);
   if (toYM) q = q.lte("year_month", toYM);
   const { data } = await q;
@@ -74,39 +89,22 @@ async function resolveBudgetIds(
 }
 
 /**
- * Resolve a fixed-expense NAME to the set of fixed_expenses row IDs to match
+ * Resolve fixed-expense NAMES to the set of fixed_expenses row IDs to match
  * against transactions.fixed_expense_id. Fixed expenses are month-specific rows,
  * so one name spans many rows; an optional [fromYM, toYM] month range (derived
  * from the date filter) narrows it to those periods. year_month is 'YYYY-MM', so
  * lexical gte/lte works.
  */
 async function resolveFixedExpenseIds(
-  name: string,
+  names: string[],
   fromYM?: string,
   toYM?: string,
 ): Promise<string[]> {
-  let q = supabase.from("fixed_expenses").select("id").eq("name", name);
+  let q = supabase.from("fixed_expenses").select("id").in("name", names);
   if (fromYM) q = q.gte("year_month", fromYM);
   if (toYM) q = q.lte("year_month", toYM);
   const { data } = await q;
   return (data ?? []).map((r) => r.id);
-}
-
-/**
- * The tag filter lives in a junction table (there is no tag_id column on
- * transactions). Collect the matching transaction IDs — OR within the selected
- * tags — so the caller can constrain the main query with `.in("id", ids)`.
- * Returns null when no tag is filtered (no restriction). Categories are NOT
- * here: category is a column on transactions and filters directly. See System
- * Design §4.9.
- */
-async function resolveTagTxnIds(tagIds?: string[]): Promise<string[] | null> {
-  if (!tagIds?.length) return null;
-  const { data } = await supabase
-    .from("transaction_tags")
-    .select("transaction_id")
-    .in("tag_id", tagIds);
-  return [...new Set((data ?? []).map((r) => r.transaction_id))];
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
@@ -120,6 +118,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
   const typeKey = filters.types?.join(",");
   const statusKey = filters.statuses?.join(",");
   const accountIdsKey = filters.accountIds?.join(",");
+  const budgetNamesKey = filters.budgetNames?.join(",");
+  const fixedExpenseNamesKey = filters.fixedExpenseNames?.join(",");
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -131,6 +131,23 @@ export function useTransactions(filters: TransactionFilters = {}) {
       .select("*")
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
+
+    // A present-but-empty facet means the user unchecked every option, so nothing
+    // can match. (An absent facet is the default "all" state and adds no filter.)
+    const noneSelected = [
+      filters.accountIds,
+      filters.types,
+      filters.statuses,
+      filters.categoryIds,
+      filters.tagIds,
+      filters.budgetNames,
+      filters.fixedExpenseNames,
+    ].some((f) => f != null && f.length === 0);
+    if (noneSelected) {
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
 
     if (filters.accountIds?.length) {
       const ors = filters.accountIds
@@ -145,46 +162,60 @@ export function useTransactions(filters: TransactionFilters = {}) {
     if (filters.search) q = q.ilike("description", `%${filters.search}%`);
     if (filters.amountMin != null) q = q.gte("amount", filters.amountMin);
     if (filters.amountMax != null) q = q.lte("amount", filters.amountMax);
-    // Category is single-select on the row: a transaction matches if its one
-    // category is any of the selected (OR-within).
-    if (filters.categoryIds?.length) q = q.in("category_id", filters.categoryIds);
-    if (filters.budgetName) {
-      const budgetIds = await resolveBudgetIds(
-        filters.budgetName,
-        filters.dateFrom?.slice(0, 7),
-        filters.dateTo?.slice(0, 7),
-      );
-      if (budgetIds.length === 0) {
-        setTransactions([]);
-        setLoading(false);
-        return;
-      }
-      q = q.in("budget_id", budgetIds);
-    }
-    if (filters.fixedExpenseName) {
-      const fixedExpenseIds = await resolveFixedExpenseIds(
-        filters.fixedExpenseName,
-        filters.dateFrom?.slice(0, 7),
-        filters.dateTo?.slice(0, 7),
-      );
-      if (fixedExpenseIds.length === 0) {
-        setTransactions([]);
-        setLoading(false);
-        return;
-      }
-      q = q.in("fixed_expense_id", fixedExpenseIds);
+
+    // Category, budget, and fixed expense are columns on the row. Within a facet
+    // the chosen values OR together — including NO_VALUE, which matches a NULL
+    // column ("(Blanks)"). Facets AND together (each is its own .or() clause).
+    if (filters.categoryIds?.length) {
+      const ids = filters.categoryIds.filter((v) => v !== NO_VALUE);
+      const parts: string[] = [];
+      if (ids.length) parts.push(`category_id.in.(${ids.join(",")})`);
+      if (filters.categoryIds.includes(NO_VALUE))
+        parts.push("category_id.is.null");
+      q = q.or(parts.join(","));
     }
 
-    // The tag filter is resolved via the junction table, then applied as an id
-    // restriction on the main query. An empty result short-circuits.
-    const restrictIds = await resolveTagTxnIds(filters.tagIds);
-    if (restrictIds !== null) {
-      if (restrictIds.length === 0) {
+    if (filters.budgetNames?.length) {
+      const names = filters.budgetNames.filter((v) => v !== NO_VALUE);
+      const parts: string[] = [];
+      if (names.length) {
+        const budgetIds = await resolveBudgetIds(
+          names,
+          filters.dateFrom?.slice(0, 7),
+          filters.dateTo?.slice(0, 7),
+        );
+        if (budgetIds.length) parts.push(`budget_id.in.(${budgetIds.join(",")})`);
+      }
+      if (filters.budgetNames.includes(NO_VALUE)) parts.push("budget_id.is.null");
+      // Named budgets were chosen but none resolved (and "(none)" wasn't): nothing matches.
+      if (parts.length === 0) {
         setTransactions([]);
         setLoading(false);
         return;
       }
-      q = q.in("id", restrictIds);
+      q = q.or(parts.join(","));
+    }
+
+    if (filters.fixedExpenseNames?.length) {
+      const names = filters.fixedExpenseNames.filter((v) => v !== NO_VALUE);
+      const parts: string[] = [];
+      if (names.length) {
+        const fixedExpenseIds = await resolveFixedExpenseIds(
+          names,
+          filters.dateFrom?.slice(0, 7),
+          filters.dateTo?.slice(0, 7),
+        );
+        if (fixedExpenseIds.length)
+          parts.push(`fixed_expense_id.in.(${fixedExpenseIds.join(",")})`);
+      }
+      if (filters.fixedExpenseNames.includes(NO_VALUE))
+        parts.push("fixed_expense_id.is.null");
+      if (parts.length === 0) {
+        setTransactions([]);
+        setLoading(false);
+        return;
+      }
+      q = q.or(parts.join(","));
     }
 
     const { data: txnRows } = await q;
@@ -262,26 +293,38 @@ export function useTransactions(filters: TransactionFilters = {}) {
       tagsByTxn.set(link.transaction_id, tags);
     }
 
-    setTransactions(
-      rows.map((r) => ({
-        ...r,
-        accounts: r.account_id
-          ? {
-              name: accountById.get(r.account_id)?.name ?? "",
-              image_url: accountById.get(r.account_id)?.image_url ?? null,
-            }
-          : null,
-        transfer_accounts: r.transfer_account_id
-          ? { name: accountById.get(r.transfer_account_id)?.name ?? "" }
-          : null,
-        category: r.category_id ? categoryById.get(r.category_id) ?? null : null,
-        tags: tagsByTxn.get(r.id) ?? [],
-        budget: r.budget_id ? { name: budgetNameById.get(r.budget_id) ?? "" } : null,
-        fixedExpense: r.fixed_expense_id
-          ? { name: fixedExpenseNameById.get(r.fixed_expense_id) ?? "" }
-          : null,
-      })),
-    );
+    const mapped = rows.map((r) => ({
+      ...r,
+      accounts: r.account_id
+        ? {
+            name: accountById.get(r.account_id)?.name ?? "",
+            image_url: accountById.get(r.account_id)?.image_url ?? null,
+          }
+        : null,
+      transfer_accounts: r.transfer_account_id
+        ? { name: accountById.get(r.transfer_account_id)?.name ?? "" }
+        : null,
+      category: r.category_id ? categoryById.get(r.category_id) ?? null : null,
+      tags: tagsByTxn.get(r.id) ?? [],
+      budget: r.budget_id ? { name: budgetNameById.get(r.budget_id) ?? "" } : null,
+      fixedExpense: r.fixed_expense_id
+        ? { name: fixedExpenseNameById.get(r.fixed_expense_id) ?? "" }
+        : null,
+    }));
+
+    // Tags live in a junction table (no tag_id column on transactions), so the
+    // tag facet is applied here on the resolved tag lists rather than in SQL.
+    // Values OR together; NO_VALUE matches rows with no tags.
+    const wantedTags = new Set(filters.tagIds?.filter((v) => v !== NO_VALUE));
+    const wantNoTags = filters.tagIds?.includes(NO_VALUE) ?? false;
+    const filtered = filters.tagIds?.length
+      ? mapped.filter(
+          (t) =>
+            (wantedTags.size > 0 && t.tags.some((tag) => wantedTags.has(tag.id))) ||
+            (wantNoTags && t.tags.length === 0),
+        )
+      : mapped;
+    setTransactions(filtered);
     setLoading(false);
     // categoryKey/tagKey stand in for the categoryIds/tagIds arrays (stable
     // identity); listing the arrays themselves would refetch every render.
@@ -295,8 +338,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
     filters.search,
     filters.amountMin,
     filters.amountMax,
-    filters.budgetName,
-    filters.fixedExpenseName,
+    budgetNamesKey,
+    fixedExpenseNamesKey,
     categoryKey,
     tagKey,
   ]);
