@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Receipt } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Receipt, Tag as TagIcon } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { Category, Tag, TransactionType } from "@/lib/types/database";
 
@@ -187,9 +187,10 @@ export function TransactionChips({
       {tags.map((t) => (
         <span
           key={t.id}
-          className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-0.5 text-xs font-medium text-[var(--color-muted-foreground)]"
+          className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-0.5 text-xs font-medium text-[var(--color-muted-foreground)]"
         >
-          #{t.name}
+          <TagIcon className="h-3 w-3" />
+          {t.name}
         </span>
       ))}
     </div>

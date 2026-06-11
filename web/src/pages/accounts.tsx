@@ -66,7 +66,7 @@ export default function AccountsPage() {
             <AccountCard
               key={account.id}
               account={account}
-              onClick={() => navigate(`/accounts/${account.id}`)}
+              onClick={() => navigate(`/transactions?account=${account.id}`)}
               onEdit={() => openEdit(account)}
               onArchive={() => handleArchive(account.id)}
             />

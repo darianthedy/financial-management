@@ -29,8 +29,17 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
     navigate(`/transactions/new?fixedExpenseId=${id}&date=${year_month}-01`);
   }
 
+  // Jump to the transaction list pre-filtered to this fixed expense (matched by
+  // name, across months — mirrors the filter bar's fixed-expense option).
+  function viewTransactions() {
+    navigate(`/transactions?fixed=${encodeURIComponent(name)}`);
+  }
+
   return (
-    <Card>
+    <Card
+      className="cursor-pointer transition-shadow hover:shadow-md"
+      onClick={viewTransactions}
+    >
       <CardContent className="flex items-start justify-between gap-3 p-4">
         {/* Left: name + paid/unpaid status, stacked. */}
         <div className="flex min-w-0 flex-col gap-2">
@@ -57,6 +66,7 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
             <DropdownMenu.Trigger
               className="-mr-1 rounded p-1 hover:bg-[var(--color-muted)]"
               aria-label="Fixed expense actions"
+              onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4 text-[var(--color-muted-foreground)]" />
             </DropdownMenu.Trigger>

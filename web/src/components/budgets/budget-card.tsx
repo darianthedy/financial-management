@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Info, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function BudgetCard({ budget, onEdit, onRemove }: Props) {
+  const navigate = useNavigate();
   const { effective_amount, spent, remaining, carry_over_amount } = budget;
   const overspent = remaining < 0;
 
@@ -30,7 +32,12 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
         : 0;
 
   return (
-    <Card>
+    <Card
+      className="cursor-pointer transition-shadow hover:shadow-md"
+      onClick={() =>
+        navigate(`/transactions?budget=${encodeURIComponent(budget.budget_name)}`)
+      }
+    >
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1">
@@ -41,7 +48,10 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
                     padding gives a comfortable tap target on mobile. No
                     horizontal negative margin, so the hover/press background
                     never bleeds under the budget name. */}
-                <PopoverTrigger className="-my-2 shrink-0 rounded-full p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]">
+                <PopoverTrigger
+                  onClick={(e) => e.stopPropagation()}
+                  className="-my-2 shrink-0 rounded-full p-2 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+                >
                   <Info className="h-4 w-4" />
                   <span className="sr-only">Budget carry-over details</span>
                 </PopoverTrigger>
@@ -66,7 +76,10 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
             )}
           </div>
           <DropdownMenu.Root>
-            <DropdownMenu.Trigger className="rounded p-1 hover:bg-[var(--color-muted)]">
+            <DropdownMenu.Trigger
+              className="rounded p-1 hover:bg-[var(--color-muted)]"
+              onClick={(e) => e.stopPropagation()}
+            >
               <MoreVertical className="h-4 w-4 text-[var(--color-muted-foreground)]" />
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>

@@ -1,10 +1,14 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TransactionList } from "@/components/transactions/transaction-list";
 import { TransactionFiltersBar } from "@/components/transactions/transaction-filters";
-import type { TransactionFilters } from "@/lib/hooks/use-transactions";
+import { TransactionSummary } from "@/components/transactions/transaction-summary";
+import type {
+  TransactionFilters,
+  TransactionWithRelations,
+} from "@/lib/hooks/use-transactions";
 import {
   parseFilters,
   serializeFilters,
@@ -13,6 +17,10 @@ import {
 export default function TransactionsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Filtered rows lifted from the list so the summary reflects exactly what the
+  // current filters return, without a second fetch. `null` until the first load.
+  const [loaded, setLoaded] = useState<TransactionWithRelations[] | null>(null);
 
   // The URL query string is the single source of truth for the active filters.
   const filters = useMemo(
@@ -39,7 +47,16 @@ export default function TransactionsPage() {
 
       <TransactionFiltersBar filters={filters} onChange={setFilters} />
 
-      <TransactionList filters={filters} showAddButton={false} hideHeader />
+      {loaded && loaded.length > 0 && (
+        <TransactionSummary transactions={loaded} />
+      )}
+
+      <TransactionList
+        filters={filters}
+        showAddButton={false}
+        hideHeader
+        onLoaded={setLoaded}
+      />
     </div>
   );
 }

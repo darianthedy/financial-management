@@ -142,19 +142,3 @@ export async function updateDefaultAccountId(
     );
   if (error) throw error;
 }
-
-export async function getAccount(id: string): Promise<AccountWithBalance | null> {
-  const [{ data: account }, { data: balance }] = await Promise.all([
-    supabase.from("accounts").select("*").eq("id", id).maybeSingle(),
-    supabase
-      .from("v_account_current_balance")
-      .select("*")
-      .eq("account_id", id)
-      .maybeSingle(),
-  ]);
-  if (!account) return null;
-  return {
-    ...account,
-    current_balance: balance?.current_balance ?? account.starting_balance,
-  };
-}

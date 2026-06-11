@@ -1,18 +1,21 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
-import { CashflowCard } from "@/components/dashboard/cashflow-card";
-import { SpendingByCategoryCard } from "@/components/dashboard/spending-by-category";
-import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
-import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
+import { VerdictBanner } from "@/components/dashboard/verdict-banner";
+import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
+import { UnplannedExpensesCard } from "@/components/dashboard/unplanned-expenses";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
 import { getCurrentYearMonth, navigateMonth, formatYearMonth } from "@/lib/utils/date";
 
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
-  const { cashflow, spendingByCategory, budgetProgress, recentTransactions, loading } =
-    useDashboard(yearMonth);
+  const {
+    unplannedExpenses,
+    fixedExpenses,
+    budgetProgress,
+    loading,
+  } = useDashboard(yearMonth);
 
   return (
     <div className="space-y-6">
@@ -44,14 +47,15 @@ export default function DashboardPage() {
         <CenteredSpinner />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <CashflowCard cashflow={cashflow} />
-          <SpendingByCategoryCard data={spendingByCategory} />
           <div className="md:col-span-2">
-            <BudgetProgressCard budgets={budgetProgress} />
+            <VerdictBanner budgets={budgetProgress} />
           </div>
-          <div className="md:col-span-2">
-            <RecentTransactionsCard transactions={recentTransactions} />
-          </div>
+          <PlannedExpensesCard
+            budgets={budgetProgress}
+            fixedExpenses={fixedExpenses}
+            yearMonth={yearMonth}
+          />
+          <UnplannedExpensesCard spending={unplannedExpenses} />
         </div>
       )}
     </div>
