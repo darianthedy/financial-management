@@ -4,7 +4,6 @@ import { AppLayout } from "@/components/layout/app-layout";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
 import AccountsPage from "@/pages/accounts";
-import AccountDetailPage from "@/pages/account-detail";
 import TransactionsPage from "@/pages/transactions";
 import TransactionFormPage from "@/pages/transaction-form";
 import BudgetsPage from "@/pages/budgets";
@@ -26,7 +25,6 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/accounts/:id" element={<AccountDetailPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/transactions/new" element={<TransactionFormPage />} />
             <Route path="/transactions/:id/edit" element={<TransactionFormPage />} />

@@ -17,8 +17,6 @@ export type TransactionType = "income" | "expense" | "transfer";
 export type TransactionStatus = "confirmed" | "pending" | "dismissed";
 
 export interface TransactionFilters {
-  /** Single account, used by the account-detail page (not the filter panel). */
-  accountId?: string;
   /** Multi-select accounts from the filter panel (matches account OR transfer). */
   accountIds?: string[];
   /** Match ANY of these transaction types. */
@@ -134,9 +132,6 @@ export function useTransactions(filters: TransactionFilters = {}) {
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (filters.accountId) {
-      q = q.or(`account_id.eq.${filters.accountId},transfer_account_id.eq.${filters.accountId}`);
-    }
     if (filters.accountIds?.length) {
       const ors = filters.accountIds
         .flatMap((id) => [`account_id.eq.${id}`, `transfer_account_id.eq.${id}`])
@@ -292,7 +287,6 @@ export function useTransactions(filters: TransactionFilters = {}) {
     // identity); listing the arrays themselves would refetch every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    filters.accountId,
     accountIdsKey,
     typeKey,
     statusKey,
