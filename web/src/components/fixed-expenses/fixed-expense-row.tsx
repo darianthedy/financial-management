@@ -40,15 +40,31 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
       className="cursor-pointer transition-shadow hover:shadow-md"
       onClick={viewTransactions}
     >
-      <CardContent className="flex flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <span className="min-w-0 truncate font-medium">{name}</span>
-          <span className="shrink-0 text-nowrap font-semibold">
+      <CardContent className="flex items-start justify-between gap-3 p-4">
+        {/* Left: name + paid/unpaid status, stacked. */}
+        <div className="flex min-w-0 flex-col gap-2">
+          <span className="truncate font-medium">{name}</span>
+          <span
+            className={cn(
+              "inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+              paid
+                ? "bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]"
+                : "border border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
+            )}
+          >
+            {paid && <Check className="h-3 w-3" />}
+            {paid ? "Paid" : "Unpaid"}
+          </span>
+        </div>
+
+        {/* Right: amount + actions menu, aligned with the name. */}
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-nowrap font-semibold">
             {formatCurrency(amount)}
           </span>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger
-              className="rounded p-1 hover:bg-[var(--color-muted)]"
+              className="-mr-1 rounded p-1 hover:bg-[var(--color-muted)]"
               aria-label="Fixed expense actions"
               onClick={(e) => e.stopPropagation()}
             >
@@ -81,20 +97,6 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
-        </div>
-
-        <div>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-              paid
-                ? "bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]"
-                : "border border-[var(--color-border)] bg-[var(--color-muted)] text-[var(--color-muted-foreground)]",
-            )}
-          >
-            {paid && <Check className="h-3 w-3" />}
-            {paid ? "Paid" : "Unpaid"}
-          </span>
         </div>
       </CardContent>
     </Card>
