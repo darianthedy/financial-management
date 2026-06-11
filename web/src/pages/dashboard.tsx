@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
 import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
-import { UntrackedSpendingCard } from "@/components/dashboard/untracked-spending";
+import { UnplannedExpensesCard } from "@/components/dashboard/unplanned-expenses";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
@@ -13,7 +13,7 @@ import { getCurrentYearMonth, navigateMonth, formatYearMonth } from "@/lib/utils
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
   const {
-    untrackedSpending,
+    unplannedExpenses,
     fixedExpenses,
     budgetProgress,
     recentTransactions,
@@ -58,7 +58,7 @@ export default function DashboardPage() {
             fixedExpenses={fixedExpenses}
             yearMonth={yearMonth}
           />
-          <UntrackedSpendingCard spending={untrackedSpending} />
+          <UnplannedExpensesCard spending={unplannedExpenses} />
           <div className="md:col-span-2">
             <BudgetProgressCard budgets={budgetProgress} />
           </div>

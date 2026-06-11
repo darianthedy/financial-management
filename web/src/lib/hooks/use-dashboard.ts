@@ -14,11 +14,11 @@ export type RecentTransaction = Transaction & {
 };
 
 /**
- * One category's untracked spend for the month: confirmed expenses NOT tied to a
- * budget and NOT linked to a fixed expense. Uncategorized untracked spend is
- * collapsed into a single null-id "Untracked" row.
+ * One category's unplanned spend for the month: confirmed expenses NOT tied to a
+ * budget and NOT linked to a fixed expense. Spend with no category is collapsed
+ * into a single null-id "Uncategorized" row.
  */
-export type UntrackedCategorySpend = {
+export type UnplannedCategorySpend = {
   category_id: string | null;
   category_name: string;
   icon: string | null;
@@ -37,7 +37,7 @@ function pctUsed(b: BudgetProgress): number {
 }
 
 export function useDashboard(yearMonth: string) {
-  const [untrackedSpending, setUntrackedSpending] = useState<UntrackedCategorySpend[]>([]);
+  const [unplannedExpenses, setUnplannedExpenses] = useState<UnplannedCategorySpend[]>([]);
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseWithStatus[]>([]);
   const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
@@ -49,7 +49,7 @@ export function useDashboard(yearMonth: string) {
     const [
       { data: budgetRows },
       { data: fxRows },
-      { data: untrackedRows },
+      { data: unplannedRows },
       { data: txnRows },
     ] = await Promise.all([
       supabase
@@ -61,7 +61,7 @@ export function useDashboard(yearMonth: string) {
         .select("*")
         .eq("year_month", yearMonth)
         .order("name", { ascending: true }),
-      // Untracked spend: confirmed expenses with no budget and no fixed expense.
+      // Unplanned spend: confirmed expenses with no budget and no fixed expense.
       supabase
         .from("transactions")
         .select("category_id, amount")
@@ -80,20 +80,20 @@ export function useDashboard(yearMonth: string) {
         .limit(10),
     ]);
 
-    // Aggregate untracked spend by category; a null category becomes "Untracked".
-    const untrackedByCat = new Map<string, number>();
-    let untrackedNoCat = 0;
-    for (const row of untrackedRows ?? []) {
+    // Aggregate unplanned spend by category; a null category -> "Uncategorized".
+    const unplannedByCat = new Map<string, number>();
+    let unplannedNoCat = 0;
+    for (const row of unplannedRows ?? []) {
       if (row.category_id) {
-        untrackedByCat.set(
+        unplannedByCat.set(
           row.category_id,
-          (untrackedByCat.get(row.category_id) ?? 0) + row.amount,
+          (unplannedByCat.get(row.category_id) ?? 0) + row.amount,
         );
       } else {
-        untrackedNoCat += row.amount;
+        unplannedNoCat += row.amount;
       }
     }
-    const untrackedCatIds = [...untrackedByCat.keys()];
+    const unplannedCatIds = [...unplannedByCat.keys()];
 
     // Hydrate the recent transactions with the relations the row needs:
     // account + transfer-account names, linked categories, and budget name.
@@ -108,12 +108,12 @@ export function useDashboard(yearMonth: string) {
     const budgetIds = [
       ...new Set(txns.map((t) => t.budget_id).filter(Boolean)),
     ] as string[];
-    // Categories needed by both the recent-transaction rows and the untracked
+    // Categories needed by both the recent-transaction rows and the unplanned
     // spend breakdown, so fetch them in one go.
     const catIds = [
       ...new Set([
         ...(txns.map((t) => t.category_id).filter(Boolean) as string[]),
-        ...untrackedCatIds,
+        ...unplannedCatIds,
       ]),
     ];
     const fixedExpenseIds = [
@@ -169,29 +169,29 @@ export function useDashboard(yearMonth: string) {
       tagsByTxn.set(link.transaction_id, tags);
     }
 
-    // Build the untracked breakdown now that category metadata is loaded.
-    const untracked: UntrackedCategorySpend[] = untrackedCatIds.map((id) => {
+    // Build the unplanned breakdown now that category metadata is loaded.
+    const unplanned: UnplannedCategorySpend[] = unplannedCatIds.map((id) => {
       const cat = categoryById.get(id);
       return {
         category_id: id,
         category_name: cat?.name ?? "Unknown",
         icon: cat?.icon ?? null,
         color: cat?.color ?? null,
-        total_amount: untrackedByCat.get(id) ?? 0,
+        total_amount: unplannedByCat.get(id) ?? 0,
       };
     });
-    if (untrackedNoCat > 0) {
-      untracked.push({
+    if (unplannedNoCat > 0) {
+      unplanned.push({
         category_id: null,
-        category_name: "Untracked",
+        category_name: "Uncategorized",
         icon: null,
         color: null,
-        total_amount: untrackedNoCat,
+        total_amount: unplannedNoCat,
       });
     }
-    untracked.sort((a, b) => b.total_amount - a.total_amount);
+    unplanned.sort((a, b) => b.total_amount - a.total_amount);
 
-    setUntrackedSpending(untracked);
+    setUnplannedExpenses(unplanned);
 
     // Derive each fixed expense's paid status from its linked transactions.
     const paidTotalById = new Map<string, number>();
@@ -245,5 +245,5 @@ export function useDashboard(yearMonth: string) {
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { untrackedSpending, fixedExpenses, budgetProgress, recentTransactions, loading, refetch: fetch };
+  return { unplannedExpenses, fixedExpenses, budgetProgress, recentTransactions, loading, refetch: fetch };
 }
