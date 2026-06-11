@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useCategories, deleteCategory } from "@/lib/hooks/use-categories";
@@ -9,6 +10,7 @@ import { CenteredSpinner, EmptyState } from "@/components/ui/misc";
 import type { Category } from "@/lib/types/database";
 
 export default function CategoriesPage() {
+  const navigate = useNavigate();
   const { categories, loading, refetch } = useCategories();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Category | null>(null);
@@ -55,7 +57,11 @@ export default function CategoriesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {categories.map((category) => (
-            <Card key={category.id}>
+            <Card
+              key={category.id}
+              className="cursor-pointer transition-shadow hover:shadow-md"
+              onClick={() => navigate(`/transactions?cat=${category.id}`)}
+            >
               <CardContent className="flex items-center justify-between gap-2 p-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <span
@@ -68,7 +74,10 @@ export default function CategoriesPage() {
                   <span className="truncate font-medium">{category.name}</span>
                 </div>
                 <DropdownMenu.Root>
-                  <DropdownMenu.Trigger className="rounded p-1 hover:bg-[var(--color-muted)]">
+                  <DropdownMenu.Trigger
+                    className="rounded p-1 hover:bg-[var(--color-muted)]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <MoreVertical className="h-4 w-4 text-[var(--color-muted-foreground)]" />
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>

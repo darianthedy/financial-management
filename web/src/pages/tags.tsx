@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, MoreVertical, Pencil, Trash2, Tag as TagIcon } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useTags, deleteTag } from "@/lib/hooks/use-tags";
@@ -9,6 +10,7 @@ import { CenteredSpinner, EmptyState } from "@/components/ui/misc";
 import type { Tag } from "@/lib/types/database";
 
 export default function TagsPage() {
+  const navigate = useNavigate();
   const { tags, loading, refetch } = useTags();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Tag | null>(null);
@@ -55,14 +57,21 @@ export default function TagsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {tags.map((tag) => (
-            <Card key={tag.id}>
+            <Card
+              key={tag.id}
+              className="cursor-pointer transition-shadow hover:shadow-md"
+              onClick={() => navigate(`/transactions?tag=${tag.id}`)}
+            >
               <CardContent className="flex items-center justify-between gap-2 p-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <TagIcon className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
                   <span className="truncate font-medium">{tag.name}</span>
                 </div>
                 <DropdownMenu.Root>
-                  <DropdownMenu.Trigger className="rounded p-1 hover:bg-[var(--color-muted)]">
+                  <DropdownMenu.Trigger
+                    className="rounded p-1 hover:bg-[var(--color-muted)]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <MoreVertical className="h-4 w-4 text-[var(--color-muted-foreground)]" />
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>

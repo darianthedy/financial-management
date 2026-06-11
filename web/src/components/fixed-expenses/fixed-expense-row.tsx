@@ -5,6 +5,7 @@ import {
   Trash2,
   Check,
   ArrowLeftRight,
+  ListFilter,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +28,12 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
   // is scoped to the date's month) and pre-selects it.
   function addTransaction() {
     navigate(`/transactions/new?fixedExpenseId=${id}&date=${year_month}-01`);
+  }
+
+  // Jump to the transaction list pre-filtered to this fixed expense (matched by
+  // name, across months — mirrors the filter bar's fixed-expense option).
+  function viewTransactions() {
+    navigate(`/transactions?fixed=${encodeURIComponent(name)}`);
   }
 
   return (
@@ -55,6 +62,12 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
                   onSelect={() => addTransaction()}
                 >
                   <ArrowLeftRight className="h-4 w-4" /> Add transaction
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
+                  onSelect={() => viewTransactions()}
+                >
+                  <ListFilter className="h-4 w-4" /> View transactions
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
