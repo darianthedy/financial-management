@@ -6,6 +6,7 @@ import { VerdictBanner } from "@/components/dashboard/verdict-banner";
 import { PaceGaugeCard } from "@/components/dashboard/pace-gauge";
 import { CashflowCard } from "@/components/dashboard/cashflow-card";
 import { SpendingByCategoryCard } from "@/components/dashboard/spending-by-category";
+import { BiggestMoversCard } from "@/components/dashboard/biggest-movers";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
@@ -18,8 +19,14 @@ import {
 
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
-  const { cashflow, spendingByCategory, budgetProgress, recentTransactions, loading } =
-    useDashboard(yearMonth);
+  const {
+    cashflow,
+    spendingByCategory,
+    spendingDeltas,
+    budgetProgress,
+    recentTransactions,
+    loading,
+  } = useDashboard(yearMonth);
 
   return (
     <div className="space-y-6">
@@ -60,7 +67,8 @@ export default function DashboardPage() {
             </div>
           )}
           <CashflowCard cashflow={cashflow} />
-          <SpendingByCategoryCard data={spendingByCategory} />
+          <SpendingByCategoryCard data={spendingByCategory} deltas={spendingDeltas} />
+          <BiggestMoversCard deltas={spendingDeltas} />
           <div className="md:col-span-2">
             <BudgetProgressCard budgets={budgetProgress} />
           </div>

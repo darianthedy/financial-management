@@ -1,6 +1,8 @@
 ﻿import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { MonthlyCashflow, SpendingByCategory, Transaction, BudgetProgress, Category, Tag } from "@/lib/types/database";
+import { navigateMonth } from "@/lib/utils/date";
+import { computeSpendingDeltas, type SpendingDelta } from "@/lib/utils/spending-delta";
 
 export type RecentTransaction = Transaction & {
   accounts: { name: string; image_url: string | null } | null;
@@ -24,15 +26,18 @@ function pctUsed(b: BudgetProgress): number {
 export function useDashboard(yearMonth: string) {
   const [cashflow, setCashflow] = useState<MonthlyCashflow | null>(null);
   const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory[]>([]);
+  const [spendingDeltas, setSpendingDeltas] = useState<SpendingDelta[]>([]);
   const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
+    const prevYearMonth = navigateMonth(yearMonth, -1);
     const [
       { data: cfRows },
       { data: spendRows },
+      { data: prevSpendRows },
       { data: budgetRows },
       { data: txnRows },
     ] = await Promise.all([
@@ -46,6 +51,10 @@ export function useDashboard(yearMonth: string) {
         .select("*")
         .eq("year_month", yearMonth)
         .order("total_amount", { ascending: false }),
+      supabase
+        .from("v_spending_by_category")
+        .select("*")
+        .eq("year_month", prevYearMonth),
       supabase
         .from("v_budget_progress")
         .select("*")
@@ -119,6 +128,7 @@ export function useDashboard(yearMonth: string) {
 
     setCashflow(cfRows ?? null);
     setSpendingByCategory(spendRows ?? []);
+    setSpendingDeltas(computeSpendingDeltas(spendRows ?? [], prevSpendRows ?? []));
     // Surface the budgets that need attention first: most-over and
     // closest-to-the-limit lead, instead of an alphabetical wall.
     setBudgetProgress([...(budgetRows ?? [])].sort((a, b) => pctUsed(b) - pctUsed(a)));
@@ -153,5 +163,5 @@ export function useDashboard(yearMonth: string) {
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { cashflow, spendingByCategory, budgetProgress, recentTransactions, loading, refetch: fetch };
+  return { cashflow, spendingByCategory, spendingDeltas, budgetProgress, recentTransactions, loading, refetch: fetch };
 }
