@@ -5,7 +5,6 @@ import {
   Trash2,
   Check,
   ArrowLeftRight,
-  ListFilter,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,7 +36,10 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
   }
 
   return (
-    <Card>
+    <Card
+      className="cursor-pointer transition-shadow hover:shadow-md"
+      onClick={viewTransactions}
+    >
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <span className="min-w-0 truncate font-medium">{name}</span>
@@ -48,6 +50,7 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
             <DropdownMenu.Trigger
               className="rounded p-1 hover:bg-[var(--color-muted)]"
               aria-label="Fixed expense actions"
+              onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4 text-[var(--color-muted-foreground)]" />
             </DropdownMenu.Trigger>
@@ -62,12 +65,6 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
                   onSelect={() => addTransaction()}
                 >
                   <ArrowLeftRight className="h-4 w-4" /> Add transaction
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
-                  onSelect={() => viewTransactions()}
-                >
-                  <ListFilter className="h-4 w-4" /> View transactions
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"

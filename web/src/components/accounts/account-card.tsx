@@ -1,5 +1,4 @@
-import { MoreVertical, Pencil, Archive, ListFilter } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { MoreVertical, Pencil, Archive } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/misc";
@@ -17,7 +16,6 @@ interface Props {
 }
 
 export function AccountCard({ account, onClick, onEdit, onArchive }: Props) {
-  const navigate = useNavigate();
   const balance = formatCurrency(account.current_balance);
   const isNegative = account.current_balance < 0;
 
@@ -62,12 +60,6 @@ export function AccountCard({ account, onClick, onEdit, onArchive }: Props) {
                 align="end"
                 className="z-50 min-w-36 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-md"
               >
-                <DropdownMenu.Item
-                  className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
-                  onSelect={() => navigate(`/transactions?account=${account.id}`)}
-                >
-                  <ListFilter className="h-4 w-4" /> View transactions
-                </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
                   onSelect={() => onEdit?.()}
