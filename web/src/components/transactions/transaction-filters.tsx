@@ -342,24 +342,16 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                 )}
               </div>
               <div className="mt-2 flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={filters.dateFrom ?? ""}
-                  onChange={(e) =>
-                    e.target.value ? patch({ dateFrom: e.target.value }) : clear("dateFrom")
-                  }
-                  aria-label="From date"
-                  className="min-w-0 appearance-none"
+                <DateInput
+                  value={filters.dateFrom}
+                  onChange={(v) => (v ? patch({ dateFrom: v }) : clear("dateFrom"))}
+                  ariaLabel="From date"
                 />
                 <span className="text-[var(--color-muted-foreground)]">–</span>
-                <Input
-                  type="date"
-                  value={filters.dateTo ?? ""}
-                  onChange={(e) =>
-                    e.target.value ? patch({ dateTo: e.target.value }) : clear("dateTo")
-                  }
-                  aria-label="To date"
-                  className="min-w-0 appearance-none"
+                <DateInput
+                  value={filters.dateTo}
+                  onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}
+                  ariaLabel="To date"
                 />
               </div>
             </FilterField>
@@ -546,6 +538,31 @@ function FilterField({
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+function DateInput({ value, onChange, ariaLabel }: { value?: string; onChange: (value: string) => void; ariaLabel: string }) {
+  return (
+    <div className="relative min-w-0 flex-1">
+      <Input
+        type="date"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+        aria-label={ariaLabel}
+        className="min-w-0 appearance-none pr-8 [&::-webkit-calendar-picker-indicator]:hidden"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label={`Clear ${ariaLabel.toLowerCase()}`}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
