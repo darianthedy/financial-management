@@ -1,8 +1,7 @@
-﻿import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
-import type { MonthlyCashflow, SpendingByCategory, Transaction, BudgetProgress, Category, Tag } from "@/lib/types/database";
-import { navigateMonth } from "@/lib/utils/date";
-import { computeSpendingDeltas, type SpendingDelta } from "@/lib/utils/spending-delta";
+import type { Transaction, BudgetProgress, Category, Tag } from "@/lib/types/database";
+import { monthDateRange } from "@/lib/utils/date";
 
 export type RecentTransaction = Transaction & {
   accounts: { name: string; image_url: string | null } | null;
@@ -11,6 +10,19 @@ export type RecentTransaction = Transaction & {
   tags: Tag[];
   budget: { name: string } | null;
   fixedExpense: { name: string } | null;
+};
+
+/**
+ * One category's untracked spend for the month: confirmed expenses NOT tied to a
+ * budget and NOT linked to a fixed expense. Uncategorized untracked spend is
+ * collapsed into a single null-id "Untracked" row.
+ */
+export type UntrackedCategorySpend = {
+  category_id: string | null;
+  category_name: string;
+  icon: string | null;
+  color: string | null;
+  total_amount: number;
 };
 
 /**
@@ -24,41 +36,33 @@ function pctUsed(b: BudgetProgress): number {
 }
 
 export function useDashboard(yearMonth: string) {
-  const [cashflow, setCashflow] = useState<MonthlyCashflow | null>(null);
-  const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory[]>([]);
-  const [spendingDeltas, setSpendingDeltas] = useState<SpendingDelta[]>([]);
+  const [untrackedSpending, setUntrackedSpending] = useState<UntrackedCategorySpend[]>([]);
   const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
-    const prevYearMonth = navigateMonth(yearMonth, -1);
+    const { start, endExclusive } = monthDateRange(yearMonth);
     const [
-      { data: cfRows },
-      { data: spendRows },
-      { data: prevSpendRows },
       { data: budgetRows },
+      { data: untrackedRows },
       { data: txnRows },
     ] = await Promise.all([
-      supabase
-        .from("v_monthly_cashflow")
-        .select("*")
-        .eq("year_month", yearMonth)
-        .maybeSingle(),
-      supabase
-        .from("v_spending_by_category")
-        .select("*")
-        .eq("year_month", yearMonth)
-        .order("total_amount", { ascending: false }),
-      supabase
-        .from("v_spending_by_category")
-        .select("*")
-        .eq("year_month", prevYearMonth),
       supabase
         .from("v_budget_progress")
         .select("*")
         .eq("year_month", yearMonth),
+      // Untracked spend: confirmed expenses with no budget and no fixed expense.
+      supabase
+        .from("transactions")
+        .select("category_id, amount")
+        .eq("type", "expense")
+        .eq("status", "confirmed")
+        .is("budget_id", null)
+        .is("fixed_expense_id", null)
+        .gte("date", start)
+        .lt("date", endExclusive),
       supabase
         .from("transactions")
         .select("*")
@@ -67,6 +71,21 @@ export function useDashboard(yearMonth: string) {
         .order("created_at", { ascending: false })
         .limit(10),
     ]);
+
+    // Aggregate untracked spend by category; a null category becomes "Untracked".
+    const untrackedByCat = new Map<string, number>();
+    let untrackedNoCat = 0;
+    for (const row of untrackedRows ?? []) {
+      if (row.category_id) {
+        untrackedByCat.set(
+          row.category_id,
+          (untrackedByCat.get(row.category_id) ?? 0) + row.amount,
+        );
+      } else {
+        untrackedNoCat += row.amount;
+      }
+    }
+    const untrackedCatIds = [...untrackedByCat.keys()];
 
     // Hydrate the recent transactions with the relations the row needs:
     // account + transfer-account names, linked categories, and budget name.
@@ -81,9 +100,14 @@ export function useDashboard(yearMonth: string) {
     const budgetIds = [
       ...new Set(txns.map((t) => t.budget_id).filter(Boolean)),
     ] as string[];
+    // Categories needed by both the recent-transaction rows and the untracked
+    // spend breakdown, so fetch them in one go.
     const catIds = [
-      ...new Set(txns.map((t) => t.category_id).filter(Boolean)),
-    ] as string[];
+      ...new Set([
+        ...(txns.map((t) => t.category_id).filter(Boolean) as string[]),
+        ...untrackedCatIds,
+      ]),
+    ];
     const fixedExpenseIds = [
       ...new Set(txns.map((t) => t.fixed_expense_id).filter(Boolean)),
     ] as string[];
@@ -126,9 +150,29 @@ export function useDashboard(yearMonth: string) {
       tagsByTxn.set(link.transaction_id, tags);
     }
 
-    setCashflow(cfRows ?? null);
-    setSpendingByCategory(spendRows ?? []);
-    setSpendingDeltas(computeSpendingDeltas(spendRows ?? [], prevSpendRows ?? []));
+    // Build the untracked breakdown now that category metadata is loaded.
+    const untracked: UntrackedCategorySpend[] = untrackedCatIds.map((id) => {
+      const cat = categoryById.get(id);
+      return {
+        category_id: id,
+        category_name: cat?.name ?? "Unknown",
+        icon: cat?.icon ?? null,
+        color: cat?.color ?? null,
+        total_amount: untrackedByCat.get(id) ?? 0,
+      };
+    });
+    if (untrackedNoCat > 0) {
+      untracked.push({
+        category_id: null,
+        category_name: "Untracked",
+        icon: null,
+        color: null,
+        total_amount: untrackedNoCat,
+      });
+    }
+    untracked.sort((a, b) => b.total_amount - a.total_amount);
+
+    setUntrackedSpending(untracked);
     // Surface the budgets that need attention first: most-over and
     // closest-to-the-limit lead, instead of an alphabetical wall.
     setBudgetProgress([...(budgetRows ?? [])].sort((a, b) => pctUsed(b) - pctUsed(a)));
@@ -163,5 +207,5 @@ export function useDashboard(yearMonth: string) {
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { cashflow, spendingByCategory, spendingDeltas, budgetProgress, recentTransactions, loading, refetch: fetch };
+  return { untrackedSpending, budgetProgress, recentTransactions, loading, refetch: fetch };
 }

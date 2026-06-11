@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
 import { PaceGaugeCard } from "@/components/dashboard/pace-gauge";
-import { CashflowCard } from "@/components/dashboard/cashflow-card";
-import { SpendingByCategoryCard } from "@/components/dashboard/spending-by-category";
-import { BiggestMoversCard } from "@/components/dashboard/biggest-movers";
+import { UntrackedSpendingCard } from "@/components/dashboard/untracked-spending";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
@@ -19,14 +17,8 @@ import {
 
 export default function DashboardPage() {
   const [yearMonth, setYearMonth] = useState(getCurrentYearMonth());
-  const {
-    cashflow,
-    spendingByCategory,
-    spendingDeltas,
-    budgetProgress,
-    recentTransactions,
-    loading,
-  } = useDashboard(yearMonth);
+  const { untrackedSpending, budgetProgress, recentTransactions, loading } =
+    useDashboard(yearMonth);
 
   return (
     <div className="space-y-6">
@@ -66,9 +58,9 @@ export default function DashboardPage() {
               <PaceGaugeCard budgets={budgetProgress} yearMonth={yearMonth} />
             </div>
           )}
-          <CashflowCard cashflow={cashflow} />
-          <SpendingByCategoryCard data={spendingByCategory} deltas={spendingDeltas} />
-          <BiggestMoversCard deltas={spendingDeltas} />
+          <div className="md:col-span-2">
+            <UntrackedSpendingCard spending={untrackedSpending} />
+          </div>
           <div className="md:col-span-2">
             <BudgetProgressCard budgets={budgetProgress} />
           </div>
