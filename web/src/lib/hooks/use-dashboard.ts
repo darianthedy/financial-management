@@ -11,6 +11,16 @@ export type RecentTransaction = Transaction & {
   fixedExpense: { name: string } | null;
 };
 
+/**
+ * Fraction of a budget consumed, used to rank budgets by urgency. Overspent
+ * budgets land above 1; a budget with no effective amount but real spend sorts
+ * to the top (Infinity), an empty budget to the bottom (0).
+ */
+function pctUsed(b: BudgetProgress): number {
+  if (b.effective_amount > 0) return b.spent / b.effective_amount;
+  return b.spent > 0 ? Infinity : 0;
+}
+
 export function useDashboard(yearMonth: string) {
   const [cashflow, setCashflow] = useState<MonthlyCashflow | null>(null);
   const [spendingByCategory, setSpendingByCategory] = useState<SpendingByCategory[]>([]);
@@ -39,8 +49,7 @@ export function useDashboard(yearMonth: string) {
       supabase
         .from("v_budget_progress")
         .select("*")
-        .eq("year_month", yearMonth)
-        .order("budget_name", { ascending: true }),
+        .eq("year_month", yearMonth),
       supabase
         .from("transactions")
         .select("*")
@@ -110,7 +119,9 @@ export function useDashboard(yearMonth: string) {
 
     setCashflow(cfRows ?? null);
     setSpendingByCategory(spendRows ?? []);
-    setBudgetProgress(budgetRows ?? []);
+    // Surface the budgets that need attention first: most-over and
+    // closest-to-the-limit lead, instead of an alphabetical wall.
+    setBudgetProgress([...(budgetRows ?? [])].sort((a, b) => pctUsed(b) - pctUsed(a)));
     setRecentTransactions(
       txns.map((t) => ({
         ...t,
