@@ -1,17 +1,17 @@
 import { useMemo } from "react";
 import { formatCurrency } from "@/lib/utils/currency";
-import type { TransactionWithRelations } from "@/lib/hooks/use-transactions";
+import type { TransactionSummaryRow } from "@/lib/hooks/use-transactions";
 import { cn } from "@/lib/utils/cn";
 
 interface Props {
-  transactions: TransactionWithRelations[];
+  transactions: TransactionSummaryRow[];
 }
 
 /**
  * Income / expense / net summary plus a texture row, for the CURRENTLY FILTERED
- * transaction set (the list is fetched fully client-side, so we derive from the
- * loaded rows). Computed on demand — the Transactions page only mounts this when
- * the user opens the summary.
+ * transaction set across every page (the Transactions page fetches the whole
+ * filtered set on demand and passes it here). Computed on demand — the page only
+ * mounts this when the user opens the summary.
  *
  * Money math uses CONFIRMED rows only: pending rows haven't happened yet and are
  * surfaced separately as a projection, while dismissed (cancelled) rows are
