@@ -5,9 +5,12 @@ export const transactionFormSchema = z
     type: z.enum(["income", "expense", "transfer"]),
     account_id: z.string().uuid("Select an account"),
     transfer_account_id: z.string().nullable().optional(),
+    // Income/expense may be negative (e.g. a refund recorded as a negative
+    // expense), so only zero is rejected here. Transfers are forced positive in
+    // the superRefine below.
     amount: z
       .number({ message: "Enter an amount" })
-      .positive("Amount must be greater than 0"),
+      .refine((v) => v !== 0, "Amount can't be zero"),
     date: z.string().min(1, "Date is required"),
     description: z.string().max(500).nullable().optional(),
     budget_id: z.string().uuid().nullable().optional(),
@@ -19,6 +22,13 @@ export const transactionFormSchema = z
   })
   .superRefine((val, ctx) => {
     if (val.type === "transfer") {
+      if (val.amount <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Transfer amount must be greater than 0",
+          path: ["amount"],
+        });
+      }
       if (!val.transfer_account_id) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
