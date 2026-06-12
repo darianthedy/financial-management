@@ -349,6 +349,9 @@ export function TransactionForm({
             id="amount"
             value={watch("amount")}
             decimals={decimalsFor(defaultCurrency)}
+            // Income/expense can be negative (e.g. a refund as a negative
+            // expense); transfers stay positive.
+            allowNegative={type !== "transfer"}
             onChange={(v) =>
               setValue("amount", v, {
                 shouldDirty: true,
