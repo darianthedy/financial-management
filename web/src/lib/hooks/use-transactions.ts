@@ -107,8 +107,184 @@ async function resolveFixedExpenseIds(
   return (data ?? []).map((r) => r.id);
 }
 
-export function useTransactions(filters: TransactionFilters = {}) {
+/**
+ * Resolve the facets that need an async lookup or compound clause into the
+ * shape `applyFilters` consumes, so the list query and the summary query share
+ * identical constraints. Budget/fixed are matched by NAME across many
+ * month-specific rows, so their names resolve to ID lists first. `empty` means
+ * some facet can match nothing (a present-but-empty facet, or chosen
+ * budget/fixed names that resolved to no rows) — callers short-circuit.
+ */
+interface ResolvedRestrictions {
+  empty: boolean;
+  /** PostgREST .or() clause for the budget facet (ids and/or "(Blanks)"). */
+  budgetOr?: string;
+  /** PostgREST .or() clause for the fixed-expense facet. */
+  fixedOr?: string;
+}
+
+async function resolveRestrictions(
+  filters: TransactionFilters,
+): Promise<ResolvedRestrictions> {
+  // A present-but-empty facet means the user unchecked every option, so nothing
+  // can match. (An absent facet is the default "all" state and adds no filter.)
+  const noneSelected = [
+    filters.accountIds,
+    filters.types,
+    filters.statuses,
+    filters.categoryIds,
+    filters.tagIds,
+    filters.budgetNames,
+    filters.fixedExpenseNames,
+  ].some((f) => f != null && f.length === 0);
+  if (noneSelected) return { empty: true };
+
+  const r: ResolvedRestrictions = { empty: false };
+
+  if (filters.budgetNames?.length) {
+    const names = filters.budgetNames.filter((v) => v !== NO_VALUE);
+    const parts: string[] = [];
+    if (names.length) {
+      const ids = await resolveBudgetIds(
+        names,
+        filters.dateFrom?.slice(0, 7),
+        filters.dateTo?.slice(0, 7),
+      );
+      if (ids.length) parts.push(`budget_id.in.(${ids.join(",")})`);
+    }
+    if (filters.budgetNames.includes(NO_VALUE)) parts.push("budget_id.is.null");
+    // Named budgets chosen but none resolved (and "(Blanks)" wasn't): nothing matches.
+    if (parts.length === 0) return { empty: true };
+    r.budgetOr = parts.join(",");
+  }
+
+  if (filters.fixedExpenseNames?.length) {
+    const names = filters.fixedExpenseNames.filter((v) => v !== NO_VALUE);
+    const parts: string[] = [];
+    if (names.length) {
+      const ids = await resolveFixedExpenseIds(
+        names,
+        filters.dateFrom?.slice(0, 7),
+        filters.dateTo?.slice(0, 7),
+      );
+      if (ids.length) parts.push(`fixed_expense_id.in.(${ids.join(",")})`);
+    }
+    if (filters.fixedExpenseNames.includes(NO_VALUE))
+      parts.push("fixed_expense_id.is.null");
+    if (parts.length === 0) return { empty: true };
+    r.fixedOr = parts.join(",");
+  }
+
+  return r;
+}
+
+/**
+ * Structural shape of the PostgREST query builder: just the filter methods this
+ * module chains. Each returns the same builder (`this`), so a generic `T` lets
+ * `applyFilters` work for both the `select("*")` list query and the lightweight
+ * summary query while preserving their row types.
+ */
+interface FilterableQuery<T> {
+  or(filters: string): T;
+  in(column: string, values: readonly string[]): T;
+  gte(column: string, value: string | number): T;
+  lte(column: string, value: string | number): T;
+  ilike(column: string, pattern: string): T;
+}
+
+/**
+ * Apply every active filter to a `v_transactions` query. Shared by the paginated
+ * list query and the whole-set summary query so their counts and totals can't
+ * drift. Tags are filtered here in SQL via the view's `tag_ids` array (overlaps
+ * for chosen tags, `= '{}'` for "(Blanks)/untagged"); category and the resolved
+ * budget/fixed clauses likewise honour their "(Blanks)" option.
+ */
+function applyFilters<T extends FilterableQuery<T>>(
+  query: T,
+  filters: TransactionFilters,
+  restrictions: ResolvedRestrictions,
+): T {
+  let q = query;
+  if (filters.accountIds?.length) {
+    const ors = filters.accountIds
+      .flatMap((id) => [`account_id.eq.${id}`, `transfer_account_id.eq.${id}`])
+      .join(",");
+    q = q.or(ors);
+  }
+  if (filters.types?.length) q = q.in("type", filters.types);
+  if (filters.statuses?.length) q = q.in("status", filters.statuses);
+  if (filters.dateFrom) q = q.gte("date", filters.dateFrom);
+  if (filters.dateTo) q = q.lte("date", filters.dateTo);
+  if (filters.search) q = q.ilike("description", `%${filters.search}%`);
+  if (filters.amountMin != null) q = q.gte("amount", filters.amountMin);
+  if (filters.amountMax != null) q = q.lte("amount", filters.amountMax);
+  if (filters.categoryIds?.length) {
+    const ids = filters.categoryIds.filter((v) => v !== NO_VALUE);
+    const parts: string[] = [];
+    if (ids.length) parts.push(`category_id.in.(${ids.join(",")})`);
+    if (filters.categoryIds.includes(NO_VALUE)) parts.push("category_id.is.null");
+    q = q.or(parts.join(","));
+  }
+  if (restrictions.budgetOr) q = q.or(restrictions.budgetOr);
+  if (restrictions.fixedOr) q = q.or(restrictions.fixedOr);
+  if (filters.tagIds?.length) {
+    const ids = filters.tagIds.filter((v) => v !== NO_VALUE);
+    const parts: string[] = [];
+    if (ids.length) parts.push(`tag_ids.ov.{${ids.join(",")}}`);
+    if (filters.tagIds.includes(NO_VALUE)) parts.push("tag_ids.eq.{}");
+    q = q.or(parts.join(","));
+  }
+  return q;
+}
+
+/** Income/expense/status rows for the whole filtered set, for the Summary dialog. */
+export type TransactionSummaryRow = Pick<
+  Transaction,
+  "type" | "amount" | "status"
+>;
+
+/**
+ * Fetch the whole filtered set (every page) reduced to the three columns the
+ * Summary needs. Kept separate from the list query so the summary spans all
+ * pages and is computed on demand (when the dialog opens), not on every page
+ * load. Reuses `applyFilters`, so it honours exactly the same filters.
+ */
+export async function fetchTransactionSummaryRows(
+  filters: TransactionFilters = {},
+): Promise<TransactionSummaryRow[]> {
+  const restrictions = await resolveRestrictions(filters);
+  if (restrictions.empty) return [];
+  const q = applyFilters(
+    supabase.from("v_transactions").select("type, amount, status"),
+    filters,
+    restrictions,
+  );
+  const { data } = await q;
+  return (data ?? []) as TransactionSummaryRow[];
+}
+
+export interface UseTransactionsOptions {
+  /**
+   * Zero-based page index. When provided the list query is windowed with
+   * `.range()` and `total` reports the full matching count. When omitted every
+   * matching row is fetched (e.g. the scheduled page) and `total` is their count.
+   */
+  page?: number;
+  pageSize?: number;
+}
+
+const DEFAULT_PAGE_SIZE = 50;
+
+export function useTransactions(
+  filters: TransactionFilters = {},
+  options: UseTransactionsOptions = {},
+) {
+  const { page, pageSize = DEFAULT_PAGE_SIZE } = options;
+  const paginated = page != null;
+
   const [transactions, setTransactions] = useState<TransactionWithRelations[]>([]);
+  // Full count of rows matching the filters (not just the loaded page).
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Arrays change identity each render; depend on a stable serialization so the
@@ -124,102 +300,35 @@ export function useTransactions(filters: TransactionFilters = {}) {
   const fetch = useCallback(async () => {
     setLoading(true);
 
-    // Use plain select("*") to avoid FK-hint syntax that requires Relationships typed.
-    // Account names are fetched separately via a lookup map.
-    let q = supabase
-      .from("transactions")
-      .select("*")
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    // A present-but-empty facet means the user unchecked every option, so nothing
-    // can match. (An absent facet is the default "all" state and adds no filter.)
-    const noneSelected = [
-      filters.accountIds,
-      filters.types,
-      filters.statuses,
-      filters.categoryIds,
-      filters.tagIds,
-      filters.budgetNames,
-      filters.fixedExpenseNames,
-    ].some((f) => f != null && f.length === 0);
-    if (noneSelected) {
+    const restrictions = await resolveRestrictions(filters);
+    if (restrictions.empty) {
       setTransactions([]);
+      setTotal(0);
       setLoading(false);
       return;
     }
 
-    if (filters.accountIds?.length) {
-      const ors = filters.accountIds
-        .flatMap((id) => [`account_id.eq.${id}`, `transfer_account_id.eq.${id}`])
-        .join(",");
-      q = q.or(ors);
-    }
-    if (filters.types?.length) q = q.in("type", filters.types);
-    if (filters.statuses?.length) q = q.in("status", filters.statuses);
-    if (filters.dateFrom) q = q.gte("date", filters.dateFrom);
-    if (filters.dateTo) q = q.lte("date", filters.dateTo);
-    if (filters.search) q = q.ilike("description", `%${filters.search}%`);
-    if (filters.amountMin != null) q = q.gte("amount", filters.amountMin);
-    if (filters.amountMax != null) q = q.lte("amount", filters.amountMax);
-
-    // Category, budget, and fixed expense are columns on the row. Within a facet
-    // the chosen values OR together — including NO_VALUE, which matches a NULL
-    // column ("(Blanks)"). Facets AND together (each is its own .or() clause).
-    if (filters.categoryIds?.length) {
-      const ids = filters.categoryIds.filter((v) => v !== NO_VALUE);
-      const parts: string[] = [];
-      if (ids.length) parts.push(`category_id.in.(${ids.join(",")})`);
-      if (filters.categoryIds.includes(NO_VALUE))
-        parts.push("category_id.is.null");
-      q = q.or(parts.join(","));
+    // Read from v_transactions so the tag facet (incl. "(Blanks)/untagged") can
+    // be filtered in SQL via its tag_ids array — that keeps the whole query
+    // server-side and lets .range()+count paginate accurately. Account/budget/
+    // /category/fixed names are still hydrated separately below. id is the
+    // tiebreaker so the order is total and stable across pages.
+    let q = (
+      paginated
+        ? supabase.from("v_transactions").select("*", { count: "exact" })
+        : supabase.from("v_transactions").select("*")
+    )
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    q = applyFilters(q, filters, restrictions);
+    if (paginated) {
+      q = q.range(page * pageSize, page * pageSize + pageSize - 1);
     }
 
-    if (filters.budgetNames?.length) {
-      const names = filters.budgetNames.filter((v) => v !== NO_VALUE);
-      const parts: string[] = [];
-      if (names.length) {
-        const budgetIds = await resolveBudgetIds(
-          names,
-          filters.dateFrom?.slice(0, 7),
-          filters.dateTo?.slice(0, 7),
-        );
-        if (budgetIds.length) parts.push(`budget_id.in.(${budgetIds.join(",")})`);
-      }
-      if (filters.budgetNames.includes(NO_VALUE)) parts.push("budget_id.is.null");
-      // Named budgets were chosen but none resolved (and "(none)" wasn't): nothing matches.
-      if (parts.length === 0) {
-        setTransactions([]);
-        setLoading(false);
-        return;
-      }
-      q = q.or(parts.join(","));
-    }
-
-    if (filters.fixedExpenseNames?.length) {
-      const names = filters.fixedExpenseNames.filter((v) => v !== NO_VALUE);
-      const parts: string[] = [];
-      if (names.length) {
-        const fixedExpenseIds = await resolveFixedExpenseIds(
-          names,
-          filters.dateFrom?.slice(0, 7),
-          filters.dateTo?.slice(0, 7),
-        );
-        if (fixedExpenseIds.length)
-          parts.push(`fixed_expense_id.in.(${fixedExpenseIds.join(",")})`);
-      }
-      if (filters.fixedExpenseNames.includes(NO_VALUE))
-        parts.push("fixed_expense_id.is.null");
-      if (parts.length === 0) {
-        setTransactions([]);
-        setLoading(false);
-        return;
-      }
-      q = q.or(parts.join(","));
-    }
-
-    const { data: txnRows } = await q;
+    const { data: txnRows, count } = await q;
     const rows: Transaction[] = txnRows ?? [];
+    setTotal(paginated ? count ?? rows.length : rows.length);
 
     const ids = rows.map((r) => r.id);
 
@@ -293,6 +402,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
       tagsByTxn.set(link.transaction_id, tags);
     }
 
+    // Tags are filtered in SQL (via the view's tag_ids array), so the fetched
+    // rows are already the final set — just hydrate names for display.
     const mapped = rows.map((r) => ({
       ...r,
       accounts: r.account_id
@@ -311,20 +422,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
         ? { name: fixedExpenseNameById.get(r.fixed_expense_id) ?? "" }
         : null,
     }));
-
-    // Tags live in a junction table (no tag_id column on transactions), so the
-    // tag facet is applied here on the resolved tag lists rather than in SQL.
-    // Values OR together; NO_VALUE matches rows with no tags.
-    const wantedTags = new Set(filters.tagIds?.filter((v) => v !== NO_VALUE));
-    const wantNoTags = filters.tagIds?.includes(NO_VALUE) ?? false;
-    const filtered = filters.tagIds?.length
-      ? mapped.filter(
-          (t) =>
-            (wantedTags.size > 0 && t.tags.some((tag) => wantedTags.has(tag.id))) ||
-            (wantNoTags && t.tags.length === 0),
-        )
-      : mapped;
-    setTransactions(filtered);
+    setTransactions(mapped);
     setLoading(false);
     // categoryKey/tagKey stand in for the categoryIds/tagIds arrays (stable
     // identity); listing the arrays themselves would refetch every render.
@@ -342,6 +440,9 @@ export function useTransactions(filters: TransactionFilters = {}) {
     fixedExpenseNamesKey,
     categoryKey,
     tagKey,
+    paginated,
+    page,
+    pageSize,
   ]);
 
   useEffect(() => {
@@ -353,7 +454,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { transactions, loading, refetch: fetch };
+  return { transactions, total, loading, refetch: fetch };
 }
 
 async function currentUserId(): Promise<string> {

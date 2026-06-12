@@ -347,6 +347,13 @@ export interface Database {
         };
         Relationships: [];
       };
+      // transactions plus an aggregated tag_ids array, so the tag facet (incl.
+      // "(Blanks)/untagged") can be filtered in SQL. Reads only — writes go to
+      // the transactions table.
+      v_transactions: {
+        Row: TransactionRow & { tag_ids: string[] };
+        Relationships: [];
+      };
     };
     Functions: Record<string, never>;
     Enums: {
