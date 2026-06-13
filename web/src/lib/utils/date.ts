@@ -1,4 +1,4 @@
-import { format, parse, addMonths, subMonths, getDaysInMonth, getDate } from "date-fns";
+import { format, parse, addMonths, subMonths, getDaysInMonth, getDate, endOfMonth } from "date-fns";
 
 export function getCurrentYearMonth(): string {
   return format(new Date(), "yyyy-MM");
@@ -46,6 +46,21 @@ export function monthDateRange(yearMonth: string): {
   return {
     start: `${yearMonth}-01`,
     endExclusive: `${navigateMonth(yearMonth, 1)}-01`,
+  };
+}
+
+/**
+ * Inclusive ISO date bounds for a month, suited to the transactions list's
+ * `from`/`to` date filter (which matches the `date` column with gte/lte). The
+ * end is the month's LAST day — not the next month's first — so the month
+ * window derived from `to` (`to.slice(0, 7)`, used to scope the budget /
+ * fixed-expense facets) stays within this month.
+ */
+export function monthDateBounds(yearMonth: string): { from: string; to: string } {
+  const date = parse(yearMonth, "yyyy-MM", new Date());
+  return {
+    from: `${yearMonth}-01`,
+    to: format(endOfMonth(date), "yyyy-MM-dd"),
   };
 }
 
