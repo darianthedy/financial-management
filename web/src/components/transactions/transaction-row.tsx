@@ -6,6 +6,7 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  Clock,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils/cn";
@@ -101,7 +102,15 @@ export function TransactionRow({ txn, onMutated }: Props) {
       />
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm font-semibold">{title}</span>
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold">{title}</span>
+          {isPending && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-warning)]">
+              <Clock className="h-3 w-3" />
+              Pending
+            </span>
+          )}
+        </div>
         {subtitle && (
           <span className="truncate text-xs text-[var(--color-muted-foreground)]">
             {subtitle}
@@ -118,13 +127,21 @@ export function TransactionRow({ txn, onMutated }: Props) {
           {formatDate(txn.date)}
         </span>
         {isPending && (
-          <div className="flex gap-1">
-            <Button size="sm" variant="secondary" className="h-6 px-2 text-xs" onClick={handleConfirm}>
-              <Check className="h-3 w-3" /> Confirm
-            </Button>
-            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={handleDismiss}>
-              <X className="h-3 w-3" />
-            </Button>
+          <div className="flex gap-1.5 pt-0.5">
+            <button
+              aria-label="Confirm"
+              onClick={handleConfirm}
+              className="flex h-8 w-8 touch-manipulation select-none items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)] transition-[background-color,color,transform] duration-150 ease-out hover:bg-[var(--color-success)] hover:text-white active:scale-90 active:bg-[var(--color-success)] active:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-success)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-muted)]"
+            >
+              <Check className="h-4 w-4" />
+            </button>
+            <button
+              aria-label="Reject"
+              onClick={handleDismiss}
+              className="flex h-8 w-8 touch-manipulation select-none items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)] transition-[background-color,color,transform] duration-150 ease-out hover:bg-[var(--color-danger)] hover:text-white active:scale-90 active:bg-[var(--color-danger)] active:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-muted)]"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
       </div>
