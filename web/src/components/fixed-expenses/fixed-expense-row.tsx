@@ -75,6 +75,11 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
                 sideOffset={4}
                 align="end"
                 className="z-50 min-w-44 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-md"
+                // The menu renders in a portal but React events still bubble up
+                // the component tree to the Card's onClick (which navigates to
+                // the transactions list). Contain clicks so menu actions like
+                // Edit aren't overridden by that navigation.
+                onClick={(e) => e.stopPropagation()}
               >
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
