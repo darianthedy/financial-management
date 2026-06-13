@@ -130,7 +130,11 @@ export function TransactionForm({
   } = useForm<TransactionFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(transactionFormSchema) as any,
-    defaultValues: {
+    // In edit mode, initialise straight from the transaction so the very first
+    // render already has the right date/month. Otherwise the form would briefly
+    // mount at today's date before `values` settles it, and that transient month
+    // shift would be mistaken for the user changing the date.
+    defaultValues: values ?? {
       type: "expense",
       account_id: defaultAccountId ?? "",
       transfer_account_id: null,
@@ -178,26 +182,90 @@ export function TransactionForm({
 
   // Budgets that can be linked: same month (derived from the date).
   const budgetMonth = yearMonthOf(date);
+
+  // True once the user edits the date field. The form first renders at the
+  // default date (today) and then settles to the edited transaction's date,
+  // which shifts budgetMonth; this flag keeps that initial settle from being
+  // mistaken for a user month change and re-linking against the wrong month.
+  const dateEditedRef = useRef(false);
+
+  // Name of the linked budget, tracked so a date (month) change can re-link to
+  // the same-named budget in the new month. Seeded from the edited transaction
+  // and kept current as options load or the user picks a different budget.
+  const linkedBudgetNameRef = useRef<string | null>(
+    transaction?.budget?.name ?? null,
+  );
+  useEffect(() => {
+    if (budgetId == null) {
+      linkedBudgetNameRef.current = null;
+      return;
+    }
+    const opt = budgetOptions.find((b) => b.budget_id === budgetId);
+    if (opt) linkedBudgetNameRef.current = opt.budget_name;
+  }, [budgetId, budgetOptions]);
+
+  // The month budgetOptions were last loaded for, so loadBudgets can tell a
+  // genuine month change apart from a same-month refresh (e.g. after creating a
+  // budget) and only re-link on the former.
+  const lastBudgetMonthRef = useRef<string | null>(null);
   const loadBudgets = useCallback(() => {
+    const prevMonth = lastBudgetMonthRef.current;
+    lastBudgetMonthRef.current = budgetMonth;
     if (type === "transfer") {
       setBudgetOptions([]);
       return;
     }
-    fetchBudgetsForMonth(budgetMonth).then(setBudgetOptions);
-  }, [type, budgetMonth]);
+    fetchBudgetsForMonth(budgetMonth).then((opts) => {
+      setBudgetOptions(opts);
+      // A user date change into a different month re-links the budget to the
+      // same-named budget in the new month, or unlinks it when there is none.
+      if (dateEditedRef.current && prevMonth !== null && prevMonth !== budgetMonth) {
+        const name = linkedBudgetNameRef.current;
+        if (name !== null) {
+          const match = opts.find((b) => b.budget_name === name);
+          setValue("budget_id", match ? match.budget_id : null);
+        }
+      }
+    });
+  }, [type, budgetMonth, setValue]);
 
   useEffect(() => {
     loadBudgets();
   }, [loadBudgets]);
 
   // Fixed expenses that can be linked: the date's month, expense type only.
+  // Re-linked by name on a month change just like budgets above.
+  const linkedFixedExpenseNameRef = useRef<string | null>(
+    transaction?.fixedExpense?.name ?? null,
+  );
+  useEffect(() => {
+    if (fixedExpenseId == null) {
+      linkedFixedExpenseNameRef.current = null;
+      return;
+    }
+    const opt = fixedExpenseOptions.find((fe) => fe.id === fixedExpenseId);
+    if (opt) linkedFixedExpenseNameRef.current = opt.name;
+  }, [fixedExpenseId, fixedExpenseOptions]);
+
+  const lastFixedExpenseMonthRef = useRef<string | null>(null);
   const loadFixedExpenses = useCallback(() => {
+    const prevMonth = lastFixedExpenseMonthRef.current;
+    lastFixedExpenseMonthRef.current = budgetMonth;
     if (type !== "expense") {
       setFixedExpenseOptions([]);
       return;
     }
-    fetchFixedExpensesForMonth(budgetMonth).then(setFixedExpenseOptions);
-  }, [type, budgetMonth]);
+    fetchFixedExpensesForMonth(budgetMonth).then((opts) => {
+      setFixedExpenseOptions(opts);
+      if (dateEditedRef.current && prevMonth !== null && prevMonth !== budgetMonth) {
+        const name = linkedFixedExpenseNameRef.current;
+        if (name !== null) {
+          const match = opts.find((fe) => fe.name === name);
+          setValue("fixed_expense_id", match ? match.id : null);
+        }
+      }
+    });
+  }, [type, budgetMonth, setValue]);
 
   useEffect(() => {
     loadFixedExpenses();
@@ -370,6 +438,12 @@ export function TransactionForm({
             // appearance-none + block strips the intrinsic height so it matches.
             className="appearance-none block"
             {...register("date")}
+            onChange={(e) => {
+              // Mark the date as user-edited so a resulting month change can
+              // re-link the budget/fixed expense (see dateEditedRef).
+              dateEditedRef.current = true;
+              register("date").onChange(e);
+            }}
           />
           <FieldError message={errors.date?.message} />
         </div>
