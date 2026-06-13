@@ -58,6 +58,7 @@ export function AccountCard({ account, onClick, onEdit, onArchive }: Props) {
               <DropdownMenu.Content
                 sideOffset={4}
                 align="end"
+                onClick={(e) => e.stopPropagation()}
                 className="z-50 min-w-36 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-card)] p-1 shadow-md"
               >
                 <DropdownMenu.Item
