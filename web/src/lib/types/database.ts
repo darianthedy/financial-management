@@ -113,6 +113,7 @@ type BudgetRow = {
   id: string;
   user_id: string;
   name: string;
+  description: string | null;
   year_month: string;
   periodic_amount: number;
   created_at: string;
@@ -173,11 +174,13 @@ export interface Database {
           id?: string;
           user_id: string;
           name: string;
+          description?: string | null;
           year_month: string;
           periodic_amount: number;
         };
         Update: {
           name?: string;
+          description?: string | null;
           year_month?: string;
           periodic_amount?: number;
         };
@@ -326,6 +329,7 @@ export interface Database {
           budget_id: string;
           user_id: string;
           budget_name: string;
+          description: string | null;
           year_month: string;
           periodic_amount: number;
           carry_over_amount: number;
