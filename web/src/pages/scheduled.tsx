@@ -63,31 +63,6 @@ export default function ScheduledPage() {
         </Button>
       </div>
 
-      {/* Scheduled transactions */}
-      <section className="space-y-3">
-        {loading ? (
-          <CenteredSpinner />
-        ) : scheduled.length === 0 ? (
-          <EmptyState
-            title="No scheduled transactions"
-            description="Schedule a recurring income or expense and it will create a pending transaction each month for you to confirm."
-            action={<Button onClick={openCreate}>Add scheduled</Button>}
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {scheduled.map((item) => (
-              <ScheduledCard
-                key={item.id}
-                scheduled={item}
-                onEdit={() => openEdit(item)}
-                onToggleActive={() => handleToggle(item)}
-                onRemove={() => handleRemove(item)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* Pending — awaiting confirmation */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Pending</h2>
@@ -110,6 +85,32 @@ export default function ScheduledPage() {
               ))}
             </CardContent>
           </Card>
+        )}
+      </section>
+
+      {/* Recurring — the standing schedules that generate the pending list */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Recurring</h2>
+        {loading ? (
+          <CenteredSpinner />
+        ) : scheduled.length === 0 ? (
+          <EmptyState
+            title="No recurring transactions"
+            description="Schedule a recurring income or expense and it will create a pending transaction each month for you to confirm."
+            action={<Button onClick={openCreate}>Add scheduled</Button>}
+          />
+        ) : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {scheduled.map((item) => (
+              <ScheduledCard
+                key={item.id}
+                scheduled={item}
+                onEdit={() => openEdit(item)}
+                onToggleActive={() => handleToggle(item)}
+                onRemove={() => handleRemove(item)}
+              />
+            ))}
+          </div>
         )}
       </section>
 
