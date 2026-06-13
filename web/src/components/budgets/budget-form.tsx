@@ -52,6 +52,7 @@ export function BudgetForm({
     resolver: zodResolver(budgetFormSchema),
     defaultValues: {
       name: "",
+      description: "",
       periodic_amount: 0,
     },
   });
@@ -62,6 +63,7 @@ export function BudgetForm({
       budget
         ? {
             name: budget.budget_name,
+            description: budget.description ?? "",
             periodic_amount: toDisplayAmount(
               budget.periodic_amount,
               currencyDecimals(defaultCurrency),
@@ -69,6 +71,7 @@ export function BudgetForm({
           }
         : {
             name: "",
+            description: "",
             periodic_amount: 0,
           },
     );
@@ -121,6 +124,16 @@ export function BudgetForm({
               }
             />
             <FieldError message={errors.periodic_amount?.message} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="description">Note</Label>
+            <Input
+              id="description"
+              placeholder="Optional"
+              {...register("description")}
+            />
+            <FieldError message={errors.description?.message} />
           </div>
 
           <FieldError message={submitError} />

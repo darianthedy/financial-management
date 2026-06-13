@@ -71,6 +71,7 @@ export async function createBudget(
     .insert({
       user_id,
       name: values.name,
+      description: values.description?.trim() || null,
       year_month: yearMonth,
       periodic_amount: toMinorUnits(values.periodic_amount, decimalPlaces),
     })
@@ -93,6 +94,7 @@ export async function updateBudget(
     .from("budgets")
     .update({
       name: values.name,
+      description: values.description?.trim() || null,
       periodic_amount: toMinorUnits(values.periodic_amount, decimalPlaces),
     })
     .eq("id", id);
