@@ -46,30 +46,55 @@ const TYPE_LABEL: Record<TransactionType, string> = {
 };
 
 /**
- * Title precedence: budget name → a linked category's name → description → the
- * type word. Reports which category (if any) became the title so the chip row
- * can drop it, and whether the description was consumed (so it isn't repeated
- * as a subtitle).
+ * Title precedence: budget name → a linked fixed expense's name → a linked
+ * category's name → description → the type word. Reports which fixed expense /
+ * category (if any) became the title so the chip row can drop it, and whether
+ * the description was consumed (so it isn't repeated as a subtitle).
  */
 export function deriveTitle(txn: TxnDisplay): {
   title: string;
   usedCategoryId: string | null;
+  usedFixedExpense: boolean;
   titleIsDescription: boolean;
 } {
   if (txn.budget && txn.type !== "transfer") {
-    return { title: txn.budget.name, usedCategoryId: null, titleIsDescription: false };
+    return {
+      title: txn.budget.name,
+      usedCategoryId: null,
+      usedFixedExpense: false,
+      titleIsDescription: false,
+    };
+  }
+  if (txn.fixedExpense) {
+    return {
+      title: txn.fixedExpense.name,
+      usedCategoryId: null,
+      usedFixedExpense: true,
+      titleIsDescription: false,
+    };
   }
   if (txn.category) {
     return {
       title: txn.category.name,
       usedCategoryId: txn.category.id,
+      usedFixedExpense: false,
       titleIsDescription: false,
     };
   }
   if (txn.description) {
-    return { title: txn.description, usedCategoryId: null, titleIsDescription: true };
+    return {
+      title: txn.description,
+      usedCategoryId: null,
+      usedFixedExpense: false,
+      titleIsDescription: true,
+    };
   }
-  return { title: TYPE_LABEL[txn.type], usedCategoryId: null, titleIsDescription: false };
+  return {
+    title: TYPE_LABEL[txn.type],
+    usedCategoryId: null,
+    usedFixedExpense: false,
+    titleIsDescription: false,
+  };
 }
 
 // Deterministic avatar background for accounts without a custom image: the same
@@ -141,16 +166,19 @@ export function AccountAvatar({
 export function TransactionChips({
   txn,
   excludeCategoryId,
+  excludeFixedExpense = false,
 }: {
   txn: TxnDisplay;
   excludeCategoryId: string | null;
+  excludeFixedExpense?: boolean;
 }) {
   const dest = txn.type === "transfer" ? txn.transfer_accounts?.name : undefined;
   // Show the category unless it already became the title.
   const category =
     txn.category && txn.category.id !== excludeCategoryId ? txn.category : null;
   const tags = txn.tags;
-  const fixedExpense = txn.fixedExpense;
+  // Show the fixed expense unless it already became the title.
+  const fixedExpense = excludeFixedExpense ? null : txn.fixedExpense;
   if (!dest && !category && tags.length === 0 && !fixedExpense) return null;
 
   return (

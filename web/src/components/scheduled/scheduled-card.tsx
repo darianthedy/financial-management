@@ -60,7 +60,8 @@ export function ScheduledCard({
       : null,
   };
 
-  const { title, usedCategoryId, titleIsDescription } = deriveTitle(display);
+  const { title, usedCategoryId, usedFixedExpense, titleIsDescription } =
+    deriveTitle(display);
   const subtitle = titleIsDescription ? null : scheduled.description;
 
   return (
@@ -83,7 +84,11 @@ export function ScheduledCard({
             {subtitle}
           </span>
         )}
-        <TransactionChips txn={display} excludeCategoryId={usedCategoryId} />
+        <TransactionChips
+          txn={display}
+          excludeCategoryId={usedCategoryId}
+          excludeFixedExpense={usedFixedExpense}
+        />
         {/* Footer: when this schedule next fires (or that it's paused). */}
         <span className="inline-flex items-center gap-1 pt-0.5 text-xs text-[var(--color-muted-foreground)]">
           <CalendarClock className="h-3 w-3 shrink-0" />

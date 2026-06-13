@@ -48,7 +48,8 @@ export function TransactionRow({ txn, onMutated }: Props) {
   const amountColor = amountColorFor(txn.type);
   const displayAmount = formatCurrency(txn.amount);
 
-  const { title, usedCategoryId, titleIsDescription } = deriveTitle(txn);
+  const { title, usedCategoryId, usedFixedExpense, titleIsDescription } =
+    deriveTitle(txn);
   const subtitle = titleIsDescription ? null : txn.description;
   const accountName = txn.accounts?.name ?? "?";
 
@@ -116,7 +117,11 @@ export function TransactionRow({ txn, onMutated }: Props) {
             {subtitle}
           </span>
         )}
-        <TransactionChips txn={txn} excludeCategoryId={usedCategoryId} />
+        <TransactionChips
+          txn={txn}
+          excludeCategoryId={usedCategoryId}
+          excludeFixedExpense={usedFixedExpense}
+        />
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-1">
