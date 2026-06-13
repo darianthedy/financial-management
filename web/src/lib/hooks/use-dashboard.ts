@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
-import type { BudgetProgress, Category } from "@/lib/types/database";
+import type { Account, BudgetProgress, Category } from "@/lib/types/database";
 import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
 import { monthDateRange } from "@/lib/utils/date";
+
+/** An account with its end-of-month balance for the selected month. */
+export type AccountMonthBalance = Account & { balance: number };
 
 /**
  * One category's unplanned spend for the month: confirmed expenses NOT tied to a
@@ -31,6 +34,7 @@ export function useDashboard(yearMonth: string) {
   const [unplannedExpenses, setUnplannedExpenses] = useState<UnplannedCategorySpend[]>([]);
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseWithStatus[]>([]);
   const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
+  const [accounts, setAccounts] = useState<AccountMonthBalance[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
@@ -40,6 +44,8 @@ export function useDashboard(yearMonth: string) {
       { data: budgetRows },
       { data: fxRows },
       { data: unplannedRows },
+      { data: accountRows },
+      { data: balanceRows },
     ] = await Promise.all([
       supabase
         .from("v_budget_progress")
@@ -60,6 +66,17 @@ export function useDashboard(yearMonth: string) {
         .is("fixed_expense_id", null)
         .gte("date", start)
         .lt("date", endExclusive),
+      supabase
+        .from("accounts")
+        .select("*")
+        .eq("is_archived", false)
+        .order("created_at", { ascending: true }),
+      // Monthly balance ledger up to the selected month; we take the latest row
+      // at or before it per account (balances carry forward across empty months).
+      supabase
+        .from("account_monthly_balances")
+        .select("account_id, year_month, balance")
+        .lte("year_month", yearMonth),
     ]);
 
     // Aggregate unplanned spend by category; a null category -> "Uncategorized".
@@ -139,6 +156,27 @@ export function useDashboard(yearMonth: string) {
     // Surface the budgets that need attention first: most-over and
     // closest-to-the-limit lead, instead of an alphabetical wall.
     setBudgetProgress([...(budgetRows ?? [])].sort((a, b) => pctUsed(b) - pctUsed(a)));
+
+    // For each account, the most recent balance row at or before the selected
+    // month — i.e. the latest balance for that month. Accounts with no ledger
+    // row yet fall back to their starting balance.
+    const latestBalanceByAccount = new Map<string, { ym: string; balance: number }>();
+    for (const row of balanceRows ?? []) {
+      const prev = latestBalanceByAccount.get(row.account_id);
+      if (!prev || row.year_month > prev.ym) {
+        latestBalanceByAccount.set(row.account_id, {
+          ym: row.year_month,
+          balance: row.balance,
+        });
+      }
+    }
+    setAccounts(
+      (accountRows ?? []).map((a) => ({
+        ...a,
+        balance: latestBalanceByAccount.get(a.id)?.balance ?? a.starting_balance,
+      })),
+    );
+
     setLoading(false);
   }, [yearMonth]);
 
@@ -149,9 +187,11 @@ export function useDashboard(yearMonth: string) {
       .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => fetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "budgets" }, () => fetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "fixed_expenses" }, () => fetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "accounts" }, () => fetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "account_monthly_balances" }, () => fetch())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { unplannedExpenses, fixedExpenses, budgetProgress, loading, refetch: fetch };
+  return { unplannedExpenses, fixedExpenses, budgetProgress, accounts, loading, refetch: fetch };
 }

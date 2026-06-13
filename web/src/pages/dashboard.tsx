@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
+import { AccountsCard } from "@/components/dashboard/accounts-card";
 import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
 import { UnplannedExpensesCard } from "@/components/dashboard/unplanned-expenses";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
@@ -14,6 +15,7 @@ export default function DashboardPage() {
     unplannedExpenses,
     fixedExpenses,
     budgetProgress,
+    accounts,
     loading,
   } = useDashboard(yearMonth);
 
@@ -49,6 +51,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
             <VerdictBanner budgets={budgetProgress} />
+          </div>
+          <div className="md:col-span-2">
+            <AccountsCard accounts={accounts} />
           </div>
           <PlannedExpensesCard
             budgets={budgetProgress}
