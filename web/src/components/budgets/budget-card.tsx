@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { formatCurrency } from "@/lib/utils/currency";
+import { monthDateBounds } from "@/lib/utils/date";
 import type { BudgetProgress } from "@/lib/types/database";
 import { cn } from "@/lib/utils/cn";
 
@@ -34,9 +35,14 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
   return (
     <Card
       className="cursor-pointer transition-shadow hover:shadow-md"
-      onClick={() =>
-        navigate(`/transactions?budget=${encodeURIComponent(budget.budget_name)}`)
-      }
+      // Open the transaction list filtered to this budget AND scoped to the
+      // budget's own month, so it shows the spend that this month's bar reflects.
+      onClick={() => {
+        const { from, to } = monthDateBounds(budget.year_month);
+        navigate(
+          `/transactions?budget=${encodeURIComponent(budget.budget_name)}&from=${from}&to=${to}`,
+        );
+      }}
     >
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">

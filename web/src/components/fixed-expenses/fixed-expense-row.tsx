@@ -10,6 +10,7 @@ import {
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils/currency";
+import { monthDateBounds } from "@/lib/utils/date";
 import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
 
 interface Props {
@@ -30,9 +31,13 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
   }
 
   // Jump to the transaction list pre-filtered to this fixed expense (matched by
-  // name, across months — mirrors the filter bar's fixed-expense option).
+  // name) AND scoped to this expense's own month, so it shows the payment this
+  // month's row tracks rather than every month's.
   function viewTransactions() {
-    navigate(`/transactions?fixed=${encodeURIComponent(name)}`);
+    const { from, to } = monthDateBounds(year_month);
+    navigate(
+      `/transactions?fixed=${encodeURIComponent(name)}&from=${from}&to=${to}`,
+    );
   }
 
   return (
