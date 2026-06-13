@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   format,
   startOfMonth,
@@ -7,7 +7,7 @@ import {
   startOfYear,
   endOfYear,
 } from "date-fns";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { CalendarDays, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -498,26 +498,57 @@ function FilterField({
 }
 
 function DateInput({ value, onChange, ariaLabel }: { value?: string; onChange: (value: string) => void; ariaLabel: string }) {
+  // Typing the date directly into the segments is the primary path, so we hide
+  // the native calendar indicator and offer our own clear/calendar buttons. They
+  // sit in DOM order clear → calendar, giving the tab sequence field → clear →
+  // calendar. The calendar button opens the picker via showPicker() — safe here
+  // because we never force it open on a plain field click (which would steal
+  // keyboard focus from the segments and block typing).
+  //
+  // The input is left uncontrolled while typing. A controlled `value` reads back
+  // as "" until every segment forms a valid date, so any re-render of the filter
+  // bar mid-typing would reset the DOM input to empty and wipe the digits. We
+  // only push the external value into the DOM when it actually differs (presets,
+  // the clear button), leaving in-progress typing untouched.
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el && el.value !== (value ?? "")) el.value = value ?? "";
+  }, [value]);
+  const iconBtn =
+    "rounded p-0.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]";
   return (
     <div className="relative min-w-0 flex-1">
       <Input
+        ref={ref}
         type="date"
-        value={value ?? ""}
+        defaultValue={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
         aria-label={ariaLabel}
-        className="min-w-0 appearance-none pr-8 [&::-webkit-calendar-picker-indicator]:hidden"
+        className={`min-w-0 [&::-webkit-calendar-picker-indicator]:hidden ${
+          value ? "pr-12" : "pr-7"
+        }`}
       />
-      {value && (
+      <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            aria-label={`Clear ${ariaLabel.toLowerCase()}`}
+            className={iconBtn}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => onChange("")}
-          aria-label={`Clear ${ariaLabel.toLowerCase()}`}
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          onClick={() => ref.current?.showPicker?.()}
+          aria-label={`Open ${ariaLabel.toLowerCase()} calendar`}
+          className={iconBtn}
         >
-          <X className="h-3.5 w-3.5" />
+          <CalendarDays className="h-3.5 w-3.5" />
         </button>
-      )}
+      </div>
     </div>
   );
 }
