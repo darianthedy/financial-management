@@ -1,4 +1,4 @@
-import { format, parse, addMonths, subMonths, getDaysInMonth, getDate, endOfMonth } from "date-fns";
+import { format, parse, addMonths, subMonths, getDaysInMonth, getDate, endOfMonth, isValid } from "date-fns";
 
 export function getCurrentYearMonth(): string {
   return format(new Date(), "yyyy-MM");
@@ -12,8 +12,10 @@ export function navigateMonth(yearMonth: string, offset: number): string {
 }
 
 export function formatYearMonth(yearMonth: string): string {
+  // Guard against empty/partial input: a native date input reports "" while a
+  // segment is mid-edit, which parses to an Invalid Date that format() throws on.
   const date = parse(yearMonth, "yyyy-MM", new Date());
-  return format(date, "MMMM yyyy");
+  return isValid(date) ? format(date, "MMMM yyyy") : "";
 }
 
 export function yearMonthOf(isoDate: string): string {
@@ -22,8 +24,10 @@ export function yearMonthOf(isoDate: string): string {
 }
 
 export function formatDate(isoDate: string): string {
+  // Same guard as formatYearMonth: an incomplete/typed date can parse to an
+  // Invalid Date, which format() throws on.
   const date = parse(isoDate, "yyyy-MM-dd", new Date());
-  return format(date, "MMM d, yyyy");
+  return isValid(date) ? format(date, "MMM d, yyyy") : "";
 }
 
 export function todayIso(): string {
