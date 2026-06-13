@@ -25,6 +25,9 @@
   --color-danger: hsl(0 72% 51%);
   --color-danger-foreground: hsl(0 0% 100%);
 
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-foreground: hsl(0 0% 100%);
+
   --radius: 0.625rem;
 }
 
@@ -46,6 +49,7 @@
 
   --color-success: hsl(142 69% 58%);
   --color-danger: hsl(0 84% 60%);
+  --color-warning: hsl(38 92% 55%);
 }
 
 * {
