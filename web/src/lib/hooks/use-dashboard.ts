@@ -71,12 +71,11 @@ export function useDashboard(yearMonth: string) {
         .select("*")
         .eq("is_archived", false)
         .order("created_at", { ascending: true }),
-      // Monthly balance ledger up to the selected month; we take the latest row
-      // at or before it per account (balances carry forward across empty months).
-      supabase
-        .from("account_monthly_balances")
-        .select("account_id, year_month, balance")
-        .lte("year_month", yearMonth),
+      // Each account's balance as of the selected month: the RPC returns the
+      // latest row at or before it per account (balances carry forward across
+      // empty months), so the payload is one row per account regardless of how
+      // far back we navigate.
+      supabase.rpc("fn_account_balances_at", { p_year_month: yearMonth }),
     ]);
 
     // Aggregate unplanned spend by category; a null category -> "Uncategorized".
@@ -157,23 +156,16 @@ export function useDashboard(yearMonth: string) {
     // closest-to-the-limit lead, instead of an alphabetical wall.
     setBudgetProgress([...(budgetRows ?? [])].sort((a, b) => pctUsed(b) - pctUsed(a)));
 
-    // For each account, the most recent balance row at or before the selected
-    // month — i.e. the latest balance for that month. Accounts with no ledger
-    // row yet fall back to their starting balance.
-    const latestBalanceByAccount = new Map<string, { ym: string; balance: number }>();
-    for (const row of balanceRows ?? []) {
-      const prev = latestBalanceByAccount.get(row.account_id);
-      if (!prev || row.year_month > prev.ym) {
-        latestBalanceByAccount.set(row.account_id, {
-          ym: row.year_month,
-          balance: row.balance,
-        });
-      }
-    }
+    // The RPC already collapsed to one row per account (the latest balance at
+    // or before the selected month). Accounts with no ledger row yet aren't
+    // returned, so they fall back to their starting balance.
+    const balanceByAccount = new Map(
+      (balanceRows ?? []).map((row) => [row.account_id, row.balance]),
+    );
     setAccounts(
       (accountRows ?? []).map((a) => ({
         ...a,
-        balance: latestBalanceByAccount.get(a.id)?.balance ?? a.starting_balance,
+        balance: balanceByAccount.get(a.id) ?? a.starting_balance,
       })),
     );
 
