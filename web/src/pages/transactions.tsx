@@ -140,7 +140,7 @@ export default function TransactionsPage() {
                 <BarChart3 className="h-4 w-4" /> Summary
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="lg:max-w-4xl">
               <DialogHeader>
                 <DialogTitle>Summary</DialogTitle>
               </DialogHeader>
