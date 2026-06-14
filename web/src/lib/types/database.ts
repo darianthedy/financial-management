@@ -359,7 +359,17 @@ export interface Database {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      // Latest balance at or before p_year_month, one row per account.
+      fn_account_balances_at: {
+        Args: { p_year_month: string };
+        Returns: {
+          account_id: string;
+          year_month: string;
+          balance: number;
+        }[];
+      };
+    };
     Enums: {
       account_type: AccountType;
       transaction_type: TransactionType;
