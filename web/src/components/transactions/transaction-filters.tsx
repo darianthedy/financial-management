@@ -325,18 +325,44 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                   </button>
                 )}
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <DateInput
-                  value={filters.dateFrom}
-                  onChange={(v) => (v ? patch({ dateFrom: v }) : clear("dateFrom"))}
-                  ariaLabel="From date"
-                />
-                <span className="text-[var(--color-muted-foreground)]">–</span>
-                <DateInput
-                  value={filters.dateTo}
-                  onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}
-                  ariaLabel="To date"
-                />
+              {/* Two native date inputs can't fit side by side on the narrowest
+                  phones (the popover is ~256px wide inside its padding at 320px
+                  viewports), so stack them vertically there with From/To labels
+                  and only collapse into the labelled-by-the-dash row once there's
+                  room. The labels are decorative (each input keeps its aria-label),
+                  so they're aria-hidden to avoid double announcements. */}
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-1 sm:flex-1">
+                  <span
+                    aria-hidden="true"
+                    className="text-xs font-medium text-[var(--color-muted-foreground)] sm:hidden"
+                  >
+                    From
+                  </span>
+                  <DateInput
+                    value={filters.dateFrom}
+                    onChange={(v) =>
+                      v ? patch({ dateFrom: v }) : clear("dateFrom")
+                    }
+                    ariaLabel="From date"
+                  />
+                </div>
+                <span className="hidden text-[var(--color-muted-foreground)] sm:inline">
+                  –
+                </span>
+                <div className="flex flex-col gap-1 sm:flex-1">
+                  <span
+                    aria-hidden="true"
+                    className="text-xs font-medium text-[var(--color-muted-foreground)] sm:hidden"
+                  >
+                    To
+                  </span>
+                  <DateInput
+                    value={filters.dateTo}
+                    onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}
+                    ariaLabel="To date"
+                  />
+                </div>
               </div>
             </FilterField>
 
