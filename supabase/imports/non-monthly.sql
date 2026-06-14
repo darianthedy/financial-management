@@ -6,9 +6,9 @@
 -- No budgets / no fixed expenses. Every row is an expense (negative = money back).
 -- Idempotent: re-runnable, but ON CONFLICT (id) DO NOTHING means edits to
 -- already-imported rows are ignored — make account edits BEFORE the first run.
--- Rows tagged 'DUPLICATE of monthly <YYYY-MM> sheet — see overlaps-<YYYY-MM>.md'
--- are the same real transaction as a monthly-sheet row; delete them from one
--- side to avoid double-counting.
+-- Rows marked 'Also in monthly <YYYY-MM> sheet' are the same real transaction
+-- as a monthly-sheet row. This sheet is kept as the source, so they stay
+-- ACTIVE here; the matching monthly row is commented out (no double-counting).
 --
 -- STRUCTURE: run the SETUP block once, then each month block (each is its own
 -- transaction) — in date order if you want balances to settle as you go.
@@ -736,17 +736,17 @@ SELECT
   NULL, NULL                  -- budget_id, fixed_expense_id (n/a)
 FROM (VALUES
     ('1bc8585b-2fb0-56b3-8227-e21c68b9ad91', 'BCA' ,     -77403441, '2026-04-01', 'Savings'               , 'Bonus'),
-    ('9acd3fc0-cdf9-5cc5-93f8-3433b6359811', 'BCA' ,       1198752, '2026-04-04', 'Shoes'                 , 'Crocs'),  -- DUPLICATE of monthly 2026-04 sheet — see overlaps-2026-04.md
-    ('35fe6158-1917-5107-973f-88b2b4a9ab72', 'BCA' ,       2679963, '2026-04-04', 'Secret Lab'            , 'Recliner'),  -- DUPLICATE of monthly 2026-04 sheet — see overlaps-2026-04.md
-    ('b5aefbba-54ce-58df-a0c4-04f9e0873163', 'BCA' ,        472184, '2026-04-04', 'Bluetooth Keyboard'    , 'Bluetooth Keyboard'),  -- DUPLICATE of monthly 2026-04 sheet — see overlaps-2026-04.md
-    ('a5c50c70-d44b-5068-9be1-89d0bac7f1c0', 'BCA' ,      16099749, '2026-04-05', 'House Renovation'      , 'Material Dunia Bangunan'),  -- DUPLICATE of monthly 2026-04 sheet — see overlaps-2026-04.md
+    ('9acd3fc0-cdf9-5cc5-93f8-3433b6359811', 'BCA' ,       1198752, '2026-04-04', 'Shoes'                 , 'Crocs'),  -- Also in monthly 2026-04 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-04.md)
+    ('35fe6158-1917-5107-973f-88b2b4a9ab72', 'BCA' ,       2679963, '2026-04-04', 'Secret Lab'            , 'Recliner'),  -- Also in monthly 2026-04 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-04.md)
+    ('b5aefbba-54ce-58df-a0c4-04f9e0873163', 'BCA' ,        472184, '2026-04-04', 'Bluetooth Keyboard'    , 'Bluetooth Keyboard'),  -- Also in monthly 2026-04 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-04.md)
+    ('a5c50c70-d44b-5068-9be1-89d0bac7f1c0', 'BCA' ,      16099749, '2026-04-05', 'House Renovation'      , 'Material Dunia Bangunan'),  -- Also in monthly 2026-04 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-04.md)
     ('ceb67230-631d-53fe-8f6a-dfeca44e2276', 'BCA' ,       5000000, '2026-04-05', 'House Renovation'      , 'DP Contractor'),
     ('99209c4b-c741-5602-beee-e9cf1c22ca16', 'BCA' ,        400000, '2026-04-08', 'House Renovation'      , 'DP Kusen'),
     ('468690aa-5ee4-5067-9eea-8418650ab45a', 'BCA' ,       4075000, '2026-04-10', 'House Renovation'      , 'Material'),
     ('54c1ebe7-422f-5ca1-9727-e6107b176875', 'BCA' ,       1105000, '2026-04-10', 'House Renovation'      , 'Besi Wiremesh'),
     ('c4e72d8b-0121-5ad4-9779-286f792cdc71', 'BCA' ,       5000000, '2026-04-10', 'House Renovation'      , 'Contractor 1'),
     ('26da6a08-cdb3-52fb-b09f-cb511819b2a7', 'BCA' ,       1700000, '2026-04-11', 'House Renovation'      , 'Pasir Semen'),
-    ('e6ce91d5-5451-5fc0-93ef-2621d3c8ee40', 'BCA' ,        554484, '2026-04-18', 'House Renovation'      , 'Keramik'),  -- DUPLICATE of monthly 2026-04 sheet — see overlaps-2026-04.md
+    ('e6ce91d5-5451-5fc0-93ef-2621d3c8ee40', 'BCA' ,        554484, '2026-04-18', 'House Renovation'      , 'Keramik'),  -- Also in monthly 2026-04 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-04.md)
     ('a7b62dc1-a931-5c5a-a5d7-adc7069f9b53', 'BCA' ,        561000, '2026-04-12', 'House Renovation'      , NULL),
     ('9c26b1f8-64df-59c5-bae3-9db7b42ef94b', 'BCA' ,        160000, '2026-04-13', 'House Renovation'      , NULL),
     ('f74ce7b0-175c-5c5f-b6c2-a9122600b145', 'BCA' ,       3628000, '2026-04-13', 'House Renovation'      , NULL),
@@ -788,14 +788,14 @@ SELECT
   NULL, NULL                  -- budget_id, fixed_expense_id (n/a)
 FROM (VALUES
     ('f31a20da-bc06-5f3b-ac49-0e75b3512ec3', 'BCA' ,       6000000, '2026-05-01', 'House Renovation'      , 'Contractor 4'),
-    ('595879a8-666d-5a6b-83ec-20a622e057e3', 'BCA' ,        204700, '2026-05-03', 'House Renovation'      , NULL),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
+    ('595879a8-666d-5a6b-83ec-20a622e057e3', 'BCA' ,        204700, '2026-05-03', 'House Renovation'      , NULL),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
     ('2394aaff-e348-56e0-80d4-eb1d7630b6fa', 'BCA' ,        138400, '2026-05-03', 'House Renovation'      , NULL),
-    ('ee72ff50-ee28-5c0c-9674-aafcd7f590ff', 'BCA' ,        328246, '2026-05-06', 'House Renovation'      , NULL),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
+    ('ee72ff50-ee28-5c0c-9674-aafcd7f590ff', 'BCA' ,        328246, '2026-05-06', 'House Renovation'      , NULL),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
     ('0e3cdea8-600a-5aa4-924b-b0167ad67174', 'BCA' ,       1022000, '2026-05-05', 'House Renovation'      , NULL),
     ('5e84a148-4a4b-51c1-a4c0-44d55752ca5f', 'BCA' ,        230000, '2026-05-07', 'House Renovation'      , 'Car Charger'),
     ('914ca0b5-7fac-5054-99e5-13531bcc0ec0', 'BCA' ,      12228980, '2026-05-08', 'House Renovation'      , 'Car Charger KWH NIDI SLO'),
     ('c605bdd4-d33b-5026-bec7-81c96edfb13f', 'BCA' ,      10000000, '2026-05-08', 'House Renovation'      , 'Contractor 5'),
-    ('ce0b9192-a829-5486-9f8f-745f9c5e2071', 'BCA' ,        342430, '2026-05-13', 'House Renovation'      , 'Tangga Rumah Lipat'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
+    ('ce0b9192-a829-5486-9f8f-745f9c5e2071', 'BCA' ,        342430, '2026-05-13', 'House Renovation'      , 'Tangga Rumah Lipat'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
     ('6c3686d3-2807-54a8-b309-90ff251bced7', 'BCA' ,       1456000, '2026-05-11', 'House Renovation'      , 'Pipa + Paket Grounding'),
     ('d840fc46-7a75-54b5-b1ff-24b0ddcc8cff', 'BCA' ,        994000, '2026-05-11', 'House Renovation'      , NULL),
     ('9642b98a-69ab-590b-9471-ce12f9100d52', 'BCA' ,     -30000000, '2026-05-11', 'ST012T2'               , NULL),
@@ -803,14 +803,14 @@ FROM (VALUES
     ('ee6fbd6d-6d8a-5c7b-b2e0-d02efe8083eb', 'BCA' ,       1500000, '2026-05-13', 'House Renovation'      , 'Car Charger Move'),
     ('bbd5603b-f618-576b-a40f-f4f89b84d1f0', 'BCA' ,       2900000, '2026-05-15', 'House Renovation'      , NULL),
     ('187e0184-b120-5b12-b0c2-91f8d4392f19', 'BCA' ,        500000, '2026-05-15', 'House Renovation'      , 'Pintu Kawat Nyamuk'),
-    ('0ffc28f7-7c03-51cd-a157-57969cd97aa5', 'BCA' ,       4300973, '2026-05-16', 'House Renovation'      , 'TTRacing Titus X'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
-    ('b5c561e2-fc87-5338-8815-fa70ef05e137', 'BCA' ,       1431500, '2026-05-18', 'House Renovation'      , 'TP Link'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
+    ('0ffc28f7-7c03-51cd-a157-57969cd97aa5', 'BCA' ,       4300973, '2026-05-16', 'House Renovation'      , 'TTRacing Titus X'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
+    ('b5c561e2-fc87-5338-8815-fa70ef05e137', 'BCA' ,       1431500, '2026-05-18', 'House Renovation'      , 'TP Link'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
     ('e5544a31-b522-5391-a5cb-807e38caeb3a', 'BCA' ,       1000000, '2026-05-18', 'House Renovation'      , 'Pintu Kawat Nyamuk'),
-    ('6759ca81-5954-544e-b114-373714bb267b', 'BCA' ,        269705, '2026-05-20', 'House Renovation'      , 'Vention Cable Management'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
-    ('2c3b9781-b73b-5ddd-b27b-bcab5a848eb2', 'BCA' ,        107982, '2026-05-20', 'House Renovation'      , 'Cable Management'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
-    ('ff3d1827-f82d-55e1-86ce-0b3110e59c4d', 'BCA' ,       1026422, '2026-05-23', 'PIA'                   , 'PIA'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
-    ('c8ed088a-6876-5dd7-8244-0ed53d2d5d6e', 'BCA' ,      27213000, '2026-05-24', 'House Renovation'      , 'IKEA'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
-    ('3d70d92b-ef55-5bc1-819f-11ff862a7625', 'BCA' ,        901500, '2026-05-24', 'House Renovation'      , 'Headboard'),  -- DUPLICATE of monthly 2026-05 sheet — see overlaps-2026-05.md
+    ('6759ca81-5954-544e-b114-373714bb267b', 'BCA' ,        269705, '2026-05-20', 'House Renovation'      , 'Vention Cable Management'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
+    ('2c3b9781-b73b-5ddd-b27b-bcab5a848eb2', 'BCA' ,        107982, '2026-05-20', 'House Renovation'      , 'Cable Management'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
+    ('ff3d1827-f82d-55e1-86ce-0b3110e59c4d', 'BCA' ,       1026422, '2026-05-23', 'PIA'                   , 'PIA'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
+    ('c8ed088a-6876-5dd7-8244-0ed53d2d5d6e', 'BCA' ,      27213000, '2026-05-24', 'House Renovation'      , 'IKEA'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
+    ('3d70d92b-ef55-5bc1-819f-11ff862a7625', 'BCA' ,        901500, '2026-05-24', 'House Renovation'      , 'Headboard'),  -- Also in monthly 2026-05 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-05.md)
     ('03f485cb-993b-577a-a005-7b6375ecef4e', 'BCA' ,       8500000, '2026-05-22', 'House Renovation'      , 'Lemari Gantung'),
     ('731ea45a-a372-57c8-8f49-cc655e703ea9', 'BCA' ,       2800000, '2026-05-22', 'House Renovation'      , 'Pintu Kawat Nyamuk + Lemari Gantung + Rumput'),
     ('8875d99b-53b2-55f7-baa5-5dabbe4bcf90', 'BCA' ,       3400000, '2026-05-22', 'House Renovation'      , 'Onna'),

@@ -31,12 +31,19 @@ in this folder (committed to the repo) — the chat history is not needed. Steps
    Confirm the printed income line says `[OK]`.
 3. **Overlaps:** `python3 check_overlaps.py <YYYY-MM>`. Review the candidates,
    **drop coincidental date+amount collisions**, add the genuine ones to
-   `MONTHLY_OVERLAPS` in `generate_nonmonthly.py`, then re-run
-   `python3 generate_nonmonthly.py` and write `overlaps-<YYYY-MM>.md`.
-4. **Review** the Lidya rows in the monthly SQL (imported literally; clean up later).
-5. **Run in Supabase**, in order: carry-over seed (once) → earlier months → this
-   month; then the non-monthly SETUP block + month blocks, deleting one side of
-   each tagged duplicate.
+   `MONTHLY_OVERLAPS` in `generate_nonmonthly.py`, then **re-run both generators**
+   (`python3 generate_nonmonthly.py` and `python3 generate_monthly.py <YYYY-MM>`)
+   and write `overlaps-<YYYY-MM>.md`. The monthly generator now **comments out and
+   marks** each registered duplicate in `<YYYY-MM>-bca.sql` (the non-monthly record
+   is kept as the single source) — it is **not deleted**, just left commented for
+   you to review before running.
+4. **Run in Supabase**, in order: carry-over seed (once) → earlier months → this
+   month; then the non-monthly SETUP block + month blocks. The monthly duplicates
+   are already commented out (step 3), so nothing double-counts — **review those
+   commented rows first**.
+
+> **Lidya rows are May-2026 only** — not a recurring step. They appear solely in
+> the May 2026 sheet; if you ever re-import that month, review them per §4.
 
 ---
 
@@ -127,7 +134,7 @@ reduces the category/budget totals without touching income.
 | **Day-01 "budget restore" rows** | `budgets.periodic_amount` — **NOT a transaction** | the app computes running budget natively (`v_budget_progress`); importing the −seed would double-count |
 | Col-M value for those 4 names | that budget's `periodic_amount` | budget identity is `(user_id, name, year_month)` |
 | Other col-L names | `fixed_expenses` rows (one per `year_month`) | amount from col M |
-| Monthly Expenses spend whose Description matches a detail name | `expense` + `fixed_expense_id` link | **the link = the bill is paid** (match is case-insensitive/trimmed) |
+| Monthly Expenses spend whose Description matches a detail name | `expense` + `fixed_expense_id` link, **`description` NULL** | **the link = the bill is paid** (match is case-insensitive/trimmed). The Description is only the matching key — once linked it's redundant, so it is **not** stored on the transaction |
 | A detail with **no** matching Description | **not imported** | the month is closed, so an unpaid fixed expense is stale data — only paid bills become `fixed_expenses` rows |
 | Income column | `income` on the bank account | Salary, Bank Interest, etc. |
 
@@ -290,10 +297,14 @@ the relevant month's banner.
 
 The non-monthly sheet shares some **real transactions** with the monthly sheets
 (big one-off charges show up in both). Running both imports would double-count
-them. Confirmed duplicates are recorded in `overlaps-<YYYY-MM>.md` (per month) and
-**tagged inline** in `non-monthly.sql` with a comment:
-`-- DUPLICATE of monthly <YYYY-MM> sheet — see overlaps-<YYYY-MM>.md`. Delete each
-tagged row from one side before running.
+them. Confirmed duplicates are recorded in `overlaps-<YYYY-MM>.md` (per month).
+The **non-monthly record is kept as the single source**; the matching row in the
+monthly `<YYYY-MM>-bca.sql` is **commented out and marked** (not deleted) with:
+`-- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-<YYYY-MM>.md`.
+`generate_monthly.py` does this automatically — it imports `MONTHLY_OVERLAPS` and
+comments any transaction whose date + amount is registered. The rows are left
+commented so you can **review them before running** — uncomment only if you decide
+the monthly side should win instead.
 
 The match key is **date + amount**; the set is **human-reviewed** in
 `MONTHLY_OVERLAPS` (top of `generate_nonmonthly.py`) so coincidental collisions

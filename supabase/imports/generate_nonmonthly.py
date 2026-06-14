@@ -47,8 +47,10 @@ CARD = "2f940480-5908-4c11-9fa1-9ff7a58c65c9"       # BCA VISA SQ Infinite (cred
 NS = uuid.UUID("9c1d7b40-5a2e-4f86-b3c1-7e9a0d4f8b22")
 
 # Cross-sheet duplicates: rows that are the SAME real transaction as a row in a
-# monthly sheet (see overlaps-<month>.md). Keyed by (date, amount); each gets a
-# warning comment in the SQL so you can delete it from one side before running.
+# monthly sheet (see overlaps-<month>.md). Keyed by (date, amount). This sheet is
+# kept as the single source — the matching row in the monthly <YYYY-MM>-bca.sql is
+# the one emitted commented-out (generate_monthly.py imports this set); here the
+# rows stay active and just get an informational marker.
 # Human-reviewed — the coincidental date+amount collision on 2026-05-01 /
 # 6,000,000 ("Contractor 4" here vs the monthly "Papa" allowance) is NOT listed.
 # Extend this when importing additional monthly sheets.
@@ -75,7 +77,8 @@ MONTHLY_OVERLAPS = {
 
 def overlap_note(date):
     ym = date[:7]
-    return f"DUPLICATE of monthly {ym} sheet — see overlaps-{ym}.md"
+    return (f"Also in monthly {ym} sheet — kept HERE as the source; the monthly "
+            f"row is commented out (see overlaps-{ym}.md)")
 
 
 def money(cell: str):
@@ -189,9 +192,9 @@ def write_sql(categories, txns):
     w("-- No budgets / no fixed expenses. Every row is an expense (negative = money back).")
     w("-- Idempotent: re-runnable, but ON CONFLICT (id) DO NOTHING means edits to")
     w("-- already-imported rows are ignored — make account edits BEFORE the first run.")
-    w("-- Rows tagged 'DUPLICATE of monthly <YYYY-MM> sheet — see overlaps-<YYYY-MM>.md'")
-    w("-- are the same real transaction as a monthly-sheet row; delete them from one")
-    w("-- side to avoid double-counting.")
+    w("-- Rows marked 'Also in monthly <YYYY-MM> sheet' are the same real transaction")
+    w("-- as a monthly-sheet row. This sheet is kept as the source, so they stay")
+    w("-- ACTIVE here; the matching monthly row is commented out (no double-counting).")
     w("--")
     w("-- STRUCTURE: run the SETUP block once, then each month block (each is its own")
     w("-- transaction) — in date order if you want balances to settle as you go.")
@@ -248,7 +251,7 @@ def summarize(categories, txns):
     months = sorted({t["date"][:7] for t in txns})
     print(f"Wrote {OUT_PATH}")
     print(f"  transactions: {len(txns)}  ({neg} negative / money-back)")
-    print(f"  overlap-tagged (monthly-sheet duplicates): {overlaps}")
+    print(f"  shared with monthly sheet (kept here; monthly row commented out): {overlaps}")
     print(f"  categories:   {len(categories)}")
     print(f"  date span:    {months[0]} .. {months[-1]}  ({len(months)} months)")
     print(f"  net amount:   Rp{total:,}  (all expense; positive = net spend)")

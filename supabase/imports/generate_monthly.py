@@ -55,6 +55,14 @@ USER_ID = "9e36aab2-dc6e-4ff6-9ae1-c81e82225424"
 BCA = "bfc92cd3-0eb3-497d-a7c2-7e7eb669e2ae"        # BCA bank_account
 CARD = "2f940480-5908-4c11-9fa1-9ff7a58c65c9"       # BCA VISA SQ Infinite (credit_card)
 
+# Cross-sheet duplicates: the human-reviewed registry lives in generate_nonmonthly
+# (MONTHLY_OVERLAPS). The non-monthly sheet is kept as the single source, so the
+# matching rows HERE are emitted commented-out and marked for review. Match on
+# (date, abs amount) — the same key check_overlaps.py uses.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from generate_nonmonthly import MONTHLY_OVERLAPS  # noqa: E402
+OVERLAP_KEYS = {(d, abs(a)) for d, a in MONTHLY_OVERLAPS}
+
 # Stable namespace so re-generation yields the same transaction ids. The YM is
 # folded into each id, so different months never collide.
 NS = uuid.UUID("5f3b0a7e-2c4d-4b1e-9a8f-0d1e2c3b4a59")
@@ -188,7 +196,10 @@ def main():
             handled = True
         if monthly is not None:
             fx = fixed_by_key.get((desc or "").strip().lower()) if desc else None
-            add("monthly", type="expense", amount=monthly, account=acct, fixed=fx)
+            # The Description is only the matching key for the fixed expense; once
+            # linked via fixed_expense_id it is redundant, so drop it on the txn.
+            add("monthly", type="expense", amount=monthly, account=acct, fixed=fx,
+                description=None if fx else desc)
             handled = True
         if handled:
             continue
@@ -272,6 +283,10 @@ def write_sql(budgets, fixed, txns):
 
     w(f"-- Transactions ({len(txns)} rows). category_id is always NULL (no categories).")
     w("-- Per row: (id, acct, xfer, type, amount, date, budget, fixed, description).")
+    if any((t["date"], abs(t["amount"])) in OVERLAP_KEYS for t in txns):
+        w("-- Rows that duplicate a non-monthly-sheet transaction are COMMENTED OUT and")
+        w("-- marked 'DUPLICATE of non-monthly sheet' — the non-monthly sheet is kept as")
+        w("-- the single source. Review them before running (uncomment to keep instead).")
     w("INSERT INTO transactions")
     w("  (id, user_id, account_id, transfer_account_id, type, status,")
     w("   amount, description, date, category_id, budget_id, fixed_expense_id)")
@@ -287,7 +302,12 @@ def write_sql(budgets, fixed, txns):
     w("  f.id    -- fixed_expense_id (matched by name)")
     w("FROM (VALUES")
 
-    n = len(txns)
+    # Commas track the ACTIVE (non-duplicate) rows only: duplicate rows are emitted
+    # as whole-line comments, so SQL ignores them — the last active row is the one
+    # that must omit its trailing comma.
+    last_active = max((i for i, t in enumerate(txns)
+                       if (t["date"], abs(t["amount"])) not in OVERLAP_KEYS),
+                      default=-1)
     prev_date = None
     for idx, t in enumerate(txns):
         if t["date"] != prev_date:
@@ -306,8 +326,14 @@ def write_sql(budgets, fixed, txns):
             cell(t.get("fixed"), 22),
             cell(t["description"]),
         ]
-        comma = "," if idx < n - 1 else ""
-        w(f"    ({', '.join(parts)}){comma}")
+        if (t["date"], abs(t["amount"])) in OVERLAP_KEYS:
+            # Same real transaction as a non-monthly-sheet row; commented out (not
+            # deleted) for review — the non-monthly sheet is the single source.
+            w(f"    -- ({', '.join(parts)}),  -- DUPLICATE of non-monthly sheet "
+              f"— commented out for review, see overlaps-{YM}.md")
+        else:
+            comma = "," if idx < last_active else ""
+            w(f"    ({', '.join(parts)}){comma}")
 
     w("  ) AS v(id, acct, xfer, type, amount, date, budget_name, fixed_name, description)")
     w(f"LEFT JOIN budgets b")
@@ -329,6 +355,7 @@ def summarize(budgets, fixed, txns, dropped, stated_income, stated_total_exp):
     n_card = sum(1 for t in txns if t["account"] == CARD)
     n_bca = sum(1 for t in txns if t["account"] == BCA)
     linked_fx = sum(1 for t in txns if t.get("fixed"))
+    commented = sum(1 for t in txns if (t["date"], abs(t["amount"])) in OVERLAP_KEYS)
     ok = "OK" if stated_income == inc else "MISMATCH"
     print(f"Wrote {OUT_PATH}  ({YM}, from {CSV_PATH.name})")
     print(f"  budgets:        {len(budgets)}  {budgets}")
@@ -336,6 +363,7 @@ def summarize(budgets, fixed, txns, dropped, stated_income, stated_total_exp):
     print(f"    dropped (no paying txn, month closed): {dropped}")
     print(f"  fixed-expense links on txns: {linked_fx}")
     print(f"  transactions:   {len(txns)}  (BCA {n_bca}, card {n_card})")
+    print(f"  commented out (non-monthly duplicates, review): {commented}")
     print(f"  income total:   Rp{inc:,}   (sheet row 3: Rp{stated_income:,}) [{ok}]")
     print(f"  expense total:  Rp{exp:,}   (sheet Total Expenses: Rp{stated_total_exp:,})")
     print(f"  transfer total: Rp{xfer:,}")

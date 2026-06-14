@@ -40,6 +40,9 @@ INSERT INTO account_monthly_balances (account_id, year_month, balance) VALUES ('
 
 -- Transactions (150 rows). category_id is always NULL (no categories).
 -- Per row: (id, acct, xfer, type, amount, date, budget, fixed, description).
+-- Rows that duplicate a non-monthly-sheet transaction are COMMENTED OUT and
+-- marked 'DUPLICATE of non-monthly sheet' — the non-monthly sheet is kept as
+-- the single source. Review them before running (uncomment to keep instead).
 INSERT INTO transactions
   (id, user_id, account_id, transfer_account_id, type, status,
    amount, description, date, category_id, budget_id, fixed_expense_id)
@@ -55,10 +58,10 @@ SELECT
 FROM (VALUES
     -- 2026-05-01
     ('ee6893a0-f42b-51f3-b3d6-1b595f9ccf49', 'BCA' , NULL  , 'income'  ,    44869286, '2026-05-01', NULL              , NULL                  , 'Salary'),
-    ('09032039-9e23-58de-b7fc-29b6371d287a', 'BCA' , NULL  , 'expense' ,     6000000, '2026-05-01', NULL              , 'Papa'                , 'Papa'),
-    ('d017720c-838c-5d7b-ab49-257756a0877d', 'BCA' , NULL  , 'expense' ,       18315, '2026-05-01', NULL              , 'Youtube Premium'     , 'Youtube Premium'),
-    ('f869f66d-7226-50b8-913a-78cbd7c03135', 'BCA' , NULL  , 'expense' ,       46500, '2026-05-01', NULL              , 'Netflix'             , 'Netflix'),
-    ('74b16ad1-98ce-5d35-a28d-a32faf0226ef', 'BCA' , NULL  , 'expense' ,      175000, '2026-05-01', NULL              , 'IPL VPP'             , 'IPL VPP'),
+    ('09032039-9e23-58de-b7fc-29b6371d287a', 'BCA' , NULL  , 'expense' ,     6000000, '2026-05-01', NULL              , 'Papa'                , NULL),
+    ('d017720c-838c-5d7b-ab49-257756a0877d', 'BCA' , NULL  , 'expense' ,       18315, '2026-05-01', NULL              , 'Youtube Premium'     , NULL),
+    ('f869f66d-7226-50b8-913a-78cbd7c03135', 'BCA' , NULL  , 'expense' ,       46500, '2026-05-01', NULL              , 'Netflix'             , NULL),
+    ('74b16ad1-98ce-5d35-a28d-a32faf0226ef', 'BCA' , NULL  , 'expense' ,      175000, '2026-05-01', NULL              , 'IPL VPP'             , NULL),
     ('586c9b40-0d98-5845-adf0-4bab47daff6e', 'CARD', NULL  , 'expense' ,      819442, '2026-05-01', 'Social'          , NULL                  , NULL),
     ('eb899650-8312-524a-8446-921af553f18b', 'CARD', NULL  , 'expense' ,      275755, '2026-05-01', 'Social'          , NULL                  , NULL),
     -- 2026-05-02
@@ -73,11 +76,11 @@ FROM (VALUES
     -- 2026-05-03
     ('6a426536-6542-5ac3-a222-671961329c86', 'CARD', NULL  , 'expense' ,       80000, '2026-05-03', 'Social'          , NULL                  , NULL),
     ('d43d522c-f092-5ccb-8903-123a800c5c93', 'CARD', NULL  , 'expense' ,       85160, '2026-05-03', 'Food'            , NULL                  , NULL),
-    ('2153b5db-68b9-58ab-b1f7-740568d458b5', 'CARD', NULL  , 'expense' ,      204700, '2026-05-03', NULL              , NULL                  , 'House Renovation'),
+    -- ('2153b5db-68b9-58ab-b1f7-740568d458b5', 'CARD', NULL  , 'expense' ,      204700, '2026-05-03', NULL              , NULL                  , 'House Renovation'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('1edca36f-88de-50a4-a52c-129656c7697c', 'BCA' , NULL  , 'expense' ,      999500, '2026-05-03', 'Transport'       , NULL                  , NULL),
     -- 2026-05-04
-    ('2be724c0-a3b3-5f6d-a3e9-295dffaac4ab', 'CARD', NULL  , 'expense' ,      402234, '2026-05-04', NULL              , 'Electricity Alegria' , 'Electricity Alegria'),
-    ('7dcbcd48-8b94-5f91-b5d9-6a8fb21886be', 'CARD', NULL  , 'expense' ,       46500, '2026-05-04', NULL              , 'PDAM'                , 'PDAM'),
+    ('2be724c0-a3b3-5f6d-a3e9-295dffaac4ab', 'CARD', NULL  , 'expense' ,      402234, '2026-05-04', NULL              , 'Electricity Alegria' , NULL),
+    ('7dcbcd48-8b94-5f91-b5d9-6a8fb21886be', 'CARD', NULL  , 'expense' ,       46500, '2026-05-04', NULL              , 'PDAM'                , NULL),
     ('553a6d02-0c98-5ab0-9ca4-8bf56ed9a578', 'CARD', NULL  , 'expense' ,      138400, '2026-05-04', NULL              , NULL                  , 'House Renovation'),
     ('644a2376-52c7-5b05-907e-343d82d876b1', 'CARD', NULL  , 'expense' ,      133700, '2026-05-04', 'Food'            , NULL                  , NULL),
     ('cd5a4e2d-b30f-59a5-841e-cb4046416636', 'CARD', NULL  , 'expense' ,      180000, '2026-05-04', 'Others'          , NULL                  , 'Blackmores'),
@@ -94,10 +97,10 @@ FROM (VALUES
     ('6f1f515f-8896-5850-b4ee-4c79818991f3', 'CARD', NULL  , 'expense' ,       12600, '2026-05-06', 'Food'            , NULL                  , NULL),
     ('c7d8e70c-3104-5416-8427-106f87a24374', 'CARD', NULL  , 'expense' ,       21000, '2026-05-06', 'Food'            , NULL                  , NULL),
     ('a14938d9-d159-5afa-8efa-99dbec61f133', 'CARD', NULL  , 'expense' ,       23870, '2026-05-06', 'Food'            , NULL                  , NULL),
-    ('4cb41a0a-ed6f-560d-aa37-8b4910c7412a', 'CARD', NULL  , 'expense' ,      328246, '2026-05-06', NULL              , NULL                  , 'House Renovation'),
+    -- ('4cb41a0a-ed6f-560d-aa37-8b4910c7412a', 'CARD', NULL  , 'expense' ,      328246, '2026-05-06', NULL              , NULL                  , 'House Renovation'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('5ec054d4-dc7c-58a1-a708-b31ee27caba5', 'CARD', NULL  , 'expense' ,      180000, '2026-05-06', 'Food'            , NULL                  , NULL),
     ('208c4487-e344-5a80-a759-6769c29ab1e4', 'BCA' , 'CARD', 'transfer',     5388396, '2026-05-06', NULL              , NULL                  , NULL),
-    ('1abd07c4-0a1b-530a-b80f-a7cfd9b82c11', 'CARD', NULL  , 'expense' ,       71730, '2026-05-06', NULL              , 'IPL Alegria'         , 'IPL Alegria'),
+    ('1abd07c4-0a1b-530a-b80f-a7cfd9b82c11', 'CARD', NULL  , 'expense' ,       71730, '2026-05-06', NULL              , 'IPL Alegria'         , NULL),
     -- 2026-05-07
     ('2ca8cb06-f56f-59ac-aa6d-8f482fa38ba3', 'CARD', NULL  , 'expense' ,       22071, '2026-05-07', 'Transport'       , NULL                  , NULL),
     ('829a1aee-c004-5f39-8e42-eb904fb8acb1', 'CARD', NULL  , 'expense' ,       13000, '2026-05-07', 'Food'            , NULL                  , NULL),
@@ -134,7 +137,7 @@ FROM (VALUES
     ('053f136e-0866-574f-9603-db4e8a776ff3', 'CARD', NULL  , 'expense' ,       52505, '2026-05-11', 'Food'            , NULL                  , NULL),
     ('e71ec9be-b120-5fc7-abc4-43b8f3b3db75', 'CARD', NULL  , 'expense' ,       26950, '2026-05-11', 'Food'            , NULL                  , NULL),
     ('75b00524-2faa-5bb5-8dcd-fb521a403efe', 'BCA' , NULL  , 'income'  ,      143991, '2026-05-11', NULL              , NULL                  , 'ST12T02'),
-    ('582ba933-0ac6-5c42-aea4-c559b32aa949', 'BCA' , NULL  , 'expense' ,      192303, '2026-05-11', NULL              , 'IPL Cilejit'         , 'IPL Cilejit'),
+    ('582ba933-0ac6-5c42-aea4-c559b32aa949', 'BCA' , NULL  , 'expense' ,      192303, '2026-05-11', NULL              , 'IPL Cilejit'         , NULL),
     -- 2026-05-12
     ('4fddcaf5-e821-52f1-95c2-51815a2c4fc6', 'CARD', NULL  , 'expense' ,       60482, '2026-05-12', 'Others'          , NULL                  , 'Hook Suction Cup'),
     ('2ec9fe97-ed6c-5a8f-be23-0adaeceae824', 'CARD', NULL  , 'expense' ,       31000, '2026-05-12', 'Food'            , NULL                  , NULL),
@@ -142,18 +145,18 @@ FROM (VALUES
     ('66d28966-3740-5883-99fb-22e679fe43a0', 'CARD', NULL  , 'expense' ,      133000, '2026-05-12', 'Food'            , NULL                  , NULL),
     ('f4e3a430-0c0e-5c6a-b6da-90a807036a7e', 'CARD', NULL  , 'expense' ,        2000, '2026-05-12', 'Food'            , NULL                  , NULL),
     -- 2026-05-13
-    ('338be927-a091-5825-906f-3286c05d5109', 'CARD', NULL  , 'expense' ,      342430, '2026-05-13', NULL              , NULL                  , 'Tangga Rumah Lipat'),
+    -- ('338be927-a091-5825-906f-3286c05d5109', 'CARD', NULL  , 'expense' ,      342430, '2026-05-13', NULL              , NULL                  , 'Tangga Rumah Lipat'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('3a8245f3-d267-5e02-990f-ee9f46f03028', 'CARD', NULL  , 'expense' ,      503100, '2026-05-13', 'Transport'       , NULL                  , NULL),
     -- 2026-05-14
     ('835dc93c-66f6-5a44-983d-8f8ceb91cacb', 'CARD', NULL  , 'expense' ,       49000, '2026-05-14', 'Social'          , NULL                  , NULL),
     ('7a54e5cb-5882-5fd1-bb28-8bbf6a776190', 'CARD', NULL  , 'expense' ,       70400, '2026-05-14', 'Food'            , NULL                  , NULL),
-    ('e9d504d8-0a73-532c-9acc-e82f493cd3dc', 'CARD', NULL  , 'expense' ,      427350, '2026-05-14', NULL              , 'First Media'         , 'First media'),
+    ('e9d504d8-0a73-532c-9acc-e82f493cd3dc', 'CARD', NULL  , 'expense' ,      427350, '2026-05-14', NULL              , 'First Media'         , NULL),
     ('73b02c1e-d800-5f88-8815-12adba1de6a0', 'BCA' , NULL  , 'expense' ,       45200, '2026-05-14', 'Transport'       , NULL                  , NULL),
     -- 2026-05-15
     ('1f1db95e-0661-597a-884e-c839e5dfa17e', 'CARD', NULL  , 'expense' ,       18000, '2026-05-15', 'Food'            , NULL                  , NULL),
-    ('0dae2bbe-4337-548a-b20d-424d79d02d9d', 'BCA' , NULL  , 'expense' ,       20000, '2026-05-15', NULL              , 'ADM BCA'             , 'ADM BCA'),
+    ('0dae2bbe-4337-548a-b20d-424d79d02d9d', 'BCA' , NULL  , 'expense' ,       20000, '2026-05-15', NULL              , 'ADM BCA'             , NULL),
     -- 2026-05-16
-    ('3a03a65f-e5d6-56a9-be74-ecd6a1d87f6b', 'CARD', NULL  , 'expense' ,     4300973, '2026-05-16', NULL              , NULL                  , 'TTRacing Titus X'),
+    -- ('3a03a65f-e5d6-56a9-be74-ecd6a1d87f6b', 'CARD', NULL  , 'expense' ,     4300973, '2026-05-16', NULL              , NULL                  , 'TTRacing Titus X'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('7c419e75-c037-5454-afd6-4478c1cae61c', 'CARD', NULL  , 'expense' ,     1009756, '2026-05-16', 'Social'          , NULL                  , NULL),
     ('ee8a948b-a550-57f0-a2ba-9fab47c7cd91', 'CARD', NULL  , 'expense' ,       25000, '2026-05-16', 'Social'          , NULL                  , NULL),
     ('3463efc4-a0a7-536d-917f-22b94624bcaa', 'CARD', NULL  , 'expense' ,       60500, '2026-05-16', 'Social'          , NULL                  , NULL),
@@ -167,19 +170,19 @@ FROM (VALUES
     -- 2026-05-17
     ('26609a48-3aec-59e4-b2a8-22fdce07c204', 'CARD', NULL  , 'expense' ,       82590, '2026-05-17', 'Food'            , NULL                  , NULL),
     -- 2026-05-18
-    ('baefffaa-a531-5dd7-b6db-1aa11d7e5a52', 'CARD', NULL  , 'expense' ,     1431500, '2026-05-18', NULL              , NULL                  , 'TP Link Router'),
-    ('c5602273-c26f-513c-a470-e0770bbaea98', 'CARD', NULL  , 'expense' ,      832000, '2026-05-18', NULL              , 'My Republic'         , 'My Republic'),
+    -- ('baefffaa-a531-5dd7-b6db-1aa11d7e5a52', 'CARD', NULL  , 'expense' ,     1431500, '2026-05-18', NULL              , NULL                  , 'TP Link Router'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
+    ('c5602273-c26f-513c-a470-e0770bbaea98', 'CARD', NULL  , 'expense' ,      832000, '2026-05-18', NULL              , 'My Republic'         , NULL),
     ('bbb7e55e-ca35-5c3d-87d6-ce42afb92d0b', 'CARD', NULL  , 'expense' ,        2000, '2026-05-18', 'Food'            , NULL                  , NULL),
     ('a61ad1e0-cb5e-5848-8312-e6116a4ffa85', 'CARD', NULL  , 'expense' ,       90260, '2026-05-18', 'Food'            , NULL                  , NULL),
     -- 2026-05-19
     ('193d940f-b5c2-5cf2-8d69-27ae46f2f115', 'CARD', NULL  , 'expense' ,       27400, '2026-05-19', 'Food'            , NULL                  , NULL),
     ('cd635a4f-5693-5329-a903-a88d41f8911a', 'CARD', NULL  , 'expense' ,        2000, '2026-05-19', 'Food'            , NULL                  , NULL),
-    ('f233d78b-c662-5e0a-bd44-e163c448c6fd', 'CARD', NULL  , 'expense' ,       90000, '2026-05-19', NULL              , 'Paket Data'          , 'Paket Data'),
+    ('f233d78b-c662-5e0a-bd44-e163c448c6fd', 'CARD', NULL  , 'expense' ,       90000, '2026-05-19', NULL              , 'Paket Data'          , NULL),
     ('c57439a2-cf61-5c03-b4ef-07fc14d60558', 'CARD', NULL  , 'expense' ,       87200, '2026-05-19', 'Food'            , NULL                  , NULL),
     -- 2026-05-20
-    ('502b8767-372a-5b36-8d26-e12a5f20a21e', 'CARD', NULL  , 'expense' ,      269705, '2026-05-20', NULL              , NULL                  , 'Vention Cable Management'),
+    -- ('502b8767-372a-5b36-8d26-e12a5f20a21e', 'CARD', NULL  , 'expense' ,      269705, '2026-05-20', NULL              , NULL                  , 'Vention Cable Management'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('dfe4f96e-5aba-5c2f-a31b-eee06b7c5555', 'CARD', NULL  , 'expense' ,       23000, '2026-05-20', 'Food'            , NULL                  , NULL),
-    ('a84451c0-54af-58f5-a2de-66a9d8166330', 'CARD', NULL  , 'expense' ,      107982, '2026-05-20', NULL              , NULL                  , 'Cable Management'),
+    -- ('a84451c0-54af-58f5-a2de-66a9d8166330', 'CARD', NULL  , 'expense' ,      107982, '2026-05-20', NULL              , NULL                  , 'Cable Management'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('15a33c66-faed-57c4-b39c-3ce5e8a0e608', 'CARD', NULL  , 'expense' ,       78000, '2026-05-20', 'Transport'       , NULL                  , NULL),
     ('79ccce9f-fc94-5ec0-8378-fd2176c514ea', 'BCA' , NULL  , 'expense' ,       10900, '2026-05-20', 'Food'            , NULL                  , NULL),
     ('da31aac6-001e-5b20-921c-8980b9985b14', 'BCA' , NULL  , 'expense' ,      101500, '2026-05-20', 'Transport'       , NULL                  , NULL),
@@ -192,7 +195,7 @@ FROM (VALUES
     -- 2026-05-22
     ('7a3e8e58-60ff-5b25-aa07-abb2b41562e0', 'BCA' , NULL  , 'expense' ,       37502, '2026-05-22', 'Food'            , NULL                  , NULL),
     -- 2026-05-23
-    ('cfb04c1f-c2bc-52de-9329-efe15a7c6e5e', 'CARD', NULL  , 'expense' ,     1026422, '2026-05-23', NULL              , NULL                  , 'PIA'),
+    -- ('cfb04c1f-c2bc-52de-9329-efe15a7c6e5e', 'CARD', NULL  , 'expense' ,     1026422, '2026-05-23', NULL              , NULL                  , 'PIA'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('b29cadfe-3e4d-5c7b-84f0-0585025bd9e1', 'CARD', NULL  , 'expense' ,      281000, '2026-05-23', 'Social'          , NULL                  , NULL),
     ('ccee0c4d-524e-5c09-ba74-30fbf0f05e55', 'CARD', NULL  , 'expense' ,      179800, '2026-05-23', 'Social'          , NULL                  , NULL),
     ('73186f4a-f54b-502b-ba2c-f8ed6232d4c5', 'CARD', NULL  , 'expense' ,       97500, '2026-05-23', 'Food'            , NULL                  , NULL),
@@ -200,14 +203,14 @@ FROM (VALUES
     ('f7b693e3-8fb0-593e-9596-7eaa017cf335', 'BCA' , NULL  , 'expense' ,       75000, '2026-05-23', 'Others'          , NULL                  , 'Laundry'),
     -- 2026-05-24
     ('966dff6c-513b-5cc3-b94f-edea18c170e6', 'CARD', NULL  , 'expense' ,      134000, '2026-05-24', 'Social'          , NULL                  , NULL),
-    ('bf119649-8439-5204-b9ac-2f5b666786c3', 'CARD', NULL  , 'expense' ,    27213000, '2026-05-24', NULL              , NULL                  , 'IKEA Furniture'),
-    ('aa8477d6-ca65-5a27-9686-d8677e3fb814', 'CARD', NULL  , 'expense' ,      901500, '2026-05-24', NULL              , NULL                  , 'Headboard'),
+    -- ('bf119649-8439-5204-b9ac-2f5b666786c3', 'CARD', NULL  , 'expense' ,    27213000, '2026-05-24', NULL              , NULL                  , 'IKEA Furniture'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
+    -- ('aa8477d6-ca65-5a27-9686-d8677e3fb814', 'CARD', NULL  , 'expense' ,      901500, '2026-05-24', NULL              , NULL                  , 'Headboard'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-05.md
     ('165d61e9-5d74-5521-b328-eca24daf0d7c', 'BCA' , 'CARD', 'transfer',    27000000, '2026-05-24', NULL              , NULL                  , NULL),
     -- 2026-05-25
     ('ef0d48e4-9dcf-5283-a91d-4261851a5f6a', 'CARD', NULL  , 'expense' ,       23000, '2026-05-25', 'Food'            , NULL                  , NULL),
     ('5c845587-e539-5668-8379-7329bfb6f923', 'CARD', NULL  , 'expense' ,       57500, '2026-05-25', 'Transport'       , NULL                  , NULL),
     ('a5c3ee71-ec8c-58d2-b7bb-b6dab04f275a', 'CARD', NULL  , 'expense' ,        5000, '2026-05-25', 'Transport'       , NULL                  , NULL),
-    ('d07fcd16-667d-5241-a80d-9ffc28a51c2f', 'BCA' , NULL  , 'expense' ,    12299123, '2026-05-25', NULL              , 'KPR'                 , 'KPR'),
+    ('d07fcd16-667d-5241-a80d-9ffc28a51c2f', 'BCA' , NULL  , 'expense' ,    12299123, '2026-05-25', NULL              , 'KPR'                 , NULL),
     ('be911de4-84e3-5624-acf2-2c59dc3529b7', 'CARD', NULL  , 'expense' ,       10000, '2026-05-25', 'Others'          , NULL                  , 'Bea Materai Lunas'),
     -- 2026-05-26
     ('1d240c29-e4a8-5659-959d-1acd24738d4a', 'CARD', NULL  , 'expense' ,        7000, '2026-05-26', 'Transport'       , NULL                  , NULL),
@@ -227,7 +230,7 @@ FROM (VALUES
     ('504dbd22-d3b3-5bdd-9d0f-9dd591d9bb5b', 'CARD', NULL  , 'expense' ,       98000, '2026-05-29', 'Food'            , NULL                  , NULL),
     ('e20351b1-e2f7-54d8-a5bd-5f2ac60020a5', 'CARD', NULL  , 'expense' ,        2000, '2026-05-29', 'Food'            , NULL                  , NULL),
     -- 2026-05-30
-    ('e24ca1e6-8a4f-59db-a2d5-38adc5a983c1', 'CARD', NULL  , 'expense' ,      227053, '2026-05-30', NULL              , 'FF XIV'              , 'FF XIV'),
+    ('e24ca1e6-8a4f-59db-a2d5-38adc5a983c1', 'CARD', NULL  , 'expense' ,      227053, '2026-05-30', NULL              , 'FF XIV'              , NULL),
     ('e08c61ad-4678-5911-abaa-40ffa5f41aed', 'CARD', NULL  , 'expense' ,      131040, '2026-05-30', 'Food'            , NULL                  , NULL),
     -- 2026-05-31
     ('e31477c8-f7aa-579d-aa8f-a826761c2674', 'CARD', NULL  , 'expense' ,       17500, '2026-05-31', 'Transport'       , NULL                  , NULL),
