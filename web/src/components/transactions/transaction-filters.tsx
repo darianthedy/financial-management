@@ -285,7 +285,11 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="space-y-4">
+          {/* Desktop lays the two date inputs side by side (sm:flex-row below),
+              which needs more room than the 22rem default or they overflow and
+              the panel scrolls horizontally. Widen on desktop only; mobile keeps
+              the sheet width and stacks the dates vertically. */}
+          <PopoverContent align="end" className="space-y-4 sm:w-[26rem]">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Filter</h3>
               {panelCount > 0 && (
