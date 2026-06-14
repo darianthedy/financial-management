@@ -689,7 +689,7 @@ ON CONFLICT (id) DO NOTHING;
 COMMIT;
 
 -- ============================================================
--- 2026-03  (10 transaction(s))
+-- 2026-03  (10 transaction(s), 3 tagged duplicate(s))
 -- ============================================================
 BEGIN;
 INSERT INTO transactions
@@ -704,13 +704,13 @@ SELECT
   c.id,                       -- category_id (matched by name)
   NULL, NULL                  -- budget_id, fixed_expense_id (n/a)
 FROM (VALUES
-    ('eb0afb6f-5f16-58d2-a5b2-750e0d47fa01', 'BCA' ,       1695885, '2026-03-01', 'Software Development'  , 'Apple Developer'),
+    ('eb0afb6f-5f16-58d2-a5b2-750e0d47fa01', 'CARD' ,       1695885, '2026-03-01', 'Software Development'  , 'Apple Developer'),  -- Also in monthly 2026-03 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-03.md)
     ('87df2743-b708-5796-a248-71fee0a781ec', 'BCA' ,        281500, '2026-03-01', 'STNK'                  , 'STNK Motor'),
-    ('a92852da-95ac-52a1-a678-623e4eb3a465', 'BCA' ,        642443, '2026-03-05', 'PBB Alegria'           , 'PBB Alegria'),
+    ('a92852da-95ac-52a1-a678-623e4eb3a465', 'CARD' ,        642443, '2026-03-05', 'PBB'           , 'PBB Alegria'),  -- Also in monthly 2026-03 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-03.md)
     ('8afb9e05-be9a-56df-8fcc-b52f3852abba', 'BCA' ,       7752500, '2026-03-05', 'House Renovation'      , 'Deposit Alegria'),
     ('ad7b9dec-2dfb-5f8d-b7b7-07631c49d2bf', 'BCA' ,      -6000000, '2026-03-07', 'ROG Ally Update'       , 'Steam Deck Sold'),
     ('c680d3ff-3188-50ad-b347-6819ada6f24b', 'BCA' ,      17387180, '2026-03-13', 'iPhone Air'            , 'iPhone Air'),
-    ('4e8a5250-ebea-5d09-bb27-c2f6f43111ea', 'BCA' ,       6939639, '2026-03-23', 'Digivice'              , 'D-Ark 25th'),
+    ('4e8a5250-ebea-5d09-bb27-c2f6f43111ea', 'CARD' ,       6939639, '2026-03-23', 'Digivice'              , 'D-Ark 25th'),  -- Also in monthly 2026-03 sheet — kept HERE as the source; the monthly row is commented out (see overlaps-2026-03.md)
     ('85931737-a8cb-56ef-a8de-e698d854b98c', 'BCA' ,     -42525000, '2026-03-23', 'Savings'               , 'THR'),
     ('fb6f51ac-bf28-5d91-bf9e-7d67b527718d', 'BCA' ,        365200, '2026-03-18', 'Google One'            , 'Google One Subscription'),
     ('f6ba679b-877a-5d42-ace9-b8c31239e06a', 'BCA' ,       1000000, '2026-03-24', 'Wedding'               , 'Aston DP')
