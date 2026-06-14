@@ -81,6 +81,7 @@ export function useDashboard(yearMonth: string) {
     // Aggregate unplanned spend by category; a null category -> "Uncategorized".
     const unplannedByCat = new Map<string, number>();
     let unplannedNoCat = 0;
+    let hasUncategorized = false;
     for (const row of unplannedRows ?? []) {
       if (row.category_id) {
         unplannedByCat.set(
@@ -89,6 +90,7 @@ export function useDashboard(yearMonth: string) {
         );
       } else {
         unplannedNoCat += row.amount;
+        hasUncategorized = true;
       }
     }
     const unplannedCatIds = [...unplannedByCat.keys()];
@@ -122,7 +124,7 @@ export function useDashboard(yearMonth: string) {
         total_amount: unplannedByCat.get(id) ?? 0,
       };
     });
-    if (unplannedNoCat > 0) {
+    if (hasUncategorized) {
       unplanned.push({
         category_id: null,
         category_name: "Uncategorized",

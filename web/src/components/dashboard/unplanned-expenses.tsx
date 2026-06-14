@@ -17,7 +17,6 @@ interface Props {
 export function UnplannedExpensesCard({ spending }: Props) {
   const { defaultCurrency } = useCurrencies();
   const total = spending.reduce((sum, c) => sum + c.total_amount, 0);
-  const top = spending.slice(0, 6);
 
   return (
     <Card>
@@ -41,7 +40,7 @@ export function UnplannedExpensesCard({ spending }: Props) {
               </span>
             </div>
             <div className="flex flex-col gap-2">
-              {top.map((c) => {
+              {spending.map((c) => {
                 const uncategorized = c.category_id === null;
                 return (
                   <div
