@@ -237,15 +237,45 @@ function applyFilters<T extends FilterableQuery<T>>(
   return q;
 }
 
-/** Income/expense/status rows for the whole filtered set, for the Summary dialog. */
-export type TransactionSummaryRow = Pick<
+/**
+ * One row of the whole filtered set, carrying the money columns plus the
+ * resolved names the Summary groups by (budget / category / fixed expense /
+ * tags). Budgets and fixed expenses are month-specific rows sharing a name, so
+ * we surface the NAME — that's their identity for the breakdown, matching how
+ * the filters treat them. `tagNames` is the (possibly empty) set of tags on the
+ * row; a transaction contributes to every one of its tags' stats. For transfers,
+ * `accountName` is the source (money out) and `transferAccountName` the
+ * destination (money in); for income/expense only `accountName` is set.
+ */
+export interface TransactionSummaryRow {
+  type: Transaction["type"];
+  amount: Transaction["amount"];
+  status: Transaction["status"];
+  accountName: string | null;
+  transferAccountName: string | null;
+  budgetName: string | null;
+  categoryName: string | null;
+  fixedExpenseName: string | null;
+  tagNames: string[];
+}
+
+/** Raw shape pulled from `v_transactions` before names are hydrated. */
+type SummaryFetchRow = Pick<
   Transaction,
-  "type" | "amount" | "status"
->;
+  | "type"
+  | "amount"
+  | "status"
+  | "account_id"
+  | "transfer_account_id"
+  | "budget_id"
+  | "category_id"
+  | "fixed_expense_id"
+> & { tag_ids: string[] };
 
 /**
- * Fetch the whole filtered set (every page) reduced to the three columns the
- * Summary needs. Kept separate from the list query so the summary spans all
+ * Fetch the whole filtered set (every page) reduced to the columns the Summary
+ * needs, then hydrate the budget / category / fixed-expense / tag names it
+ * breaks down by. Kept separate from the list query so the summary spans all
  * pages and is computed on demand (when the dialog opens), not on every page
  * load. Reuses `applyFilters`, so it honours exactly the same filters.
  */
@@ -255,12 +285,88 @@ export async function fetchTransactionSummaryRows(
   const restrictions = await resolveRestrictions(filters);
   if (restrictions.empty) return [];
   const q = applyFilters(
-    supabase.from("v_transactions").select("type, amount, status"),
+    supabase
+      .from("v_transactions")
+      .select(
+        "type, amount, status, account_id, transfer_account_id, budget_id, category_id, fixed_expense_id, tag_ids",
+      ),
     filters,
     restrictions,
   );
   const { data } = await q;
-  return (data ?? []) as TransactionSummaryRow[];
+  const rows = (data ?? []) as SummaryFetchRow[];
+
+  const accountIds = [
+    ...new Set([
+      ...rows.map((r) => r.account_id),
+      ...rows.map((r) => r.transfer_account_id),
+    ].filter(Boolean)),
+  ] as string[];
+  const budgetIds = [
+    ...new Set(rows.map((r) => r.budget_id).filter(Boolean)),
+  ] as string[];
+  const catIds = [
+    ...new Set(rows.map((r) => r.category_id).filter(Boolean)),
+  ] as string[];
+  const fixedIds = [
+    ...new Set(rows.map((r) => r.fixed_expense_id).filter(Boolean)),
+  ] as string[];
+  const tagIds = [...new Set(rows.flatMap((r) => r.tag_ids))];
+
+  const [accountResult, budgetResult, categoryResult, fixedResult, tagResult] =
+    await Promise.all([
+      accountIds.length
+        ? supabase.from("accounts").select("id, name").in("id", accountIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      budgetIds.length
+        ? supabase.from("budgets").select("id, name").in("id", budgetIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      catIds.length
+        ? supabase.from("categories").select("id, name").in("id", catIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      fixedIds.length
+        ? supabase.from("fixed_expenses").select("id, name").in("id", fixedIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      tagIds.length
+        ? supabase.from("tags").select("id, name").in("id", tagIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    ]);
+
+  const accountNameById = new Map(
+    (accountResult.data ?? []).map((a) => [a.id, a.name]),
+  );
+  const budgetNameById = new Map(
+    (budgetResult.data ?? []).map((b) => [b.id, b.name]),
+  );
+  const categoryNameById = new Map(
+    (categoryResult.data ?? []).map((c) => [c.id, c.name]),
+  );
+  const fixedNameById = new Map(
+    (fixedResult.data ?? []).map((f) => [f.id, f.name]),
+  );
+  const tagNameById = new Map(
+    (tagResult.data ?? []).map((t) => [t.id, t.name]),
+  );
+
+  return rows.map((r) => ({
+    type: r.type,
+    amount: r.amount,
+    status: r.status,
+    accountName: r.account_id ? accountNameById.get(r.account_id) ?? null : null,
+    transferAccountName: r.transfer_account_id
+      ? accountNameById.get(r.transfer_account_id) ?? null
+      : null,
+    budgetName: r.budget_id ? budgetNameById.get(r.budget_id) ?? null : null,
+    categoryName: r.category_id
+      ? categoryNameById.get(r.category_id) ?? null
+      : null,
+    fixedExpenseName: r.fixed_expense_id
+      ? fixedNameById.get(r.fixed_expense_id) ?? null
+      : null,
+    tagNames: r.tag_ids
+      .map((id) => tagNameById.get(id))
+      .filter((n): n is string => n != null),
+  }));
 }
 
 export interface UseTransactionsOptions {
