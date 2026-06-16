@@ -329,44 +329,23 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                   </button>
                 )}
               </div>
-              {/* Two native date inputs can't fit side by side on the narrowest
-                  phones (the popover is ~256px wide inside its padding at 320px
-                  viewports), so stack them vertically there with From/To labels
-                  and only collapse into the labelled-by-the-dash row once there's
-                  room. The labels are decorative (each input keeps its aria-label),
-                  so they're aria-hidden to avoid double announcements. */}
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="flex flex-col gap-1 sm:flex-1">
-                  <span
-                    aria-hidden="true"
-                    className="text-xs font-medium text-[var(--color-muted-foreground)] sm:hidden"
-                  >
-                    From
-                  </span>
-                  <DateInput
-                    value={filters.dateFrom}
-                    onChange={(v) =>
-                      v ? patch({ dateFrom: v }) : clear("dateFrom")
-                    }
-                    ariaLabel="From date"
-                  />
-                </div>
-                <span className="hidden text-[var(--color-muted-foreground)] sm:inline">
-                  –
-                </span>
-                <div className="flex flex-col gap-1 sm:flex-1">
-                  <span
-                    aria-hidden="true"
-                    className="text-xs font-medium text-[var(--color-muted-foreground)] sm:hidden"
-                  >
-                    To
-                  </span>
-                  <DateInput
-                    value={filters.dateTo}
-                    onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}
-                    ariaLabel="To date"
-                  />
-                </div>
+              {/* Both date inputs stay side by side with a dash between, even on
+                  the narrowest phones. The popover is only ~256px wide inside its
+                  padding at 320px, so on mobile the inputs shrink (smaller text,
+                  tighter padding) and drop their per-field calendar button —
+                  tapping the field still opens the native picker there. */}
+              <div className="mt-2 flex items-center gap-1.5">
+                <DateInput
+                  value={filters.dateFrom}
+                  onChange={(v) => (v ? patch({ dateFrom: v }) : clear("dateFrom"))}
+                  ariaLabel="From date"
+                />
+                <span className="text-[var(--color-muted-foreground)]">–</span>
+                <DateInput
+                  value={filters.dateTo}
+                  onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}
+                  ariaLabel="To date"
+                />
               </div>
             </FilterField>
 
@@ -555,11 +534,16 @@ function DateInput({ value, onChange, ariaLabel }: { value?: string; onChange: (
         defaultValue={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
-        className={`min-w-0 [&::-webkit-calendar-picker-indicator]:hidden ${
-          value ? "pr-12" : "pr-7"
+        // Mobile: tighter padding so two fields fit at 320px; the calendar
+        // button is hidden there, so reserve room only for the clear button
+        // (when present). Desktop keeps both buttons. `filter-date` opts these
+        // inputs out of the touch 16px floor (see globals.css) so the date text
+        // matches the surrounding filter controls instead of looming over them.
+        className={`filter-date min-w-0 px-2 text-sm sm:px-3 [&::-webkit-calendar-picker-indicator]:hidden ${
+          value ? "pr-7 sm:pr-12" : "pr-2 sm:pr-7"
         }`}
       />
-      <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+      <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
         {value && (
           <button
             type="button"
@@ -574,7 +558,7 @@ function DateInput({ value, onChange, ariaLabel }: { value?: string; onChange: (
           type="button"
           onClick={() => ref.current?.showPicker?.()}
           aria-label={`Open ${ariaLabel.toLowerCase()} calendar`}
-          className={iconBtn}
+          className={`hidden sm:inline-flex ${iconBtn}`}
         >
           <CalendarDays className="h-3.5 w-3.5" />
         </button>

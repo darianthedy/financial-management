@@ -83,4 +83,14 @@ body {
   textarea {
     font-size: 16px;
   }
+
+  /*
+   * The transaction date-range filter inputs open a native date picker on tap
+   * (no text caret, no keyboard), so they don't trigger iOS's focus zoom and
+   * don't need the 16px floor. Keep them at the surrounding filter text size so
+   * they don't loom larger than the chips, labels and multi-selects beside them.
+   */
+  input[type="date"].filter-date {
+    font-size: 0.875rem; /* text-sm */
+  }
 }
