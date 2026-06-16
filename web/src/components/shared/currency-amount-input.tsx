@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
 interface Props
@@ -76,9 +76,13 @@ function settledText(value: number, decimals: number): string {
 }
 
 export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
-  ({ value, onChange, decimals, allowNegative = false, ...props }, ref) => {
+  ({ value, onChange, decimals, allowNegative = false, className, ...props }, ref) => {
     const [text, setText] = useState(() => settledText(value, decimals));
     const focused = useRef(false);
+    // Local ref so the sign toggle can refocus the field; merged into the
+    // forwarded ref so callers still reach the underlying input.
+    const inputRef = useRef<HTMLInputElement>(null);
+    useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
 
     // Re-sync from the outside (edit prefill, currency/decimals change, reset)
     // — but never while the user is actively typing.
@@ -87,13 +91,32 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
       setText(settledText(value, decimals));
     }, [value, decimals]);
 
-    return (
+    // Mobile numeric/decimal keyboards have no minus key, so a leading "-" can't
+    // be typed there. The toggle flips the sign of the current text and re-parses
+    // it, giving a reachable way to enter negatives on every device.
+    const isNegative = text.trim().startsWith("-");
+    const toggleSign = () => {
+      const nextRaw = isNegative ? text.replace("-", "") : `-${text}`;
+      const { text: nextText, value: nextValue } = parseInput(
+        nextRaw,
+        decimals,
+        true,
+      );
+      // Focus first so the value round-trip below doesn't trigger the settle
+      // effect and wipe a lone "-" typed into an otherwise empty field.
+      inputRef.current?.focus();
+      setText(nextText);
+      onChange(nextValue);
+    };
+
+    const field = (
       <Input
-        ref={ref}
+        ref={inputRef}
         type="text"
         inputMode={decimals === 0 ? "numeric" : "decimal"}
         placeholder="0"
         {...props}
+        className={allowNegative ? `pr-11 ${className ?? ""}`.trim() : className}
         value={text}
         onFocus={(e) => {
           focused.current = true;
@@ -117,6 +140,30 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
           props.onBlur?.(e);
         }}
       />
+    );
+
+    if (!allowNegative) return field;
+
+    return (
+      <div className="relative">
+        {field}
+        <button
+          type="button"
+          // Don't steal focus on press (which would blur + settle the field);
+          // toggleSign refocuses the input itself.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={toggleSign}
+          aria-label="Toggle positive or negative"
+          aria-pressed={isNegative}
+          className={`absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[var(--radius)] border text-base font-medium leading-none transition-colors ${
+            isNegative
+              ? "border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+              : "border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+          }`}
+        >
+          {isNegative ? "−" : "+"}
+        </button>
+      </div>
     );
   },
 );
