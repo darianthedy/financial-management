@@ -625,7 +625,7 @@ ON CONFLICT (id) DO NOTHING;
 COMMIT;
 
 -- ============================================================
--- 2026-01  (7 transaction(s))
+-- 2026-01  (7 transaction(s), 2 tagged duplicate(s))
 -- ============================================================
 BEGIN;
 INSERT INTO transactions
@@ -641,8 +641,8 @@ SELECT
   NULL, NULL                  -- budget_id, fixed_expense_id (n/a)
 FROM (VALUES
     ('9af1dabf-7db7-5a36-a2ba-eb81d96b604d', 'BCA' ,     -14078000, '2026-01-01', 'Savings'               , 'Superbank Deposit'),
-    ('b8570ea4-7688-54ff-9f04-8e520b4ca77f', 'BCA' ,        599000, '2026-01-04', 'Fashion'               , 'Celana'),
-    ('226c422e-79c3-51e7-b10b-71b562b2bcd1', 'BCA' ,        247401, '2026-01-04', 'Fashion'               , 'Sepatu'),
+    ('b8570ea4-7688-54ff-9f04-8e520b4ca77f', 'CARD',        599000, '2026-01-04', 'Fashion'               , 'Celana'),  -- Also in monthly 2026-01 sheet — kept HERE (on CARD) as the source; the monthly row is commented out (see overlaps-2026-01.md)
+    ('226c422e-79c3-51e7-b10b-71b562b2bcd1', 'CARD',        247401, '2026-01-04', 'Fashion'               , 'Sepatu'),  -- Also in monthly 2026-01 sheet — kept HERE (on CARD) as the source; the monthly row is commented out (see overlaps-2026-01.md)
     ('638631d4-3d4b-5eb8-b7ef-2cf6f9c4a3e9', 'BCA' ,       5282500, '2026-01-08', 'SQ Parking'            , 'Parkir Jan-Dec 2026'),
     ('13988da5-32ce-564d-8302-8b2a28d1c976', 'BCA' ,       1600000, '2026-01-20', 'Wedding'               , 'Jember Ticket'),
     ('39549045-34fd-5a5e-8b6b-be17468822d5', 'BCA' ,        177500, '2026-01-21', 'Wedding'               , 'Kertanegara'),
