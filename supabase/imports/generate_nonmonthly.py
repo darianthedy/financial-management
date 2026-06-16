@@ -58,6 +58,9 @@ NS = uuid.UUID("9c1d7b40-5a2e-4f86-b3c1-7e9a0d4f8b22")
 # 6,000,000 ("Contractor 4" here vs the monthly "Papa" allowance) is NOT listed.
 # Extend this when importing additional monthly sheets.
 MONTHLY_OVERLAPS = {
+    # January 2026 (see overlaps-2026-01.md) — both genuine card charges.
+    ("2026-01-04", 599000),     # Celana (Fashion) / card-only charge
+    ("2026-01-04", 247401),     # Sepatu (Fashion) / card-only charge
     # March 2026 (see overlaps-2026-03.md) — all 3 genuine, descriptions match.
     ("2026-03-01", 1695885),    # Apple Developer / Apple Developer
     ("2026-03-05", 642443),     # PBB Alegria / PBB Alegria
