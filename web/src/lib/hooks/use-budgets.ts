@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { BudgetProgress } from "@/lib/types/database";
 import type { BudgetFormValues } from "@/lib/validations/budget";
 import { toMinorUnits } from "@/lib/utils/currency";
+import { navigateMonth } from "@/lib/utils/date";
 
 /**
  * Budget progress for a single month. Reads the live `v_budget_progress` view,
@@ -105,6 +106,46 @@ export async function updateBudget(
 export async function deleteBudget(id: string) {
   const { error } = await supabase.from("budgets").delete().eq("id", id);
   if (error) throw error;
+}
+
+/**
+ * Copy every budget from the previous month into `yearMonth`, preserving name,
+ * description, and periodic_amount. Budgets whose name already exists in the
+ * target month are skipped (the UNIQUE (user_id, name, year_month) constraint).
+ * Returns the number of rows created.
+ */
+export async function copyFromPreviousMonth(yearMonth: string): Promise<number> {
+  const user_id = await currentUserId();
+  const prevMonth = navigateMonth(yearMonth, -1);
+
+  const [{ data: prevRows }, { data: currentRows }] = await Promise.all([
+    supabase
+      .from("budgets")
+      .select("name, description, periodic_amount")
+      .eq("user_id", user_id)
+      .eq("year_month", prevMonth),
+    supabase
+      .from("budgets")
+      .select("name")
+      .eq("user_id", user_id)
+      .eq("year_month", yearMonth),
+  ]);
+
+  const existing = new Set((currentRows ?? []).map((r) => r.name));
+  const toInsert = (prevRows ?? [])
+    .filter((r) => !existing.has(r.name))
+    .map((r) => ({
+      user_id,
+      name: r.name,
+      description: r.description,
+      year_month: yearMonth,
+      periodic_amount: r.periodic_amount,
+    }));
+
+  if (toInsert.length === 0) return 0;
+  const { error } = await supabase.from("budgets").insert(toInsert);
+  if (error) throw error;
+  return toInsert.length;
 }
 
 /**

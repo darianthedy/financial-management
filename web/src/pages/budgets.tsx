@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, CopyPlus } from "lucide-react";
 import {
   useBudgets,
   deleteBudget,
+  copyFromPreviousMonth,
 } from "@/lib/hooks/use-budgets";
 import { BudgetCard } from "@/components/budgets/budget-card";
 import { BudgetForm } from "@/components/budgets/budget-form";
@@ -20,6 +21,7 @@ export default function BudgetsPage() {
   const { budgets, loading, refetch } = useBudgets(yearMonth);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<BudgetProgress | null>(null);
+  const [copying, setCopying] = useState(false);
 
   function openCreate() {
     setEditTarget(null);
@@ -42,14 +44,37 @@ export default function BudgetsPage() {
     refetch();
   }
 
+  async function handleCopy() {
+    setCopying(true);
+    try {
+      const count = await copyFromPreviousMonth(yearMonth);
+      refetch();
+      if (count === 0) {
+        alert(
+          `Nothing to copy — the previous month has no budgets that aren't already in ${formatYearMonth(yearMonth)}.`,
+        );
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to copy budgets");
+    } finally {
+      setCopying(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Budgets</h1>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Add budget
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" onClick={handleCopy} disabled={copying}>
+            <CopyPlus className="h-4 w-4" />
+            {copying ? "Copying…" : "Copy previous month"}
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Add budget
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center justify-center gap-2">
@@ -77,8 +102,15 @@ export default function BudgetsPage() {
       ) : budgets.length === 0 ? (
         <EmptyState
           title="No budgets this month"
-          description="Add a budget to track spending against a monthly target."
-          action={<Button onClick={openCreate}>Add budget</Button>}
+          description="Add a budget to track spending against a monthly target, or copy this month's set from the previous month."
+          action={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleCopy} disabled={copying}>
+                Copy previous month
+              </Button>
+              <Button onClick={openCreate}>Add budget</Button>
+            </div>
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -82,9 +82,9 @@ export default function FixedExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Fixed Expenses</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button variant="outline" onClick={handleCopy} disabled={copying}>
             <CopyPlus className="h-4 w-4" />
             {copying ? "Copying…" : "Copy previous month"}
