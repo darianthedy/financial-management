@@ -7,8 +7,14 @@
 -- ============================================================
 BEGIN;
 
--- NOTE: this spreadsheet does not categorize transactions, so every
---       transaction is imported with category_id = NULL.
+-- NOTE: expenses/transfers are imported with category_id = NULL (this sheet
+--       does not categorize spending). Income is the one exception: its
+--       category = its Description (e.g. Salary, Bank Interest).
+
+-- Categories (income only; create-or-reuse by name).
+INSERT INTO categories (user_id, name) VALUES ('9e36aab2-dc6e-4ff6-9ae1-c81e82225424', 'Salary') ON CONFLICT (user_id, name) DO NOTHING;
+INSERT INTO categories (user_id, name) VALUES ('9e36aab2-dc6e-4ff6-9ae1-c81e82225424', 'ST012T2') ON CONFLICT (user_id, name) DO NOTHING;
+INSERT INTO categories (user_id, name) VALUES ('9e36aab2-dc6e-4ff6-9ae1-c81e82225424', 'Bank Interest') ON CONFLICT (user_id, name) DO NOTHING;
 
 -- Budgets for the month (periodic_amount = the spreadsheet's budget).
 INSERT INTO budgets (user_id, name, year_month, periodic_amount) VALUES ('9e36aab2-dc6e-4ff6-9ae1-c81e82225424', 'Food', '2026-04', 2600000) ON CONFLICT (user_id, name, year_month) DO UPDATE SET periodic_amount = EXCLUDED.periodic_amount;
@@ -38,8 +44,12 @@ INSERT INTO account_monthly_balances (account_id, year_month, balance) VALUES ('
 INSERT INTO account_monthly_balances (account_id, year_month, balance) VALUES ('2f940480-5908-4c11-9fa1-9ff7a58c65c9', '2026-04', 0) ON CONFLICT (account_id, year_month) DO NOTHING;
 INSERT INTO account_monthly_balances (account_id, year_month, balance) VALUES ('2f940480-5908-4c11-9fa1-9ff7a58c65c9', '2026-05', 0) ON CONFLICT (account_id, year_month) DO NOTHING;
 
--- Transactions (136 rows). category_id is always NULL (no categories).
--- Per row: (id, acct, xfer, type, amount, date, budget, fixed, description).
+-- Transactions (136 rows). category_id is set only for income
+-- (= its Description); expenses/transfers stay NULL.
+-- Per row: (id, acct, xfer, type, amount, date, budget, fixed, category, description).
+-- Rows that duplicate a non-monthly-sheet transaction are COMMENTED OUT and
+-- marked 'DUPLICATE of non-monthly sheet' — the non-monthly sheet is kept as
+-- the single source. Review them before running (uncomment to keep instead).
 INSERT INTO transactions
   (id, user_id, account_id, transfer_account_id, type, status,
    amount, description, date, category_id, budget_id, fixed_expense_id)
@@ -49,181 +59,183 @@ SELECT
   CASE v.xfer WHEN 'CARD' THEN '2f940480-5908-4c11-9fa1-9ff7a58c65c9'::uuid ELSE NULL END,
   v.type::transaction_type, 'confirmed',
   v.amount, v.description, v.date::date,
-  NULL,   -- category_id (this sheet does not categorize)
+  c.id,   -- category_id      (income only, matched by name; else NULL)
   b.id,   -- budget_id        (matched by name)
   f.id    -- fixed_expense_id (matched by name)
 FROM (VALUES
     -- 2026-04-01
-    ('d311be78-5f5f-51f1-93a7-8c95896366cd', 'BCA' , NULL  , 'income'  ,    42675000, '2026-04-01', NULL              , NULL                  , 'Salary'),
-    ('2f15d53c-242d-5aa2-8e79-491fef821369', 'BCA' , NULL  , 'expense' ,     5000000, '2026-04-01', NULL              , 'Papa'                , 'Papa'),
-    ('c1ca42e9-0dbb-5851-9634-5589cfb61127', 'BCA' , NULL  , 'expense' ,       18315, '2026-04-01', NULL              , 'Youtube Premium'     , 'Youtube Premium'),
-    ('ed5dc42c-b836-5dd8-916e-7d81430ad99d', 'BCA' , NULL  , 'expense' ,       46500, '2026-04-01', NULL              , 'Netflix'             , 'Netflix'),
-    ('ee8331ee-2ba3-544f-bf32-cfa495a7bd25', 'BCA' , NULL  , 'expense' ,      175000, '2026-04-01', NULL              , 'IPL VPP'             , 'IPL VPP'),
+    ('d311be78-5f5f-51f1-93a7-8c95896366cd', 'BCA' , NULL  , 'income'  ,    42675000, '2026-04-01', NULL              , NULL                  , 'Salary'          , 'Salary'),
+    ('2f15d53c-242d-5aa2-8e79-491fef821369', 'BCA' , NULL  , 'expense' ,     5000000, '2026-04-01', NULL              , 'Papa'                , NULL              , NULL),
+    ('c1ca42e9-0dbb-5851-9634-5589cfb61127', 'BCA' , NULL  , 'expense' ,       18315, '2026-04-01', NULL              , 'Youtube Premium'     , NULL              , NULL),
+    ('ed5dc42c-b836-5dd8-916e-7d81430ad99d', 'BCA' , NULL  , 'expense' ,       46500, '2026-04-01', NULL              , 'Netflix'             , NULL              , NULL),
+    ('ee8331ee-2ba3-544f-bf32-cfa495a7bd25', 'BCA' , NULL  , 'expense' ,      175000, '2026-04-01', NULL              , 'IPL VPP'             , NULL              , NULL),
     -- 2026-04-02
-    ('da72a072-6ad2-5664-848f-4c059444da95', 'CARD', NULL  , 'expense' ,      234280, '2026-04-02', 'Others'          , NULL                  , 'Laptop Stand'),
-    ('31892730-c552-5629-9656-fe0e04a2ebc9', 'CARD', NULL  , 'expense' ,       84300, '2026-04-02', 'Food'            , NULL                  , NULL),
-    ('a6a3e1e9-b764-564e-a892-7944d6cf5f66', 'CARD', NULL  , 'expense' ,      100000, '2026-04-02', 'Others'          , NULL                  , 'ByU'),
+    ('da72a072-6ad2-5664-848f-4c059444da95', 'CARD', NULL  , 'expense' ,      234280, '2026-04-02', 'Others'          , NULL                  , NULL              , 'Laptop Stand'),
+    ('31892730-c552-5629-9656-fe0e04a2ebc9', 'CARD', NULL  , 'expense' ,       84300, '2026-04-02', 'Food'            , NULL                  , NULL              , NULL),
+    ('a6a3e1e9-b764-564e-a892-7944d6cf5f66', 'CARD', NULL  , 'expense' ,      100000, '2026-04-02', 'Others'          , NULL                  , NULL              , 'ByU'),
     -- 2026-04-03
-    ('dc8a1f62-6a2e-50f2-b681-dfb0d1edc40d', 'CARD', NULL  , 'expense' ,       20000, '2026-04-03', 'Social'          , NULL                  , NULL),
+    ('dc8a1f62-6a2e-50f2-b681-dfb0d1edc40d', 'CARD', NULL  , 'expense' ,       20000, '2026-04-03', 'Social'          , NULL                  , NULL              , NULL),
     -- 2026-04-04
-    ('d24e8d2f-5c1e-564f-b2c0-6e8db0939a12', 'CARD', NULL  , 'expense' ,      -10000, '2026-04-04', 'Others'          , NULL                  , 'Dana'),
-    ('a3f7945f-878a-5bb8-bc20-d0652580dfdd', 'CARD', NULL  , 'expense' ,       -1000, '2026-04-04', 'Others'          , NULL                  , 'Shopee'),
-    ('ca95ce2b-fb43-50c6-a11c-5d04b6fb43f5', 'CARD', NULL  , 'expense' ,      -10000, '2026-04-04', 'Others'          , NULL                  , 'Tokopedia'),
-    ('42ff4a64-4a48-55c2-95d3-769e506241fd', 'CARD', NULL  , 'expense' ,       -1000, '2026-04-04', 'Others'          , NULL                  , 'GoPay'),
-    ('e62598de-e37d-5b28-9296-89688f754597', 'CARD', NULL  , 'expense' ,      -10000, '2026-04-04', 'Others'          , NULL                  , 'Steam'),
-    ('a7d0ca26-bb44-5b5c-bd18-318304dee79e', 'CARD', NULL  , 'expense' ,       -1000, '2026-04-04', 'Others'          , NULL                  , 'Grab'),
-    ('314ec84a-8bad-56d1-bd9e-ab807ac70b0e', 'CARD', NULL  , 'expense' ,      472184, '2026-04-04', NULL              , NULL                  , 'BT Keyboard'),
-    ('0386a69f-f67f-5219-97a9-fcec9a7ee987', 'CARD', NULL  , 'expense' ,     1198752, '2026-04-04', NULL              , NULL                  , 'Crocs'),
-    ('54582690-427b-54c0-bac7-e69ba2b5e3d3', 'CARD', NULL  , 'expense' ,     2679963, '2026-04-04', NULL              , NULL                  , 'Secret Lab Recliner'),
-    ('b130fe4c-e12b-5836-a73d-e23c88d3e91f', 'CARD', NULL  , 'expense' ,       10000, '2026-04-04', 'Others'          , NULL                  , 'Dana'),
-    ('a44090ad-5f36-5735-b989-67211bcddbfe', 'CARD', NULL  , 'expense' ,        1000, '2026-04-04', 'Others'          , NULL                  , 'Shopee'),
-    ('238df67e-0cef-5763-8844-288dc2926a38', 'CARD', NULL  , 'expense' ,       10000, '2026-04-04', 'Others'          , NULL                  , 'Tokopedia'),
-    ('751ac8bd-b30e-571c-ada9-504f03e21f83', 'CARD', NULL  , 'expense' ,        1000, '2026-04-04', 'Others'          , NULL                  , 'GoPay'),
-    ('f06272cd-0611-5f45-8821-9193488dc940', 'CARD', NULL  , 'expense' ,        1000, '2026-04-04', 'Others'          , NULL                  , 'Grab'),
-    ('e42f859b-4f2f-5ad3-8769-5ceee961ce93', 'CARD', NULL  , 'expense' ,       10000, '2026-04-04', 'Others'          , NULL                  , 'Steam'),
-    ('11530bb7-aec3-5a8a-afab-d0dea6142f1b', 'CARD', NULL  , 'expense' ,      102854, '2026-04-04', 'Food'            , NULL                  , NULL),
-    ('68fc5ed7-4c53-598b-8ecd-3c7484b34eae', 'CARD', NULL  , 'expense' ,       20000, '2026-04-04', 'Social'          , NULL                  , NULL),
-    ('555b82a9-f7aa-5be0-bfc0-7a8a14ead377', 'BCA' , NULL  , 'expense' ,      158500, '2026-04-04', 'Food'            , NULL                  , NULL),
+    ('d24e8d2f-5c1e-564f-b2c0-6e8db0939a12', 'CARD', NULL  , 'expense' ,      -10000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Dana'),
+    ('a3f7945f-878a-5bb8-bc20-d0652580dfdd', 'CARD', NULL  , 'expense' ,       -1000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Shopee'),
+    ('ca95ce2b-fb43-50c6-a11c-5d04b6fb43f5', 'CARD', NULL  , 'expense' ,      -10000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Tokopedia'),
+    ('42ff4a64-4a48-55c2-95d3-769e506241fd', 'CARD', NULL  , 'expense' ,       -1000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'GoPay'),
+    ('e62598de-e37d-5b28-9296-89688f754597', 'CARD', NULL  , 'expense' ,      -10000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Steam'),
+    ('a7d0ca26-bb44-5b5c-bd18-318304dee79e', 'CARD', NULL  , 'expense' ,       -1000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Grab'),
+    -- ('314ec84a-8bad-56d1-bd9e-ab807ac70b0e', 'CARD', NULL  , 'expense' ,      472184, '2026-04-04', NULL              , NULL                  , NULL              , 'BT Keyboard'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-04.md
+    -- ('0386a69f-f67f-5219-97a9-fcec9a7ee987', 'CARD', NULL  , 'expense' ,     1198752, '2026-04-04', NULL              , NULL                  , NULL              , 'Crocs'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-04.md
+    -- ('54582690-427b-54c0-bac7-e69ba2b5e3d3', 'CARD', NULL  , 'expense' ,     2679963, '2026-04-04', NULL              , NULL                  , NULL              , 'Secret Lab Recliner'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-04.md
+    ('b130fe4c-e12b-5836-a73d-e23c88d3e91f', 'CARD', NULL  , 'expense' ,       10000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Dana'),
+    ('a44090ad-5f36-5735-b989-67211bcddbfe', 'CARD', NULL  , 'expense' ,        1000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Shopee'),
+    ('238df67e-0cef-5763-8844-288dc2926a38', 'CARD', NULL  , 'expense' ,       10000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Tokopedia'),
+    ('751ac8bd-b30e-571c-ada9-504f03e21f83', 'CARD', NULL  , 'expense' ,        1000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'GoPay'),
+    ('f06272cd-0611-5f45-8821-9193488dc940', 'CARD', NULL  , 'expense' ,        1000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Grab'),
+    ('e42f859b-4f2f-5ad3-8769-5ceee961ce93', 'CARD', NULL  , 'expense' ,       10000, '2026-04-04', 'Others'          , NULL                  , NULL              , 'Steam'),
+    ('11530bb7-aec3-5a8a-afab-d0dea6142f1b', 'CARD', NULL  , 'expense' ,      102854, '2026-04-04', 'Food'            , NULL                  , NULL              , NULL),
+    ('68fc5ed7-4c53-598b-8ecd-3c7484b34eae', 'CARD', NULL  , 'expense' ,       20000, '2026-04-04', 'Social'          , NULL                  , NULL              , NULL),
+    ('555b82a9-f7aa-5be0-bfc0-7a8a14ead377', 'BCA' , NULL  , 'expense' ,      158500, '2026-04-04', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-05
-    ('62bcc826-5d62-52cf-b683-6fb48f8c1291', 'CARD', NULL  , 'expense' ,    16099749, '2026-04-05', NULL              , NULL                  , 'Material Dunia Bangunan'),
-    ('a5c20ed3-710e-5323-9601-750cb2e3e84e', 'CARD', NULL  , 'expense' ,      135100, '2026-04-05', 'Food'            , NULL                  , NULL),
-    ('15469130-224b-51ef-a774-436ed84d3dfb', 'CARD', NULL  , 'expense' ,        2000, '2026-04-05', 'Food'            , NULL                  , NULL),
-    ('99d4cf87-ae13-529d-8779-cb7a3277d10e', 'BCA' , 'CARD', 'transfer',    20000000, '2026-04-05', NULL              , NULL                  , NULL),
+    -- ('62bcc826-5d62-52cf-b683-6fb48f8c1291', 'CARD', NULL  , 'expense' ,    16099749, '2026-04-05', NULL              , NULL                  , NULL              , 'Material Dunia Bangunan'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-04.md
+    ('a5c20ed3-710e-5323-9601-750cb2e3e84e', 'CARD', NULL  , 'expense' ,      135100, '2026-04-05', 'Food'            , NULL                  , NULL              , NULL),
+    ('15469130-224b-51ef-a774-436ed84d3dfb', 'CARD', NULL  , 'expense' ,        2000, '2026-04-05', 'Food'            , NULL                  , NULL              , NULL),
+    ('99d4cf87-ae13-529d-8779-cb7a3277d10e', 'BCA' , 'CARD', 'transfer',    20000000, '2026-04-05', NULL              , NULL                  , NULL              , NULL),
     -- 2026-04-06
-    ('b7626733-bd77-5a08-8e82-0214b05b0785', 'CARD', NULL  , 'expense' ,       37000, '2026-04-06', 'Food'            , NULL                  , NULL),
-    ('4ca9e2ca-58cc-566b-bcea-594666dafebe', 'CARD', NULL  , 'expense' ,       35000, '2026-04-06', 'Food'            , NULL                  , NULL),
-    ('24ca2e24-5131-573c-9e71-04777544d481', 'CARD', NULL  , 'expense' ,        2000, '2026-04-06', 'Food'            , NULL                  , NULL),
-    ('a87bdc26-1306-524a-93af-c32f2468044e', 'BCA' , NULL  , 'expense' ,       72730, '2026-04-06', NULL              , 'IPL Alegria'         , 'IPL Alegria'),
-    ('cf6b9e8b-c203-5e13-b7d1-8433d759e712', 'CARD', NULL  , 'expense' ,      256010, '2026-04-06', NULL              , 'Electricity Alegria' , 'Electricity Alegria'),
+    ('b7626733-bd77-5a08-8e82-0214b05b0785', 'CARD', NULL  , 'expense' ,       37000, '2026-04-06', 'Food'            , NULL                  , NULL              , NULL),
+    ('4ca9e2ca-58cc-566b-bcea-594666dafebe', 'CARD', NULL  , 'expense' ,       35000, '2026-04-06', 'Food'            , NULL                  , NULL              , NULL),
+    ('24ca2e24-5131-573c-9e71-04777544d481', 'CARD', NULL  , 'expense' ,        2000, '2026-04-06', 'Food'            , NULL                  , NULL              , NULL),
+    ('a87bdc26-1306-524a-93af-c32f2468044e', 'BCA' , NULL  , 'expense' ,       72730, '2026-04-06', NULL              , 'IPL Alegria'         , NULL              , NULL),
+    ('cf6b9e8b-c203-5e13-b7d1-8433d759e712', 'CARD', NULL  , 'expense' ,      256010, '2026-04-06', NULL              , 'Electricity Alegria' , NULL              , NULL),
     -- 2026-04-07
-    ('13bce345-b14a-5179-a22f-5fbee36de496', 'CARD', NULL  , 'expense' ,       80000, '2026-04-07', NULL              , 'Paket Data'          , 'Paket Data'),
-    ('1f7f655a-f5c5-5212-a977-6b34e9c876e8', 'CARD', NULL  , 'expense' ,       45000, '2026-04-07', 'Food'            , NULL                  , NULL),
-    ('824699d2-a0f2-5969-bd08-3dfdd3b95621', 'CARD', NULL  , 'expense' ,       23870, '2026-04-07', 'Food'            , NULL                  , NULL),
-    ('437beb1c-0adb-5688-869b-204a05763244', 'BCA' , NULL  , 'expense' ,        5900, '2026-04-07', 'Food'            , NULL                  , NULL),
+    ('13bce345-b14a-5179-a22f-5fbee36de496', 'CARD', NULL  , 'expense' ,       80000, '2026-04-07', NULL              , 'Paket Data'          , NULL              , NULL),
+    ('1f7f655a-f5c5-5212-a977-6b34e9c876e8', 'CARD', NULL  , 'expense' ,       45000, '2026-04-07', 'Food'            , NULL                  , NULL              , NULL),
+    ('824699d2-a0f2-5969-bd08-3dfdd3b95621', 'CARD', NULL  , 'expense' ,       23870, '2026-04-07', 'Food'            , NULL                  , NULL              , NULL),
+    ('437beb1c-0adb-5688-869b-204a05763244', 'BCA' , NULL  , 'expense' ,        5900, '2026-04-07', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-08
-    ('93917d5e-ca93-50c0-8605-9c4234b642cb', 'CARD', NULL  , 'expense' ,      130600, '2026-04-08', 'Food'            , NULL                  , NULL),
-    ('f9a019b5-679e-5ee8-8a41-fc2619ed8c57', 'CARD', NULL  , 'expense' ,      120831, '2026-04-08', 'Food'            , NULL                  , NULL),
+    ('93917d5e-ca93-50c0-8605-9c4234b642cb', 'CARD', NULL  , 'expense' ,      130600, '2026-04-08', 'Food'            , NULL                  , NULL              , NULL),
+    ('f9a019b5-679e-5ee8-8a41-fc2619ed8c57', 'CARD', NULL  , 'expense' ,      120831, '2026-04-08', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-09
-    ('567f5d7f-d301-5fe2-9810-7bbb351e1b96', 'CARD', NULL  , 'expense' ,       80500, '2026-04-09', NULL              , 'PDAM'                , 'PDAM'),
-    ('993eb3a0-3c54-55f8-b89a-1607f9db1bbd', 'CARD', NULL  , 'expense' ,      100153, '2026-04-09', 'Others'          , NULL                  , 'Storage Bag'),
-    ('e034ae7b-7caa-58a1-a02a-b811c62deff4', 'CARD', NULL  , 'expense' ,       29000, '2026-04-09', 'Food'            , NULL                  , NULL),
-    ('8020b94e-7fd9-51c7-95ed-2db612704769', 'CARD', NULL  , 'expense' ,      365000, '2026-04-09', 'Others'          , NULL                  , 'MD'),
-    ('cbabf4b2-6b30-51cb-81d1-e2fedd39f033', 'CARD', NULL  , 'expense' ,      500000, '2026-04-09', 'Transport'       , NULL                  , NULL),
-    ('6981eb8f-627f-534a-987a-8c3d7bc498b6', 'CARD', NULL  , 'expense' ,        3100, '2026-04-09', 'Others'          , NULL                  , NULL),
-    ('b85960d4-44c0-5b5c-84f9-e4527b270329', 'BCA' , NULL  , 'expense' ,        9900, '2026-04-09', 'Food'            , NULL                  , NULL),
-    ('2e6111b1-7a65-50d5-a3bd-8f408375de22', 'BCA' , NULL  , 'expense' ,       10150, '2026-04-09', 'Others'          , NULL                  , 'ShopeePay'),
+    ('567f5d7f-d301-5fe2-9810-7bbb351e1b96', 'CARD', NULL  , 'expense' ,       80500, '2026-04-09', NULL              , 'PDAM'                , NULL              , NULL),
+    ('993eb3a0-3c54-55f8-b89a-1607f9db1bbd', 'CARD', NULL  , 'expense' ,      100153, '2026-04-09', 'Others'          , NULL                  , NULL              , 'Storage Bag'),
+    ('e034ae7b-7caa-58a1-a02a-b811c62deff4', 'CARD', NULL  , 'expense' ,       29000, '2026-04-09', 'Food'            , NULL                  , NULL              , NULL),
+    ('8020b94e-7fd9-51c7-95ed-2db612704769', 'CARD', NULL  , 'expense' ,      365000, '2026-04-09', 'Others'          , NULL                  , NULL              , 'MD'),
+    ('cbabf4b2-6b30-51cb-81d1-e2fedd39f033', 'CARD', NULL  , 'expense' ,      500000, '2026-04-09', 'Transport'       , NULL                  , NULL              , NULL),
+    ('6981eb8f-627f-534a-987a-8c3d7bc498b6', 'CARD', NULL  , 'expense' ,        3100, '2026-04-09', 'Others'          , NULL                  , NULL              , NULL),
+    ('b85960d4-44c0-5b5c-84f9-e4527b270329', 'BCA' , NULL  , 'expense' ,        9900, '2026-04-09', 'Food'            , NULL                  , NULL              , NULL),
+    ('2e6111b1-7a65-50d5-a3bd-8f408375de22', 'BCA' , NULL  , 'expense' ,       10150, '2026-04-09', 'Others'          , NULL                  , NULL              , 'ShopeePay'),
     -- 2026-04-10
-    ('f9fcc29d-64c1-51c7-821a-5e5e72574397', 'CARD', NULL  , 'expense' ,       14500, '2026-04-10', 'Food'            , NULL                  , NULL),
-    ('6c73fc01-86d6-5c6f-9d2f-27de9340d3dd', 'CARD', NULL  , 'expense' ,      133050, '2026-04-10', 'Food'            , NULL                  , NULL),
-    ('c83fc257-c72b-5d20-a002-51aa0f403584', 'CARD', NULL  , 'expense' ,        2000, '2026-04-10', 'Food'            , NULL                  , NULL),
-    ('f40e70a4-a34b-518c-8313-ca3c0d0d5c79', 'CARD', NULL  , 'expense' ,        2000, '2026-04-10', 'Food'            , NULL                  , NULL),
-    ('c606d321-babb-5008-8641-a49632464545', 'BCA' , NULL  , 'income'  ,      143991, '2026-04-10', NULL              , NULL                  , 'ST012T2'),
+    ('f9fcc29d-64c1-51c7-821a-5e5e72574397', 'CARD', NULL  , 'expense' ,       14500, '2026-04-10', 'Food'            , NULL                  , NULL              , NULL),
+    ('6c73fc01-86d6-5c6f-9d2f-27de9340d3dd', 'CARD', NULL  , 'expense' ,      133050, '2026-04-10', 'Food'            , NULL                  , NULL              , NULL),
+    ('c83fc257-c72b-5d20-a002-51aa0f403584', 'CARD', NULL  , 'expense' ,        2000, '2026-04-10', 'Food'            , NULL                  , NULL              , NULL),
+    ('f40e70a4-a34b-518c-8313-ca3c0d0d5c79', 'CARD', NULL  , 'expense' ,        2000, '2026-04-10', 'Food'            , NULL                  , NULL              , NULL),
+    ('c606d321-babb-5008-8641-a49632464545', 'BCA' , NULL  , 'income'  ,      143991, '2026-04-10', NULL              , NULL                  , 'ST012T2'         , 'ST012T2'),
     -- 2026-04-11
-    ('acc04a21-f153-593f-a425-7bdbfaa2e805', 'CARD', NULL  , 'expense' ,       46000, '2026-04-11', 'Social'          , NULL                  , NULL),
-    ('542c4ed4-c52b-57bc-86e7-250a0fbadb5f', 'CARD', NULL  , 'expense' ,       37000, '2026-04-11', 'Social'          , NULL                  , NULL),
-    ('ceb48f01-b70c-579a-b1b9-b36977b281ff', 'CARD', NULL  , 'expense' ,       40000, '2026-04-11', 'Social'          , NULL                  , NULL),
+    ('acc04a21-f153-593f-a425-7bdbfaa2e805', 'CARD', NULL  , 'expense' ,       46000, '2026-04-11', 'Social'          , NULL                  , NULL              , NULL),
+    ('542c4ed4-c52b-57bc-86e7-250a0fbadb5f', 'CARD', NULL  , 'expense' ,       37000, '2026-04-11', 'Social'          , NULL                  , NULL              , NULL),
+    ('ceb48f01-b70c-579a-b1b9-b36977b281ff', 'CARD', NULL  , 'expense' ,       40000, '2026-04-11', 'Social'          , NULL                  , NULL              , NULL),
     -- 2026-04-12
-    ('044776eb-1c43-5087-a3e9-1aea73ae3fed', 'BCA' , NULL  , 'expense' ,      430550, '2026-04-12', 'Social'          , NULL                  , NULL),
+    ('044776eb-1c43-5087-a3e9-1aea73ae3fed', 'BCA' , NULL  , 'expense' ,      430550, '2026-04-12', 'Social'          , NULL                  , NULL              , NULL),
     -- 2026-04-13
-    ('0058994a-e408-5a28-91ac-f439e654ae7d', 'CARD', NULL  , 'expense' ,      427350, '2026-04-13', NULL              , 'First Media'         , 'First Media'),
+    ('0058994a-e408-5a28-91ac-f439e654ae7d', 'CARD', NULL  , 'expense' ,      427350, '2026-04-13', NULL              , 'First Media'         , NULL              , NULL),
     -- 2026-04-14
-    ('05f654a9-d000-562b-938b-af8fcbf1a197', 'CARD', NULL  , 'expense' ,       83600, '2026-04-14', 'Food'            , NULL                  , NULL),
-    ('f1f2a11e-ce9c-5368-b050-a45a0744c0d7', 'CARD', NULL  , 'expense' ,       35000, '2026-04-14', 'Food'            , NULL                  , NULL),
-    ('3984c38c-a20b-50a4-ae60-31fb5089d2fc', 'CARD', NULL  , 'expense' ,       69200, '2026-04-14', 'Food'            , NULL                  , NULL),
-    ('daf2b355-7328-584d-9e8c-7485b136ee8a', 'BCA' , NULL  , 'expense' ,     1001500, '2026-04-14', 'Transport'       , NULL                  , NULL),
-    ('aa8ee5ce-76a1-53a9-9b3e-19d2cd89c8ec', 'BCA' , NULL  , 'expense' ,      192303, '2026-04-14', NULL              , 'IPL Cilejit'         , 'IPL Cilejit'),
+    ('05f654a9-d000-562b-938b-af8fcbf1a197', 'CARD', NULL  , 'expense' ,       83600, '2026-04-14', 'Food'            , NULL                  , NULL              , NULL),
+    ('f1f2a11e-ce9c-5368-b050-a45a0744c0d7', 'CARD', NULL  , 'expense' ,       35000, '2026-04-14', 'Food'            , NULL                  , NULL              , NULL),
+    ('3984c38c-a20b-50a4-ae60-31fb5089d2fc', 'CARD', NULL  , 'expense' ,       69200, '2026-04-14', 'Food'            , NULL                  , NULL              , NULL),
+    ('daf2b355-7328-584d-9e8c-7485b136ee8a', 'BCA' , NULL  , 'expense' ,     1001500, '2026-04-14', 'Transport'       , NULL                  , NULL              , NULL),
+    ('aa8ee5ce-76a1-53a9-9b3e-19d2cd89c8ec', 'BCA' , NULL  , 'expense' ,      192303, '2026-04-14', NULL              , 'IPL Cilejit'         , NULL              , NULL),
     -- 2026-04-15
-    ('6edcdd10-4c4f-56ad-be93-a040be9ef120', 'CARD', NULL  , 'expense' ,       85000, '2026-04-15', 'Food'            , NULL                  , NULL),
-    ('653b7811-00ff-5456-b201-98d88e964857', 'CARD', NULL  , 'expense' ,       92200, '2026-04-15', 'Food'            , NULL                  , NULL),
-    ('f60a3c94-a929-526f-8840-e0e61b8f4df4', 'CARD', NULL  , 'expense' ,        5000, '2026-04-15', 'Food'            , NULL                  , NULL),
-    ('14cdd767-20c3-5782-b46f-9971e6c130a5', 'BCA' , NULL  , 'expense' ,       39250, '2026-04-15', 'Food'            , NULL                  , NULL),
-    ('823a5e16-8fa0-5d04-b747-ed8f97e7859c', 'BCA' , NULL  , 'expense' ,      -22000, '2026-04-15', 'Food'            , NULL                  , NULL),
+    ('6edcdd10-4c4f-56ad-be93-a040be9ef120', 'CARD', NULL  , 'expense' ,       85000, '2026-04-15', 'Food'            , NULL                  , NULL              , NULL),
+    ('653b7811-00ff-5456-b201-98d88e964857', 'CARD', NULL  , 'expense' ,       92200, '2026-04-15', 'Food'            , NULL                  , NULL              , NULL),
+    ('f60a3c94-a929-526f-8840-e0e61b8f4df4', 'CARD', NULL  , 'expense' ,        5000, '2026-04-15', 'Food'            , NULL                  , NULL              , NULL),
+    ('14cdd767-20c3-5782-b46f-9971e6c130a5', 'BCA' , NULL  , 'expense' ,       39250, '2026-04-15', 'Food'            , NULL                  , NULL              , NULL),
+    ('823a5e16-8fa0-5d04-b747-ed8f97e7859c', 'BCA' , NULL  , 'expense' ,      -22000, '2026-04-15', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-16
-    ('b22c55ea-6a76-5f69-a3bf-5f95742d274d', 'CARD', NULL  , 'expense' ,       29000, '2026-04-16', 'Food'            , NULL                  , NULL),
-    ('28d27e20-7608-5adb-b38c-5e1212335c2b', 'CARD', NULL  , 'expense' ,       44333, '2026-04-16', 'Food'            , NULL                  , NULL),
-    ('ff9a9a10-b8ef-5416-bec9-aca6efbc5cd5', 'CARD', NULL  , 'expense' ,       66200, '2026-04-16', 'Food'            , NULL                  , NULL),
-    ('ee188312-42db-5be9-8d63-ac629ef8c311', 'CARD', NULL  , 'expense' ,       47000, '2026-04-16', 'Food'            , NULL                  , NULL),
+    ('b22c55ea-6a76-5f69-a3bf-5f95742d274d', 'CARD', NULL  , 'expense' ,       29000, '2026-04-16', 'Food'            , NULL                  , NULL              , NULL),
+    ('28d27e20-7608-5adb-b38c-5e1212335c2b', 'CARD', NULL  , 'expense' ,       44333, '2026-04-16', 'Food'            , NULL                  , NULL              , NULL),
+    ('ff9a9a10-b8ef-5416-bec9-aca6efbc5cd5', 'CARD', NULL  , 'expense' ,       66200, '2026-04-16', 'Food'            , NULL                  , NULL              , NULL),
+    ('ee188312-42db-5be9-8d63-ac629ef8c311', 'CARD', NULL  , 'expense' ,       47000, '2026-04-16', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-17
-    ('bd3bfd16-c901-5caa-9220-0f535bc8aadd', 'CARD', NULL  , 'expense' ,       99570, '2026-04-17', 'Food'            , NULL                  , NULL),
+    ('bd3bfd16-c901-5caa-9220-0f535bc8aadd', 'CARD', NULL  , 'expense' ,       99570, '2026-04-17', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-18
-    ('9ce756c6-38f3-5949-9e1b-17d1b38e32b2', 'CARD', NULL  , 'expense' ,      161000, '2026-04-18', 'Social'          , NULL                  , NULL),
-    ('356a2ac0-a41d-5b65-bb19-b4fc3c7682a5', 'CARD', NULL  , 'expense' ,       53000, '2026-04-18', 'Food'            , NULL                  , NULL),
-    ('96150dad-5e6d-534d-a34d-dc233221117d', 'CARD', NULL  , 'expense' ,      554484, '2026-04-18', NULL              , NULL                  , 'Dunia Bangunan'),
+    ('9ce756c6-38f3-5949-9e1b-17d1b38e32b2', 'CARD', NULL  , 'expense' ,      161000, '2026-04-18', 'Social'          , NULL                  , NULL              , NULL),
+    ('356a2ac0-a41d-5b65-bb19-b4fc3c7682a5', 'CARD', NULL  , 'expense' ,       53000, '2026-04-18', 'Food'            , NULL                  , NULL              , NULL),
+    -- ('96150dad-5e6d-534d-a34d-dc233221117d', 'CARD', NULL  , 'expense' ,      554484, '2026-04-18', NULL              , NULL                  , NULL              , 'Dunia Bangunan'),  -- DUPLICATE of non-monthly sheet — commented out for review, see overlaps-2026-04.md
     -- 2026-04-20
-    ('ae99eaf0-2ffc-58aa-8834-93e1e81fc698', 'BCA' , NULL  , 'expense' ,       20000, '2026-04-20', NULL              , 'ADM BCA'             , 'ADM BCA'),
-    ('db329e91-5cc1-5a3b-b54c-d5ddc1b6db06', 'BCA' , NULL  , 'expense' ,      -50000, '2026-04-20', 'Food'            , NULL                  , NULL),
-    ('42963e7f-5c69-547d-8796-cfea50b80fad', 'BCA' , NULL  , 'expense' ,       51000, '2026-04-20', 'Transport'       , NULL                  , NULL),
-    ('aefc567e-3a37-5897-b7ec-d07741bed4f9', 'CARD', NULL  , 'expense' ,       24561, '2026-04-20', 'Transport'       , NULL                  , NULL),
-    ('2b72e440-3e3e-5502-8f91-0578157d418c', 'CARD', NULL  , 'expense' ,       54422, '2026-04-20', 'Food'            , NULL                  , NULL),
-    ('9785ad27-fd36-5358-ac7b-8894eb01b47b', 'CARD', NULL  , 'expense' ,       80000, '2026-04-20', 'Food'            , NULL                  , NULL),
+    ('ae99eaf0-2ffc-58aa-8834-93e1e81fc698', 'BCA' , NULL  , 'expense' ,       20000, '2026-04-20', NULL              , 'ADM BCA'             , NULL              , NULL),
+    ('db329e91-5cc1-5a3b-b54c-d5ddc1b6db06', 'BCA' , NULL  , 'expense' ,      -50000, '2026-04-20', 'Food'            , NULL                  , NULL              , NULL),
+    ('42963e7f-5c69-547d-8796-cfea50b80fad', 'BCA' , NULL  , 'expense' ,       51000, '2026-04-20', 'Transport'       , NULL                  , NULL              , NULL),
+    ('aefc567e-3a37-5897-b7ec-d07741bed4f9', 'CARD', NULL  , 'expense' ,       24561, '2026-04-20', 'Transport'       , NULL                  , NULL              , NULL),
+    ('2b72e440-3e3e-5502-8f91-0578157d418c', 'CARD', NULL  , 'expense' ,       54422, '2026-04-20', 'Food'            , NULL                  , NULL              , NULL),
+    ('9785ad27-fd36-5358-ac7b-8894eb01b47b', 'CARD', NULL  , 'expense' ,       80000, '2026-04-20', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-21
-    ('d52f5bd4-b3b8-55bb-8bc0-76e6d7ccd453', 'CARD', NULL  , 'expense' ,        2000, '2026-04-21', 'Food'            , NULL                  , NULL),
-    ('8bd51abe-5207-5c05-a1da-935d2fae994b', 'CARD', NULL  , 'expense' ,       95000, '2026-04-21', 'Food'            , NULL                  , NULL),
-    ('929f27df-8fc5-59cc-983e-df24067bb003', 'CARD', NULL  , 'expense' ,       50000, '2026-04-21', 'Social'          , NULL                  , NULL),
+    ('d52f5bd4-b3b8-55bb-8bc0-76e6d7ccd453', 'CARD', NULL  , 'expense' ,        2000, '2026-04-21', 'Food'            , NULL                  , NULL              , NULL),
+    ('8bd51abe-5207-5c05-a1da-935d2fae994b', 'CARD', NULL  , 'expense' ,       95000, '2026-04-21', 'Food'            , NULL                  , NULL              , NULL),
+    ('929f27df-8fc5-59cc-983e-df24067bb003', 'CARD', NULL  , 'expense' ,       50000, '2026-04-21', 'Social'          , NULL                  , NULL              , NULL),
     -- 2026-04-22
-    ('02a178bf-c20a-5c6a-a104-c5aedd6da0e6', 'CARD', NULL  , 'expense' ,        7000, '2026-04-22', 'Transport'       , NULL                  , NULL),
-    ('b67ea44c-4cd9-5431-afe2-7b2dffd466c6', 'CARD', NULL  , 'expense' ,        5000, '2026-04-22', 'Transport'       , NULL                  , NULL),
-    ('676c70df-4671-5333-841f-36485614883b', 'CARD', NULL  , 'expense' ,       15000, '2026-04-22', 'Food'            , NULL                  , NULL),
-    ('e8c4aadb-874f-5be6-8536-02b23c92d58a', 'CARD', NULL  , 'expense' ,       63000, '2026-04-22', 'Food'            , NULL                  , NULL),
-    ('6f6f2b41-6106-55fe-b4b4-55a4391fb0d3', 'CARD', NULL  , 'expense' ,       25942, '2026-04-22', 'Food'            , NULL                  , NULL),
-    ('c380a3dc-3087-5a46-bc51-c3b8c3224bf1', 'CARD', NULL  , 'expense' ,       25500, '2026-04-22', 'Social'          , NULL                  , NULL),
-    ('98e8cfc6-2176-5438-b0fd-04a4f75bc20e', 'CARD', NULL  , 'expense' ,       93000, '2026-04-22', 'Social'          , NULL                  , NULL),
-    ('9e3e07d9-8372-592c-b087-162a72dff2d5', 'BCA' , NULL  , 'expense' ,      507500, '2026-04-22', 'Others'          , NULL                  , 'Cash'),
-    ('ba1d2955-da2b-5e3a-8797-e7dd0a8bbf6a', 'BCA' , NULL  , 'expense' ,       51000, '2026-04-22', 'Transport'       , NULL                  , NULL),
-    ('52f77027-11f9-5e16-b485-5ccbc5e265b9', 'BCA' , NULL  , 'expense' ,      501000, '2026-04-22', 'Transport'       , NULL                  , NULL),
+    ('02a178bf-c20a-5c6a-a104-c5aedd6da0e6', 'CARD', NULL  , 'expense' ,        7000, '2026-04-22', 'Transport'       , NULL                  , NULL              , NULL),
+    ('b67ea44c-4cd9-5431-afe2-7b2dffd466c6', 'CARD', NULL  , 'expense' ,        5000, '2026-04-22', 'Transport'       , NULL                  , NULL              , NULL),
+    ('676c70df-4671-5333-841f-36485614883b', 'CARD', NULL  , 'expense' ,       15000, '2026-04-22', 'Food'            , NULL                  , NULL              , NULL),
+    ('e8c4aadb-874f-5be6-8536-02b23c92d58a', 'CARD', NULL  , 'expense' ,       63000, '2026-04-22', 'Food'            , NULL                  , NULL              , NULL),
+    ('6f6f2b41-6106-55fe-b4b4-55a4391fb0d3', 'CARD', NULL  , 'expense' ,       25942, '2026-04-22', 'Food'            , NULL                  , NULL              , NULL),
+    ('c380a3dc-3087-5a46-bc51-c3b8c3224bf1', 'CARD', NULL  , 'expense' ,       25500, '2026-04-22', 'Social'          , NULL                  , NULL              , NULL),
+    ('98e8cfc6-2176-5438-b0fd-04a4f75bc20e', 'CARD', NULL  , 'expense' ,       93000, '2026-04-22', 'Social'          , NULL                  , NULL              , NULL),
+    ('9e3e07d9-8372-592c-b087-162a72dff2d5', 'BCA' , NULL  , 'expense' ,      507500, '2026-04-22', 'Others'          , NULL                  , NULL              , 'Cash'),
+    ('ba1d2955-da2b-5e3a-8797-e7dd0a8bbf6a', 'BCA' , NULL  , 'expense' ,       51000, '2026-04-22', 'Transport'       , NULL                  , NULL              , NULL),
+    ('52f77027-11f9-5e16-b485-5ccbc5e265b9', 'BCA' , NULL  , 'expense' ,      501000, '2026-04-22', 'Transport'       , NULL                  , NULL              , NULL),
     -- 2026-04-23
-    ('76fa2751-8575-53e2-a818-dda87a25352d', 'CARD', NULL  , 'expense' ,        7000, '2026-04-23', 'Transport'       , NULL                  , NULL),
-    ('15113f58-4060-5e51-85c4-f3bdf3456634', 'CARD', NULL  , 'expense' ,        5000, '2026-04-23', 'Transport'       , NULL                  , NULL),
-    ('575427ae-350f-50eb-80a2-f378087e6859', 'CARD', NULL  , 'expense' ,       45960, '2026-04-23', 'Food'            , NULL                  , NULL),
-    ('eaa9c446-d7cf-58d9-8c24-46547c9de5c3', 'CARD', NULL  , 'expense' ,      583518, '2026-04-23', 'Social'          , NULL                  , NULL),
+    ('76fa2751-8575-53e2-a818-dda87a25352d', 'CARD', NULL  , 'expense' ,        7000, '2026-04-23', 'Transport'       , NULL                  , NULL              , NULL),
+    ('15113f58-4060-5e51-85c4-f3bdf3456634', 'CARD', NULL  , 'expense' ,        5000, '2026-04-23', 'Transport'       , NULL                  , NULL              , NULL),
+    ('575427ae-350f-50eb-80a2-f378087e6859', 'CARD', NULL  , 'expense' ,       45960, '2026-04-23', 'Food'            , NULL                  , NULL              , NULL),
+    ('eaa9c446-d7cf-58d9-8c24-46547c9de5c3', 'CARD', NULL  , 'expense' ,      583518, '2026-04-23', 'Social'          , NULL                  , NULL              , NULL),
     -- 2026-04-24
-    ('06cfffd3-c692-5c04-a470-144febb9ba20', 'CARD', NULL  , 'expense' ,      119300, '2026-04-24', 'Food'            , NULL                  , NULL),
-    ('35b8fe3e-e086-5049-b3a1-dfee6818e362', 'CARD', NULL  , 'expense' ,       52000, '2026-04-24', 'Food'            , NULL                  , NULL),
-    ('bf1df079-c6af-597f-96c8-687caf3e4295', 'CARD', NULL  , 'expense' ,       27120, '2026-04-24', 'Food'            , NULL                  , NULL),
-    ('2f3664fc-7e9e-55bf-ae03-d9315a79dbdf', 'CARD', NULL  , 'expense' ,        2000, '2026-04-24', 'Food'            , NULL                  , NULL),
+    ('06cfffd3-c692-5c04-a470-144febb9ba20', 'CARD', NULL  , 'expense' ,      119300, '2026-04-24', 'Food'            , NULL                  , NULL              , NULL),
+    ('35b8fe3e-e086-5049-b3a1-dfee6818e362', 'CARD', NULL  , 'expense' ,       52000, '2026-04-24', 'Food'            , NULL                  , NULL              , NULL),
+    ('bf1df079-c6af-597f-96c8-687caf3e4295', 'CARD', NULL  , 'expense' ,       27120, '2026-04-24', 'Food'            , NULL                  , NULL              , NULL),
+    ('2f3664fc-7e9e-55bf-ae03-d9315a79dbdf', 'CARD', NULL  , 'expense' ,        2000, '2026-04-24', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-25
-    ('808faa74-8ba1-5d5a-91ff-833816989520', 'CARD', NULL  , 'expense' ,      100000, '2026-04-25', 'Social'          , NULL                  , NULL),
-    ('35497907-9c12-57f2-9e90-eabbd3945c3e', 'CARD', NULL  , 'expense' ,      315000, '2026-04-25', 'Social'          , NULL                  , NULL),
-    ('b101571f-a7c1-5a5c-bd16-b832713a384c', 'BCA' , NULL  , 'expense' ,    12299123, '2026-04-25', NULL              , 'KPR'                 , 'KPR'),
-    ('eb88f988-0055-5270-895d-71a50b8d586e', 'BCA' , NULL  , 'expense' ,      -70000, '2026-04-25', 'Social'          , NULL                  , NULL),
-    ('c34bd661-dff3-59cb-91b5-7ad871fc13a0', 'CARD', NULL  , 'expense' ,       10000, '2026-04-25', 'Others'          , NULL                  , 'Materai'),
+    ('808faa74-8ba1-5d5a-91ff-833816989520', 'CARD', NULL  , 'expense' ,      100000, '2026-04-25', 'Social'          , NULL                  , NULL              , NULL),
+    ('35497907-9c12-57f2-9e90-eabbd3945c3e', 'CARD', NULL  , 'expense' ,      315000, '2026-04-25', 'Social'          , NULL                  , NULL              , NULL),
+    ('b101571f-a7c1-5a5c-bd16-b832713a384c', 'BCA' , NULL  , 'expense' ,    12299123, '2026-04-25', NULL              , 'KPR'                 , NULL              , NULL),
+    ('eb88f988-0055-5270-895d-71a50b8d586e', 'BCA' , NULL  , 'expense' ,      -70000, '2026-04-25', 'Social'          , NULL                  , NULL              , NULL),
+    ('c34bd661-dff3-59cb-91b5-7ad871fc13a0', 'CARD', NULL  , 'expense' ,       10000, '2026-04-25', 'Others'          , NULL                  , NULL              , 'Materai'),
     -- 2026-04-26
-    ('556d2754-87df-55d8-a425-62a8119e7201', 'BCA' , NULL  , 'expense' ,      -25000, '2026-04-26', 'Social'          , NULL                  , NULL),
-    ('6414af4f-55f3-5740-9d75-2a865d7b189f', 'CARD', NULL  , 'expense' ,       37000, '2026-04-26', 'Social'          , NULL                  , NULL),
-    ('5831e351-15ca-53f9-8241-c01738afd679', 'CARD', NULL  , 'expense' ,       89480, '2026-04-26', 'Food'            , NULL                  , NULL),
-    ('75f733d5-c417-5ae3-8e84-199d7636bb7e', 'CARD', NULL  , 'expense' ,        3000, '2026-04-26', 'Others'          , NULL                  , 'Electricity VPP'),
-    ('22be180b-cc5f-5f74-98ec-ad9171793fd4', 'CARD', NULL  , 'expense' ,     1000000, '2026-04-26', NULL              , 'Electricity VPP'     , 'Electricity VPP'),
-    ('c3d60278-9b07-54e8-b6a6-6c16c0aa449b', 'BCA' , NULL  , 'expense' ,       22222, '2026-04-26', 'Food'            , NULL                  , NULL),
-    ('7734daf0-0f4a-5acd-ab11-75f2148cf144', 'BCA' , NULL  , 'expense' ,      104000, '2026-04-26', 'Social'          , NULL                  , NULL),
-    ('3445bec8-19dd-53f8-bbfb-c28e98ebd787', 'BCA' , NULL  , 'expense' ,     -125000, '2026-04-26', 'Social'          , NULL                  , NULL),
+    ('556d2754-87df-55d8-a425-62a8119e7201', 'BCA' , NULL  , 'expense' ,      -25000, '2026-04-26', 'Social'          , NULL                  , NULL              , NULL),
+    ('6414af4f-55f3-5740-9d75-2a865d7b189f', 'CARD', NULL  , 'expense' ,       37000, '2026-04-26', 'Social'          , NULL                  , NULL              , NULL),
+    ('5831e351-15ca-53f9-8241-c01738afd679', 'CARD', NULL  , 'expense' ,       89480, '2026-04-26', 'Food'            , NULL                  , NULL              , NULL),
+    ('75f733d5-c417-5ae3-8e84-199d7636bb7e', 'CARD', NULL  , 'expense' ,        3000, '2026-04-26', 'Others'          , NULL                  , NULL              , 'Electricity VPP'),
+    ('22be180b-cc5f-5f74-98ec-ad9171793fd4', 'CARD', NULL  , 'expense' ,     1000000, '2026-04-26', NULL              , 'Electricity VPP'     , NULL              , NULL),
+    ('c3d60278-9b07-54e8-b6a6-6c16c0aa449b', 'BCA' , NULL  , 'expense' ,       22222, '2026-04-26', 'Food'            , NULL                  , NULL              , NULL),
+    ('7734daf0-0f4a-5acd-ab11-75f2148cf144', 'BCA' , NULL  , 'expense' ,      104000, '2026-04-26', 'Social'          , NULL                  , NULL              , NULL),
+    ('3445bec8-19dd-53f8-bbfb-c28e98ebd787', 'BCA' , NULL  , 'expense' ,     -125000, '2026-04-26', 'Social'          , NULL                  , NULL              , NULL),
     -- 2026-04-28
-    ('fa2b6bcc-a2e6-5812-bbc1-4b48dbdfda0c', 'CARD', NULL  , 'expense' ,       88000, '2026-04-28', 'Others'          , NULL                  , NULL),
-    ('cdaeaff2-cc73-52ae-9eb8-609e5cbdb795', 'CARD', NULL  , 'expense' ,       15000, '2026-04-28', 'Food'            , NULL                  , NULL),
-    ('6b3fe62e-d1df-5783-ba4e-bdd8f96b1fc3', 'CARD', NULL  , 'expense' ,       80000, '2026-04-28', 'Others'          , NULL                  , 'Paket Data Telkomsel'),
-    ('09c33ae6-f2c0-5ed7-a85e-618e0cd4f7df', 'CARD', NULL  , 'expense' ,       49521, '2026-04-28', 'Food'            , NULL                  , NULL),
-    ('d5142c8f-f59f-54e6-97d2-caa1ec1c4bc0', 'CARD', NULL  , 'expense' ,        2000, '2026-04-28', 'Food'            , NULL                  , NULL),
-    ('9944182f-d674-5bd2-b146-1f5f5b25a4d6', 'CARD', NULL  , 'expense' ,      120000, '2026-04-28', 'Others'          , NULL                  , 'ByU'),
-    ('4f1b9ac7-09b7-5c12-aa73-55fc0bd32abb', 'CARD', NULL  , 'expense' ,       76200, '2026-04-28', 'Food'            , NULL                  , NULL),
-    ('4445aa23-72d2-564f-8991-52d018201b40', 'CARD', NULL  , 'expense' ,        2000, '2026-04-28', 'Food'            , NULL                  , NULL),
+    ('fa2b6bcc-a2e6-5812-bbc1-4b48dbdfda0c', 'CARD', NULL  , 'expense' ,       88000, '2026-04-28', 'Others'          , NULL                  , NULL              , NULL),
+    ('cdaeaff2-cc73-52ae-9eb8-609e5cbdb795', 'CARD', NULL  , 'expense' ,       15000, '2026-04-28', 'Food'            , NULL                  , NULL              , NULL),
+    ('6b3fe62e-d1df-5783-ba4e-bdd8f96b1fc3', 'CARD', NULL  , 'expense' ,       80000, '2026-04-28', 'Others'          , NULL                  , NULL              , 'Paket Data Telkomsel'),
+    ('09c33ae6-f2c0-5ed7-a85e-618e0cd4f7df', 'CARD', NULL  , 'expense' ,       49521, '2026-04-28', 'Food'            , NULL                  , NULL              , NULL),
+    ('d5142c8f-f59f-54e6-97d2-caa1ec1c4bc0', 'CARD', NULL  , 'expense' ,        2000, '2026-04-28', 'Food'            , NULL                  , NULL              , NULL),
+    ('9944182f-d674-5bd2-b146-1f5f5b25a4d6', 'CARD', NULL  , 'expense' ,      120000, '2026-04-28', 'Others'          , NULL                  , NULL              , 'ByU'),
+    ('4f1b9ac7-09b7-5c12-aa73-55fc0bd32abb', 'CARD', NULL  , 'expense' ,       76200, '2026-04-28', 'Food'            , NULL                  , NULL              , NULL),
+    ('4445aa23-72d2-564f-8991-52d018201b40', 'CARD', NULL  , 'expense' ,        2000, '2026-04-28', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-29
-    ('c328399a-5ad7-533e-b9dd-2708cfe64432', 'CARD', NULL  , 'expense' ,       85600, '2026-04-29', 'Food'            , NULL                  , NULL),
-    ('e31afd4f-5c07-5019-aff1-5596705c354c', 'CARD', NULL  , 'expense' ,      136120, '2026-04-29', 'Transport'       , NULL                  , NULL),
-    ('ee4ed751-74a3-57d8-942d-4b63e578fefd', 'CARD', NULL  , 'expense' ,      103050, '2026-04-29', 'Food'            , NULL                  , NULL),
-    ('d9af8fa2-354c-59f2-a85a-6aca104b32fc', 'CARD', NULL  , 'expense' ,        2000, '2026-04-29', 'Food'            , NULL                  , NULL),
+    ('c328399a-5ad7-533e-b9dd-2708cfe64432', 'CARD', NULL  , 'expense' ,       85600, '2026-04-29', 'Food'            , NULL                  , NULL              , NULL),
+    ('e31afd4f-5c07-5019-aff1-5596705c354c', 'CARD', NULL  , 'expense' ,      136120, '2026-04-29', 'Transport'       , NULL                  , NULL              , NULL),
+    ('ee4ed751-74a3-57d8-942d-4b63e578fefd', 'CARD', NULL  , 'expense' ,      103050, '2026-04-29', 'Food'            , NULL                  , NULL              , NULL),
+    ('d9af8fa2-354c-59f2-a85a-6aca104b32fc', 'CARD', NULL  , 'expense' ,        2000, '2026-04-29', 'Food'            , NULL                  , NULL              , NULL),
     -- 2026-04-30
-    ('63635e64-8676-51eb-a489-0caa97dab482', 'CARD', NULL  , 'expense' ,        7000, '2026-04-30', 'Transport'       , NULL                  , NULL),
-    ('91d78e1c-cd22-571b-8db4-18b55f2b763e', 'CARD', NULL  , 'expense' ,        5000, '2026-04-30', 'Transport'       , NULL                  , NULL),
-    ('af12602c-c2e2-5567-9c1b-848a1b2ea7ac', 'CARD', NULL  , 'expense' ,      230254, '2026-04-30', NULL              , 'FF XIV'              , 'FF XIV'),
-    ('782da7d6-56bf-5356-ba66-7d87ac318c37', 'CARD', NULL  , 'expense' ,       15000, '2026-04-30', 'Food'            , NULL                  , NULL),
-    ('f08dada6-6893-5982-94dc-f2264dd6e6dd', 'CARD', NULL  , 'expense' ,      217000, '2026-04-30', 'Food'            , NULL                  , NULL),
-    ('c40f1a94-e7c5-5efb-af50-f3f5140eccdf', 'BCA' , NULL  , 'income'  ,         652, '2026-04-30', NULL              , NULL                  , 'Bank Interest')
-  ) AS v(id, acct, xfer, type, amount, date, budget_name, fixed_name, description)
+    ('63635e64-8676-51eb-a489-0caa97dab482', 'CARD', NULL  , 'expense' ,        7000, '2026-04-30', 'Transport'       , NULL                  , NULL              , NULL),
+    ('91d78e1c-cd22-571b-8db4-18b55f2b763e', 'CARD', NULL  , 'expense' ,        5000, '2026-04-30', 'Transport'       , NULL                  , NULL              , NULL),
+    ('af12602c-c2e2-5567-9c1b-848a1b2ea7ac', 'CARD', NULL  , 'expense' ,      230254, '2026-04-30', NULL              , 'FF XIV'              , NULL              , NULL),
+    ('782da7d6-56bf-5356-ba66-7d87ac318c37', 'CARD', NULL  , 'expense' ,       15000, '2026-04-30', 'Food'            , NULL                  , NULL              , NULL),
+    ('f08dada6-6893-5982-94dc-f2264dd6e6dd', 'CARD', NULL  , 'expense' ,      217000, '2026-04-30', 'Food'            , NULL                  , NULL              , NULL),
+    ('c40f1a94-e7c5-5efb-af50-f3f5140eccdf', 'BCA' , NULL  , 'income'  ,         652, '2026-04-30', NULL              , NULL                  , 'Bank Interest'   , 'Bank Interest')
+  ) AS v(id, acct, xfer, type, amount, date, budget_name, fixed_name, category_name, description)
 LEFT JOIN budgets b
   ON b.user_id = '9e36aab2-dc6e-4ff6-9ae1-c81e82225424'::uuid
   AND b.year_month = '2026-04' AND b.name = v.budget_name
 LEFT JOIN fixed_expenses f
   ON f.user_id = '9e36aab2-dc6e-4ff6-9ae1-c81e82225424'::uuid AND f.year_month = '2026-04'
   AND f.name = v.fixed_name
+LEFT JOIN categories c
+  ON c.user_id = '9e36aab2-dc6e-4ff6-9ae1-c81e82225424'::uuid AND c.name = v.category_name
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
