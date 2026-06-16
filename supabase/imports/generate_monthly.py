@@ -16,16 +16,17 @@ Mapping decisions (confirmed with the user):
     running budget natively via v_budget_progress). The "Other Expenses" envelope
     is stored under the shorter budget name "Others".
   * Each budget spend links to a budget (no category — this sheet doesn't
-    categorize, so category_id is always NULL).
+    categorize spending, so expenses/transfers have category_id = NULL). Income
+    is the one exception: its category = its Description (e.g. Salary, Bank
+    Interest), upserted by name and linked via category_id.
   * Monthly Expenses Details (the other col-L names) -> fixed_expenses rows.
     A "Monthly Expenses" spend whose Description matches a detail name links via
     fixed_expense_id (= marks it paid). The month is closed, so details with no
     paying transaction are stale and are NOT imported.
   * Credit-Card column: negative = a charge (expense on the card account);
     positive = a payment -> TRANSFER from BCA bank into the card.
-  * "Lidya Laparoskopi" rows are imported LITERALLY: each populated Income / Card
-    column becomes its own transaction (income col -> income; card col -> a
-    signed expense on the card).
+  * A row that fills BOTH Income and Credit Card has no generic mapping (the only
+    case was the May-2026 "Lidya" rows, since removed) -> the generator raises.
   * Single-currency app (no per-row currency column). IDR has 0 decimal places,
     so figures are whole rupiah (no scaling).
 
@@ -168,20 +169,19 @@ def main():
         if current_day == 1 and desc in BUDGET_NAMES and budget_vals:
             continue
 
-        is_lidya = bool(desc and "lidya" in desc.lower())
-
         def add(slot, **kw):
             txns.append({"line": line_no, "slot": slot, "date": date,
                          "description": desc, **kw})
 
-        if is_lidya:
-            # Literal: one txn per populated monetary column.
-            if income is not None:
-                add("inc", type="income", amount=income, account=BCA)
-            if card is not None:
-                # negative card = charge (positive expense); positive = credit.
-                add("card", type="expense", amount=-card, account=CARD)
-            continue
+        # A row that fills BOTH Income and Credit Card has no generic mapping (the
+        # only known case was the May-2026 "Lidya" hospital-financing rows, since
+        # removed). Fail loudly rather than silently drop the income.
+        if income is not None and card is not None:
+            raise SystemExit(
+                f"row {line_no} ({date}) populates both Income and Credit Card — "
+                f"no mapping for this shape (the old Lidya special case was removed). "
+                f"Handle it explicitly in generate_monthly.py / the README before re-running."
+            )
 
         # A row can populate MULTIPLE budget columns and/or Monthly Expenses (one
         # combined card charge covering several allocations, e.g. Apr row 54:
@@ -223,11 +223,20 @@ def main():
     dropped = [n for n, _ in fixed if n not in paid_names]
     fixed = [(n, a) for n, a in fixed if n in paid_names]
 
-    write_sql(budgets, fixed, txns)
-    summarize(budgets, fixed, txns, dropped, stated_income, stated_total_exp)
+    # Income is the one categorized type: its category = its Description (col I).
+    # Collect the distinct names (first-seen order) to upsert; blank-description
+    # income stays uncategorized (category_id = NULL).
+    categories, seen_cat = [], set()
+    for t in txns:
+        if t["type"] == "income" and t["description"] and t["description"] not in seen_cat:
+            seen_cat.add(t["description"])
+            categories.append(t["description"])
+
+    write_sql(budgets, fixed, txns, categories)
+    summarize(budgets, fixed, txns, dropped, categories, stated_income, stated_total_exp)
 
 
-def write_sql(budgets, fixed, txns):
+def write_sql(budgets, fixed, txns, categories):
     out = []
     w = out.append
     w("-- ============================================================")
@@ -239,8 +248,16 @@ def write_sql(budgets, fixed, txns):
     w("-- ============================================================")
     w("BEGIN;")
     w("")
-    w("-- NOTE: this spreadsheet does not categorize transactions, so every")
-    w("--       transaction is imported with category_id = NULL.")
+    w("-- NOTE: expenses/transfers are imported with category_id = NULL (this sheet")
+    w("--       does not categorize spending). Income is the one exception: its")
+    w("--       category = its Description (e.g. Salary, Bank Interest).")
+    w("")
+
+    w("-- Categories (income only; create-or-reuse by name).")
+    for name in categories:
+        w(f"INSERT INTO categories (user_id, name) VALUES "
+          f"({sqlstr(USER_ID)}, {sqlstr(name)}) "
+          f"ON CONFLICT (user_id, name) DO NOTHING;")
     w("")
 
     w("-- Budgets for the month (periodic_amount = the spreadsheet's budget).")
@@ -281,8 +298,9 @@ def write_sql(budgets, fixed, txns):
             s = s.rjust(width) if right else s.ljust(width)
         return s
 
-    w(f"-- Transactions ({len(txns)} rows). category_id is always NULL (no categories).")
-    w("-- Per row: (id, acct, xfer, type, amount, date, budget, fixed, description).")
+    w(f"-- Transactions ({len(txns)} rows). category_id is set only for income")
+    w("-- (= its Description); expenses/transfers stay NULL.")
+    w("-- Per row: (id, acct, xfer, type, amount, date, budget, fixed, category, description).")
     if any((t["date"], abs(t["amount"])) in OVERLAP_KEYS for t in txns):
         w("-- Rows that duplicate a non-monthly-sheet transaction are COMMENTED OUT and")
         w("-- marked 'DUPLICATE of non-monthly sheet' — the non-monthly sheet is kept as")
@@ -297,7 +315,7 @@ def write_sql(budgets, fixed, txns):
     w(f"  CASE v.xfer WHEN 'CARD' THEN {sqlstr(CARD)}::uuid ELSE NULL END,")
     w("  v.type::transaction_type, 'confirmed',")
     w("  v.amount, v.description, v.date::date,")
-    w("  NULL,   -- category_id (this sheet does not categorize)")
+    w("  c.id,   -- category_id      (income only, matched by name; else NULL)")
     w("  b.id,   -- budget_id        (matched by name)")
     w("  f.id    -- fixed_expense_id (matched by name)")
     w("FROM (VALUES")
@@ -315,6 +333,8 @@ def write_sql(budgets, fixed, txns):
             prev_date = t["date"]
         acct_tok = "BCA" if t["account"] == BCA else "CARD"
         xfer_tok = "CARD" if t.get("transfer") else None
+        # Income carries its Description as the category name; everything else NULL.
+        cat_tok = t["description"] if t["type"] == "income" else None
         parts = [
             cell(tid(t["line"], t["slot"])),
             cell(acct_tok, 6),
@@ -324,6 +344,7 @@ def write_sql(budgets, fixed, txns):
             cell(t["date"]),
             cell(t.get("budget"), 18),
             cell(t.get("fixed"), 22),
+            cell(cat_tok, 18),
             cell(t["description"]),
         ]
         if (t["date"], abs(t["amount"])) in OVERLAP_KEYS:
@@ -335,20 +356,23 @@ def write_sql(budgets, fixed, txns):
             comma = "," if idx < last_active else ""
             w(f"    ({', '.join(parts)}){comma}")
 
-    w("  ) AS v(id, acct, xfer, type, amount, date, budget_name, fixed_name, description)")
+    w("  ) AS v(id, acct, xfer, type, amount, date, budget_name, fixed_name, "
+      "category_name, description)")
     w(f"LEFT JOIN budgets b")
     w(f"  ON b.user_id = {sqlstr(USER_ID)}::uuid")
     w(f"  AND b.year_month = {sqlstr(YM)} AND b.name = v.budget_name")
     w(f"LEFT JOIN fixed_expenses f")
     w(f"  ON f.user_id = {sqlstr(USER_ID)}::uuid AND f.year_month = {sqlstr(YM)}")
     w(f"  AND f.name = v.fixed_name")
+    w(f"LEFT JOIN categories c")
+    w(f"  ON c.user_id = {sqlstr(USER_ID)}::uuid AND c.name = v.category_name")
     w("ON CONFLICT (id) DO NOTHING;")
     w("")
     w("COMMIT;")
     OUT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
-def summarize(budgets, fixed, txns, dropped, stated_income, stated_total_exp):
+def summarize(budgets, fixed, txns, dropped, categories, stated_income, stated_total_exp):
     inc = sum(t["amount"] for t in txns if t["type"] == "income")
     exp = sum(t["amount"] for t in txns if t["type"] == "expense")
     xfer = sum(t["amount"] for t in txns if t["type"] == "transfer")
@@ -362,6 +386,7 @@ def summarize(budgets, fixed, txns, dropped, stated_income, stated_total_exp):
     print(f"  fixed expenses: {len(fixed)} (paid only)")
     print(f"    dropped (no paying txn, month closed): {dropped}")
     print(f"  fixed-expense links on txns: {linked_fx}")
+    print(f"  income categories: {len(categories)}  {categories}")
     print(f"  transactions:   {len(txns)}  (BCA {n_bca}, card {n_card})")
     print(f"  commented out (non-monthly duplicates, review): {commented}")
     print(f"  income total:   Rp{inc:,}   (sheet row 3: Rp{stated_income:,}) [{ok}]")

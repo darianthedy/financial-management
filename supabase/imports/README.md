@@ -42,8 +42,12 @@ in this folder (committed to the repo) — the chat history is not needed. Steps
    are already commented out (step 3), so nothing double-counts — **review those
    commented rows first**.
 
-> **Lidya rows are May-2026 only** — not a recurring step. They appear solely in
-> the May 2026 sheet; if you ever re-import that month, review them per §4.
+> **A row filling both Income and Credit Card now hard-fails.** The only such
+> rows were the May-2026 "Lidya" hospital-financing rows, which had no generic
+> mapping and were handled as a one-off literal import. That special case has been
+> **removed**: `generate_monthly.py` now **raises** if it encounters a row with
+> both columns populated. Re-importing May 2026 will fail until those rows are
+> handled explicitly (see §4).
 
 ---
 
@@ -89,9 +93,9 @@ These are derived display values and are **not imported**.
 
 Generally **one transaction per populated row**. The amount lands in exactly one
 of B–F (its envelope), and **G mirrors it as a negative** when the spend was put
-on the card. Exception: a row that fills *both* Income and Credit Card (the Lidya
-rows — see §4) splits into **two** transactions, so the row count and transaction
-count differ (see the note under §4).
+on the card. A row that fills *both* Income and Credit Card has **no generic
+mapping** and makes the generator **raise** (see §4) — the only such rows were the
+removed May-2026 Lidya rows.
 
 ### Right-side reference block — "Monthly Expenses Details" (cols L/M)
 
@@ -136,12 +140,16 @@ reduces the category/budget totals without touching income.
 | Other col-L names | `fixed_expenses` rows (one per `year_month`) | amount from col M |
 | Monthly Expenses spend whose Description matches a detail name | `expense` + `fixed_expense_id` link, **`description` NULL** | **the link = the bill is paid** (match is case-insensitive/trimmed). The Description is only the matching key — once linked it's redundant, so it is **not** stored on the transaction |
 | A detail with **no** matching Description | **not imported** | the month is closed, so an unpaid fixed expense is stale data — only paid bills become `fixed_expenses` rows |
-| Income column | `income` on the bank account | Salary, Bank Interest, etc. |
+| Income column | `income` on the bank account | Salary, Bank Interest, etc. **Category = the Description** (see note below) — the only place this sheet sets `category_id` |
 
-> **No categories.** This spreadsheet does not categorize transactions, so every
-> imported transaction has `category_id = NULL` and no category rows are created.
-> Classification is carried by the budget link (B–E) and the fixed-expense link
-> (Monthly Expenses) instead.
+> **No categories — except income.** This spreadsheet does not categorize
+> *expenses*, so every imported expense/transfer has `category_id = NULL`;
+> classification is carried by the budget link (B–E) and the fixed-expense link
+> (Monthly Expenses) instead. **Income rows are the one exception:** an `income`
+> transaction is given a category named after its **Description** (col I) — e.g.
+> `Salary`, `Bank Interest`. The category is created (upsert by name, same as the
+> non-monthly format) and linked via `transactions.category_id`. An income row
+> with a blank Description gets `category_id = NULL`.
 
 ### Account routing for a ledger row
 
@@ -165,6 +173,10 @@ row is **split into two expenses** (rules 1 and 2), which sum to the card mirror
 
 ## 4. Confirmed decisions (2026-06-13)
 
+- **Income is categorized by its Description (2026-06-16).** Unlike expenses
+  (always `category_id = NULL`), an `income` transaction takes a category named
+  after its Description (col I) — `Salary`, `Bank Interest`, etc. The category is
+  upserted by name and linked via `category_id`; a blank Description → NULL.
 - **Day-01 budget seeds** become `budgets.periodic_amount`, not transactions.
 - **Budget naming:** the CSV's `Other Expenses` envelope is stored as the budget
   **`Others`**; `Food` / `Transport` / `Social` keep their names.
@@ -172,16 +184,13 @@ row is **split into two expenses** (rules 1 and 2), which sum to the card mirror
   Expenses Details entry with no paying transaction (e.g. May 2026: `Savings`,
   `Electricity VPP`) is treated as stale sheet data and is **not** imported.
 - **Positive Credit Card entries** → **transfer** from BCA bank into the card.
-- **"Lidya Laparoskopi" rows** (large Income + Card + a −40M expense) are imported
-  **literally**: each populated Income/Card column becomes its own transaction
-  (Income col → `income`; Card col → a signed `expense` on the card). This is a
-  placeholder — the real-world hospital-financing flow is to be **cleaned up
-  manually after import**.
-
-> **Row count vs transaction count.** Because the two Lidya rows (rows 63 & 72)
-> each fill both Income and Card, they split into two transactions each. So May
-> 2026's **148 ledger rows** (the Salary row + rows 9–155, minus the four day-01
-> seed rows) yield **150 transactions** — 7 income, 141 expense, 2 transfer.
+- **A row filling both Income and Credit Card → hard error (2026-06-16).** There
+  is no generic mapping for this shape. The only occurrence was the May-2026
+  "Lidya Laparoskopi" hospital-financing rows (large Income + Card + a −40M
+  expense), previously imported **literally** (each column its own transaction)
+  as a manual-cleanup placeholder. Since they won't recur, that special case was
+  **removed**: the generator now **raises** on any such row. To re-import May
+  2026, restore bespoke handling for rows 63 & 72 first.
 
 ---
 
@@ -195,8 +204,8 @@ row is **split into two expenses** (rules 1 and 2), which sum to the card mirror
 2. Review the `.sql`, then paste it into the **Supabase SQL editor** (or run via
    `psql`). It is wrapped in one transaction and is **idempotent**: budgets and
    fixed expenses upsert on their natural keys, and every transaction carries a
-   deterministic `uuid5` id with `ON CONFLICT (id) DO NOTHING`. (No category rows
-   are created.)
+   deterministic `uuid5` id with `ON CONFLICT (id) DO NOTHING`. (The only category
+   rows created are the income categories — see §3.)
 
 The user / account ids are constants at the top of `generate_monthly.py`.
 
@@ -204,13 +213,11 @@ The user / account ids are constants at the top of `generate_monthly.py`.
 
 - **Income** reconciled exactly for May 2026 (`Rp58,032,963`).
 - The expense total does **not** equal the sheet's "Total Expenses" — that cell is
-  a running-budget rollup and nets transfers/Lidya differently. Not a 1:1 check.
+  a running-budget rollup and nets transfers differently. Not a 1:1 check.
 - **Account balances** won't match the sheet's "Current Balance": the import does
   **not** set `accounts.starting_balance`. The computed month balance =
   starting_balance + that month's net. Set starting balances (or backfill prior
   months) separately to land on the sheet's absolute figures.
-- The Lidya literal import leaves artifacts (negative income, negative "credit"
-  expenses on the card) to be reconciled when that flow is modelled properly.
 
 ## 6. Budget carry-over seed
 
@@ -264,6 +271,8 @@ with a category.
   card**; each row in the generated SQL carries an editable `'BCA'`/`'CARD'`
   token (resolved by a `CASE`), so flip the relevant rows to `'CARD'` **before
   the first run**. (Re-running won't change already-imported rows — see below.)
+  Rows that **overlap a monthly sheet** are emitted as `'CARD'` automatically —
+  see *Cross-sheet overlaps* below.
 - **Categories:** created (upsert by name) and linked via
   `transactions.category_id`. This differs from the monthly format, which sets
   `category_id = NULL`.
@@ -305,6 +314,14 @@ monthly `<YYYY-MM>-bca.sql` is **commented out and marked** (not deleted) with:
 comments any transaction whose date + amount is registered. The rows are left
 commented so you can **review them before running** — uncomment only if you decide
 the monthly side should win instead.
+
+> **Overlap rows are on the CARD (2026-06-16).** These shared transactions are the
+> big one-off charges, which on the monthly sheet live on the credit card. So the
+> surviving non-monthly record must be on the card too: `generate_nonmonthly.py`
+> emits the **`'CARD'` account token** for any row whose (date, amount) is in
+> `MONTHLY_OVERLAPS`, instead of the default `'BCA'`. (The monthly duplicate stays
+> commented out as above, so nothing double-counts.) This overrides the manual
+> "flip to CARD before first run" step for overlap rows — they are already CARD.
 
 The match key is **date + amount**; the set is **human-reviewed** in
 `MONTHLY_OVERLAPS` (top of `generate_nonmonthly.py`) so coincidental collisions

@@ -17,7 +17,10 @@ Mapping decisions (confirmed with the user):
   * Account: every row defaults to BCA. Some are really on the BCA VISA card —
     each VALUES row carries an editable 'BCA'/'CARD' token, so flip a row to
     'CARD' before running. (Re-running won't change already-imported rows; see
-    the idempotency note below — edit before the first run.)
+    the idempotency note below — edit before the first run.) Rows that overlap a
+    monthly sheet (MONTHLY_OVERLAPS) are emitted as 'CARD' automatically: those
+    big one-off charges live on the card on the monthly sheet, and this sheet is
+    kept as the single source for them.
   * Categories: created (upsert by name) and linked via transactions.category_id.
     Event-scoped names are kept literal (e.g. 'Housing 2024' != 'Housing 2025').
   * Sign: every row is an `expense`; a NEGATIVE amount is a negative expense
@@ -81,8 +84,8 @@ MONTHLY_OVERLAPS = {
 
 def overlap_note(date):
     ym = date[:7]
-    return (f"Also in monthly {ym} sheet — kept HERE as the source; the monthly "
-            f"row is commented out (see overlaps-{ym}.md)")
+    return (f"Also in monthly {ym} sheet — kept HERE (on CARD) as the source; the "
+            f"monthly row is commented out (see overlaps-{ym}.md)")
 
 
 def money(cell: str):
@@ -171,17 +174,20 @@ def write_sql(categories, txns):
         w("FROM (VALUES")
         last = len(month_txns) - 1
         for idx, t in enumerate(month_txns):
+            is_overlap = (t["date"], t["amount"]) in MONTHLY_OVERLAPS
+            # Overlap rows are the big one-off charges, which live on the credit
+            # card on the monthly sheet — so the surviving record here is CARD.
+            acct_tok = "CARD" if is_overlap else "BCA"
             parts = [
                 cell(tid(t["line"])),
-                cell("BCA", 6),
+                cell(acct_tok, 6),
                 cell(t["amount"], 13, right=True),
                 cell(t["date"]),
                 cell(t["category"], 24),
                 cell(t["description"]),
             ]
             comma = "," if idx < last else ""
-            mark = (f"  -- {overlap_note(t['date'])}"
-                    if (t["date"], t["amount"]) in MONTHLY_OVERLAPS else "")
+            mark = (f"  -- {overlap_note(t['date'])}" if is_overlap else "")
             w(f"    ({', '.join(parts)}){comma}{mark}")
         w("  ) AS v(id, acct, amount, date, category_name, description)")
         w(f"LEFT JOIN categories c "
@@ -198,7 +204,8 @@ def write_sql(categories, txns):
     w("-- already-imported rows are ignored — make account edits BEFORE the first run.")
     w("-- Rows marked 'Also in monthly <YYYY-MM> sheet' are the same real transaction")
     w("-- as a monthly-sheet row. This sheet is kept as the source, so they stay")
-    w("-- ACTIVE here; the matching monthly row is commented out (no double-counting).")
+    w("-- ACTIVE here (emitted on CARD — they were card charges on the monthly sheet);")
+    w("-- the matching monthly row is commented out (no double-counting).")
     w("--")
     w("-- STRUCTURE: run the SETUP block once, then each month block (each is its own")
     w("-- transaction) — in date order if you want balances to settle as you go.")
