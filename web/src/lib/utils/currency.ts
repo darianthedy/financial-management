@@ -64,6 +64,84 @@ export function formatCurrency(
   }
 }
 
+export interface FormattedCurrencyParts {
+  /** Leading sign: "", "-", or "+". */
+  sign: string;
+  /** Currency symbol/prefix, e.g. "$", "Rp", or "USD " when Intl is unaware. */
+  symbol: string;
+  /** Numeric portion with group/decimal separators — no sign, no symbol. */
+  number: string;
+}
+
+/**
+ * Split a formatted amount into its sign, currency symbol, and numeric body so
+ * lists can render the symbol in a fixed left column and right-align the digits
+ * (see `AmountColumn`). Mirrors `formatCurrency`'s formatting exactly.
+ */
+export function formatCurrencyParts(
+  minorUnits: number,
+  currency = appCurrency,
+  decimalPlaces = currencyDecimals(currency),
+): FormattedCurrencyParts {
+  const value = toDisplayAmount(minorUnits, decimalPlaces);
+  try {
+    const parts = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+    }).formatToParts(value);
+    let sign = "";
+    let symbol = "";
+    let number = "";
+    for (const part of parts) {
+      switch (part.type) {
+        case "minusSign":
+        case "plusSign":
+          sign = part.value;
+          break;
+        case "currency":
+          symbol += part.value;
+          break;
+        case "literal":
+          // Whitespace between symbol and digits (e.g. "$ 1,234") rides with the
+          // symbol so the numeric column stays flush.
+          if (symbol && !number) symbol += part.value;
+          break;
+        default:
+          number += part.value;
+      }
+    }
+    return { sign, symbol, number };
+  } catch {
+    // Mirror formatCurrency's fallback for currencies Intl can't format.
+    return {
+      sign: value < 0 ? "-" : "",
+      symbol: `${currency} `,
+      number: Math.abs(toDisplayAmount(minorUnits, decimalPlaces)).toFixed(
+        decimalPlaces,
+      ),
+    };
+  }
+}
+
+/**
+ * Widest numeric body (in characters) across a set of amounts, for sizing an
+ * amount column so every symbol and digit lines up. Returns a `ch` count.
+ */
+export function maxCurrencyNumberWidth(
+  amounts: ReadonlyArray<number>,
+  currency = appCurrency,
+  decimalPlaces = currencyDecimals(currency),
+): number {
+  let max = 0;
+  for (const amount of amounts) {
+    const { number } = formatCurrencyParts(amount, currency, decimalPlaces);
+    if (number.length > max) max = number.length;
+  }
+  return max;
+}
+
 /** Signed display for a transaction amount (negative for outflows). */
 export function formatSignedCurrency(
   minorUnits: number,
