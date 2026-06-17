@@ -285,10 +285,9 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
               )}
             </Button>
           </PopoverTrigger>
-          {/* Desktop lays the two date inputs side by side (sm:flex-row below),
-              which needs more room than the 22rem default or they overflow and
-              the panel scrolls horizontally. Widen on desktop only; mobile keeps
-              the sheet width and stacks the dates vertically. */}
+          {/* The two date inputs sit side by side at every width; desktop just
+              gets more breathing room (26rem vs the 22rem mobile sheet) so the
+              fields and the dash between them aren't cramped. */}
           <PopoverContent align="end" className="space-y-4 sm:w-[26rem]">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Filter</h3>
@@ -329,20 +328,19 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                   </button>
                 )}
               </div>
-              {/* The popover is only ~320px wide inside its padding on a phone —
-                  too narrow for two date fields side by side, where the native
-                  value would collide with the clear button. So on mobile the
-                  fields stack vertically (each gets the full width) and the dash
-                  is hidden; desktop lays them in a row with the dash between. */}
-              <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center">
+              {/* From/To sit side by side at every width. Each field is
+                  `flex-1 min-w-0` so they split the row evenly and shrink to fit;
+                  this only holds because `.filter-date` resets the native date
+                  input's `appearance` (see globals.css) — otherwise iOS Safari's
+                  intrinsic width would overflow the narrow popover and the dates
+                  had to stack vertically. */}
+              <div className="mt-2 flex items-center gap-1.5">
                 <DateInput
                   value={filters.dateFrom}
                   onChange={(v) => (v ? patch({ dateFrom: v }) : clear("dateFrom"))}
                   ariaLabel="From date"
                 />
-                <span className="hidden text-[var(--color-muted-foreground)] sm:inline">
-                  –
-                </span>
+                <span className="text-[var(--color-muted-foreground)]">–</span>
                 <DateInput
                   value={filters.dateTo}
                   onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}

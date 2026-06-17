@@ -89,8 +89,26 @@ body {
    * (no text caret, no keyboard), so they don't trigger iOS's focus zoom and
    * don't need the 16px floor. Keep them at the surrounding filter text size so
    * they don't loom larger than the chips, labels and multi-selects beside them.
+   *
+   * A native date input is a replaced element with an intrinsic minimum width
+   * sized to its formatted value; on iOS Safari that intrinsic width wins over
+   * `width: 100%`, so the field overflows the narrow filter popover and scrolls
+   * the page sideways. Resetting `appearance` drops the native intrinsic sizing
+   * so `width: 100%` actually constrains the field (the date picker still opens
+   * on tap — that's tied to the input type, not its appearance).
    */
   input[type="date"].filter-date {
     font-size: 0.875rem; /* text-sm */
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  /* Without native chrome the value box defaults to filling/centering oddly;
+     pin it left and let it shrink so long locale dates can't force overflow. */
+  input[type="date"].filter-date::-webkit-date-and-time-value {
+    text-align: left;
+    min-width: 0;
+    margin: 0;
   }
 }
