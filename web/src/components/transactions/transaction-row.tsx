@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils/cn";
-import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
+import { AmountColumn } from "@/components/shared/amount-column";
 import { Button } from "@/components/ui/button";
 import {
   AccountAvatar,
@@ -35,10 +35,12 @@ import {
 
 interface Props {
   txn: TransactionWithRelations;
+  /** Shared numeric-column width (in `ch`) so amounts align across the list. */
+  amountWidthCh?: number;
   onMutated?: () => void;
 }
 
-export function TransactionRow({ txn, onMutated }: Props) {
+export function TransactionRow({ txn, amountWidthCh, onMutated }: Props) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -46,7 +48,6 @@ export function TransactionRow({ txn, onMutated }: Props) {
   const isPending = txn.status === "pending";
 
   const amountColor = amountColorFor(txn.type);
-  const displayAmount = formatCurrency(txn.amount);
 
   const { title, usedCategoryId, usedFixedExpense, titleIsDescription } =
     deriveTitle(txn);
@@ -125,9 +126,11 @@ export function TransactionRow({ txn, onMutated }: Props) {
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className={cn("text-nowrap text-sm font-semibold", amountColor)}>
-          {displayAmount}
-        </span>
+        <AmountColumn
+          minorUnits={txn.amount}
+          numberWidthCh={amountWidthCh}
+          className={cn("text-nowrap text-sm font-semibold", amountColor)}
+        />
         <span className="text-xs text-[var(--color-muted-foreground)]">
           {formatDate(txn.date)}
         </span>

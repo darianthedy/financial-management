@@ -1,7 +1,8 @@
 import { CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
-import { formatCurrency } from "@/lib/utils/currency";
+import { AmountColumn } from "@/components/shared/amount-column";
+import { formatCurrency, maxCurrencyNumberWidth } from "@/lib/utils/currency";
 import { monthElapsedFraction } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 import type { BudgetProgress } from "@/lib/types/database";
@@ -43,6 +44,15 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
   const unpaidTotal = unpaidFx.reduce((s, f) => s + f.amount, 0);
   const paidTotal = paidFx.reduce((s, f) => s + f.amount, 0);
 
+  // One shared width for every single-amount figure in this card so their
+  // currency symbols and digits line up into a tidy column.
+  const amountWidthCh = maxCurrencyNumberWidth([
+    plannedTotal,
+    unpaidTotal,
+    paidTotal,
+    ...fixedExpenses.map((f) => f.amount),
+  ]);
+
   return (
     <Card>
       <CardHeader>
@@ -60,9 +70,11 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
               <span className="text-sm text-[var(--color-muted-foreground)]">
                 Total planned
               </span>
-              <span className="text-nowrap font-semibold">
-                {formatCurrency(plannedTotal)}
-              </span>
+              <AmountColumn
+                minorUnits={plannedTotal}
+                numberWidthCh={amountWidthCh}
+                className="text-nowrap font-semibold"
+              />
             </div>
 
             {budgets.length > 0 && (
@@ -135,9 +147,11 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         <Clock className="h-3.5 w-3.5 shrink-0" />
                         Unpaid
                       </span>
-                      <span className="text-nowrap text-base font-semibold">
-                        {formatCurrency(unpaidTotal)}
-                      </span>
+                      <AmountColumn
+                        minorUnits={unpaidTotal}
+                        numberWidthCh={amountWidthCh}
+                        className="text-nowrap text-base font-semibold"
+                      />
                     </div>
                     {unpaidFx.map((f) => (
                       <div
@@ -145,7 +159,11 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         className="flex items-center justify-between gap-2 pl-5 text-sm text-[var(--color-muted-foreground)]"
                       >
                         <span className="truncate">{f.name}</span>
-                        <span className="text-nowrap">{formatCurrency(f.amount)}</span>
+                        <AmountColumn
+                          minorUnits={f.amount}
+                          numberWidthCh={amountWidthCh}
+                          className="text-nowrap"
+                        />
                       </div>
                     ))}
                   </div>
@@ -158,9 +176,11 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                         Paid
                       </span>
-                      <span className="text-nowrap text-base font-semibold text-[var(--color-success)]">
-                        {formatCurrency(paidTotal)}
-                      </span>
+                      <AmountColumn
+                        minorUnits={paidTotal}
+                        numberWidthCh={amountWidthCh}
+                        className="text-nowrap text-base font-semibold text-[var(--color-success)]"
+                      />
                     </div>
                     {paidFx.map((f) => (
                       <div
@@ -168,7 +188,11 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         className="flex items-center justify-between gap-2 pl-5 text-sm"
                       >
                         <span className="truncate font-medium">{f.name}</span>
-                        <span className="text-nowrap">{formatCurrency(f.amount)}</span>
+                        <AmountColumn
+                          minorUnits={f.amount}
+                          numberWidthCh={amountWidthCh}
+                          className="text-nowrap"
+                        />
                       </div>
                     ))}
                   </div>
