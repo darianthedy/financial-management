@@ -1,6 +1,14 @@
 // Hand-written Supabase types shim.
 // Replace with: supabase gen types typescript --project-id <id> > src/lib/types/database.ts
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export type AccountType =
   | "bank_account"
   | "credit_card"
@@ -121,6 +129,35 @@ type BudgetRow = {
   updated_at: string;
 };
 
+// Header for a Budget Installment (P1): one large expense spread across budgets
+// over future months. The source expense is an ordinary `transactions` row with
+// budget_id NULL; the spread itself lives in budget_installment_allocations.
+// Deleting the source transaction cascades to (cancels) the installment.
+type BudgetInstallmentRow = {
+  id: string;
+  user_id: string;
+  source_transaction_id: string;
+  total_amount: number;
+  description: string | null;
+  start_year_month: string;
+  months: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// One reservation grid cell: (budget_name × year_month) -> amount. Budget-side
+// only — never a transaction, never affects account balances. v_budget_progress
+// subtracts these from each budget month's remaining.
+type BudgetInstallmentAllocationRow = {
+  id: string;
+  installment_id: string;
+  user_id: string;
+  budget_name: string;
+  year_month: string;
+  amount: number;
+  created_at: string;
+};
+
 // Flat, self-contained fixed-expense entry. Identity = (name + year_month). One
 // row per expense per month. Paid status is derived from linked transactions
 // (transactions.fixed_expense_id), not stored here. App is single-currency, so
@@ -186,6 +223,41 @@ export interface Database {
           description?: string | null;
           year_month?: string;
           periodic_amount?: number;
+        };
+        Relationships: [];
+      };
+      budget_installments: {
+        Row: BudgetInstallmentRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          source_transaction_id: string;
+          total_amount: number;
+          description?: string | null;
+          start_year_month: string;
+          months: number;
+        };
+        Update: {
+          description?: string | null;
+          start_year_month?: string;
+          months?: number;
+        };
+        Relationships: [];
+      };
+      budget_installment_allocations: {
+        Row: BudgetInstallmentAllocationRow;
+        Insert: {
+          id?: string;
+          installment_id: string;
+          user_id: string;
+          budget_name: string;
+          year_month: string;
+          amount: number;
+        };
+        Update: {
+          budget_name?: string;
+          year_month?: string;
+          amount?: number;
         };
         Relationships: [];
       };
@@ -338,6 +410,9 @@ export interface Database {
           carry_over_amount: number;
           effective_amount: number;
           spent: number;
+          // Sum of budget-installment reservations for this budget month.
+          // effective_amount stays periodic + carry_in; remaining nets it out.
+          reserved: number;
           remaining: number;
         };
         Relationships: [];
@@ -372,6 +447,23 @@ export interface Database {
           balance: number;
         }[];
       };
+      // Persist a Budget Installment atomically: inserts the source expense
+      // (budget_id NULL), the header, and one allocation per non-zero grid cell
+      // (materializing any missing budget rows). p_grid is a JSON array of
+      // { budget_name, year_month, amount } and must sum to p_amount. Returns
+      // the new budget_installments id.
+      create_budget_installment: {
+        Args: {
+          p_account_id: string;
+          p_amount: number;
+          p_date: string;
+          p_description: string | null;
+          p_start_year_month: string;
+          p_months: number;
+          p_grid: Json;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       account_type: AccountType;
@@ -389,6 +481,10 @@ export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
 export type ScheduledTransaction =
   Database["public"]["Tables"]["scheduled_transactions"]["Row"];
 export type Budget = Database["public"]["Tables"]["budgets"]["Row"];
+export type BudgetInstallment =
+  Database["public"]["Tables"]["budget_installments"]["Row"];
+export type BudgetInstallmentAllocation =
+  Database["public"]["Tables"]["budget_installment_allocations"]["Row"];
 export type FixedExpense =
   Database["public"]["Tables"]["fixed_expenses"]["Row"];
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
