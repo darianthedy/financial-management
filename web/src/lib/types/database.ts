@@ -338,6 +338,9 @@ export interface Database {
           carry_over_amount: number;
           effective_amount: number;
           spent: number;
+          // Sum of budget-installment reservations for this budget month (P1).
+          // effective_amount stays periodic + carry_in; remaining nets it out.
+          reserved: number;
           remaining: number;
         };
         Relationships: [];
