@@ -561,34 +561,36 @@ The dashboard is **month-scoped**: a header month navigator (`ChevronLeft` / `Ch
 - "Add Transaction" form with:
   - Type selector (income/expense/transfer)
   - Account picker (+ transfer destination if transfer)
-  - Amount + currency
+  - Amount (single-currency; income/expense may be negative — e.g. a refund as a negative expense — while transfers are forced positive and zero is rejected, per `transactionFormSchema`)
   - Date picker
   - Category single-select (autocomplete + create; at most one per transaction)
   - Tag multi-select (autocomplete + create)
-  - Budget picker (income & expense; hidden for transfers) — loads `budgets` for the transaction's month **whose currency matches the transaction's currency**, displaying budget name + effective amount (from `v_budget_progress`). Selection stored as `budget_id`. Offers an inline "create budget for this month" option when none exists. Cleared when type is `transfer`.
+  - Budget picker (income & expense; hidden for transfers) — loads `budgets` for the transaction's month, displaying budget name + effective amount (from `v_budget_progress`). Selection stored as `budget_id`. Offers an inline "create budget for this month" option when none exists. Cleared when type is `transfer`.
   - Fixed expense picker (expense only) — loads `fixed_expenses` for the transaction's month (filtered by `year_month`). Selection stored as `fixed_expense_id`. Linking a transaction indicates the fixed expense is paid. Cleared when type is not `expense`.
   - Description
 
 #### 7.3.1 Filter & Search
 
-The transaction list can be narrowed by any combination of filters. The query strategy (column-level filters vs. junction pre-query for categories/tags, and the AND-across / OR-within semantics) is defined in the System Design doc §4.9; this section covers the web implementation.
+The transaction list can be narrowed by any combination of filters. The query strategy (reading from `v_transactions`, the SQL-side tag array, the budget/fixed-by-name resolution, and the AND-across / OR-within semantics) is defined in the System Design doc §4.9; this section covers the web implementation.
+
+Every facet except search, date, and amount is an **Excel-style multi-select** (`MultiSelect`) and is **tri-state**: absent = no filter, a non-empty set matches any selected value, and a present-but-empty set matches nothing. The category, tag, budget, and fixed facets lead their option list with a `(Blanks)` row (`NO_VALUE`, labelled "No category / No tags / No budget / No fixed expense") to match rows with no value for that facet.
 
 **Filters**
 
 | Filter | Control | State shape |
 |---|---|---|
 | Search | Always-visible text input (debounced ~300ms) | `search?: string` |
-| Type | Select (All / income / expense / transfer) | `type?` |
-| Account | Select (All / each account) | `accountId?` |
-| Status | Select (All / confirmed / pending / dismissed) | `status?` |
+| Type | Multi-select (income / expense / transfer) | `types?: TransactionType[]` |
+| Account | Multi-select (each account; matches the source or transfer side) | `accountIds?: string[]` |
+| Status | Multi-select (confirmed / pending / dismissed) | `statuses?: TransactionStatus[]` |
 | Date range | From/to date inputs + preset buttons (This month, Last month, Last 3 months, This year, All time) | `dateFrom?`, `dateTo?` |
-| Categories | Multi-select (a transaction matches if its one category is any selected) | `categoryIds?: string[]` |
-| Tags | Multi-select chips | `tagIds?: string[]` |
+| Categories | Multi-select (+ "No category"); matches if the one category is any selected | `categoryIds?: string[]` |
+| Tags | Multi-select (+ "No tags") | `tagIds?: string[]` |
 | Amount range | Two `CurrencyAmountInput`s (min/max). Stored in **minor units**; the widget shows major units using the default currency's decimals | `amountMin?`, `amountMax?` |
-| Budget | Select (All budgets / each budget **name**). Options come from `v_budget_progress` (distinct `budget_name`) and are scoped to the active date range's months; a selected name is kept in the list even if the range no longer lists it | `budgetName?: string` |
-| Fixed-expense link | Select (All / Linked (paid) / Not linked (unpaid)) | `fixedExpenseLinked?: boolean` |
+| Budget | Multi-select of budget **names** (+ "No budget"). Options come from `v_budget_progress` (distinct `budget_name`), scoped to the active date range's months; selected names stay listed even if the range no longer lists them | `budgetNames?: string[]` |
+| Fixed expense | Multi-select of fixed-expense **names** (+ "No fixed expense"), mirroring the budget filter; options from `fixed_expenses` | `fixedExpenseNames?: string[]` |
 
-**Budget filter semantics** (see System Design §4.9): selecting a budget name resolves — via `v_budget_progress`, the same source used elsewhere in the app — to the set of `budget_id`s for that name, narrowed to the date range's months when a date filter is set (otherwise all periods). Transactions are then matched with `in('budget_id', ids)`. The transaction `date` filter still applies independently, so results are transactions linked to that budget **and** within any selected date range. `fetchBudgetNames(fromYM?, toYM?)` and `resolveBudgetIds(name, fromYM?, toYM?)` both read `v_budget_progress` — **not** the `budgets` table — so the filter is consistent with the Budgets page and the transaction budget picker (the raw table is RLS-scoped differently from the view the rest of the app reads).
+**Budget & fixed-expense filter semantics** (see System Design §4.9): selecting budget/fixed **names** resolves to the set of `budget_id`s / `fixed_expense_id`s for those names — budgets via `v_budget_progress`, fixed expenses via `fixed_expenses` — narrowed to the date range's months when a date filter is set (otherwise all periods). Transactions are then matched with `in('budget_id', ids)` / `in('fixed_expense_id', ids)`, OR-ed with the `(Blanks)` option (`…is.null`) when chosen. The transaction `date` filter still applies independently. `resolveBudgetIds` reads `v_budget_progress` — **not** the `budgets` table — so the budget filter stays consistent with the Budgets page and the transaction budget picker (the raw table is RLS-scoped differently from the view the rest of the app reads). `resolveRestrictions` performs these lookups once and feeds the shared `applyFilters` used by both the list and Summary queries.
 
 **UI layout**
 
@@ -600,17 +602,22 @@ The transaction list can be narrowed by any combination of filters. The query st
 
 Filters are the **single source of truth in the URL query string** via `react-router`'s `useSearchParams` (no `useState` mirror, no cross-session persistence). This makes filtered views shareable/bookmarkable and survives reload while resetting on a fresh navigation to `/transactions`.
 
-- Serialize each non-empty filter to a param: `?type=expense&from=2026-06-01&to=2026-06-30&cat=<id>,<id>&tag=<id>&amtMin=5000&search=coffee&budget=Food&fixed=unlinked`. Multi-selects are comma-joined ID lists; `budget` carries the budget **name**. Omit params that are unset/`"all"`.
+- Serialize each present filter to a param: `?type=expense&from=2026-06-01&to=2026-06-30&cat=<id>,<id>&tag=<id>&amtMin=5000&search=coffee&budget=Food,Rent&fixed=Netflix`. Every multi-select is a comma-joined value list (`budget`/`fixed` carry **names**; the others carry ids/enum values). A present-but-empty facet round-trips as `key=` ("none selected"); only absent facets are omitted.
 - A small `parseFilters(searchParams)` / `serializeFilters(filters)` pair (in `lib/utils/transaction-filters.ts`) converts between the URL and the `TransactionFilters` object. Amount params are **minor-unit** integers in the URL (parse/serialize stay currency-decimal-agnostic); only the amount input widget converts to/from major units for display.
-- Changing a filter calls `setSearchParams(serialize(next), { replace: true })` so filter tweaks don't spam browser history.
+- The page also keeps the **pager** in the URL alongside the filters: `page` (1-based, omitted on page 1) and `size` (omitted at the default of 25; options 25/50/100/200). Changing a filter resets to page 1 but preserves the size; the list query is windowed with `.range()` and `count: 'exact'`, so the pager's "x–y of N" reflects the full filtered count.
 
 **Hook changes (`use-transactions.ts`)**
 
-Extend `TransactionFilters` with the new fields and the existing `fetch` accordingly:
+`TransactionFilters` carries every facet and `fetch` reads from `v_transactions`:
 
-- Add column-level operators for `search` (`.ilike`), `amountMin`/`amountMax` (`.gte`/`.lte` on `amount`, in minor units), `categoryIds` (`.in('category_id', …)` — matches any selected), `budgetName`, and `fixedExpenseLinked` (`.not('…','is',null)` / `.is('…', null)`).
-- For `tagIds`, run the junction pre-query described in System Design §4.9 to collect transaction IDs and apply `.in('id', ids)`. Short-circuit to an empty result if the pre-query yields no IDs.
-- Add the new fields to the `useCallback` dependency array so the list refetches when any filter changes.
+- Column-level operators for `search` (`.ilike`), `amountMin`/`amountMax` (`.gte`/`.lte` on `amount`, in minor units), `types`/`statuses` (`.in`), `accountIds` (`.or` over both account columns), and `categoryIds` (`.or` of `category_id.in.(…)` and, for `(Blanks)`, `category_id.is.null`).
+- `tagIds` filters **in SQL** via the view's `tag_ids` array — `.or('tag_ids.ov.{ids},tag_ids.eq.{}')` (overlap for chosen tags, empty-array for "untagged") — so no junction pre-query is needed and pagination stays accurate.
+- `budgetNames`/`fixedExpenseNames` are resolved to id lists by `resolveRestrictions` (see §4.9) and applied as a shared `.or(…)` clause; a chosen-but-unresolved facet short-circuits to an empty result.
+- A stable serialization of each array facet is added to the `useCallback` dependency array so the list refetches when any filter changes. The `useTransactions(filters, { page, pageSize })` overload windows the query; omitting `page` fetches the whole set (used by the scheduled page).
+
+**Summary**
+
+A "Summary" dialog calls `fetchTransactionSummaryRows(filters)` — the same `applyFilters` against `v_transactions` but selecting only the money/grouping columns for the **whole filtered set** (all pages), fetched on demand when opened. `TransactionSummary` reduces it to income / expense / net / transfers in-out / count / largest expense plus collapsible breakdowns by account, category, budget, fixed expense, and tag (confirmed rows only; pending shown as a separate projection, dismissed excluded).
 
 **Supporting data**
 

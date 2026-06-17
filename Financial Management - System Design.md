@@ -359,7 +359,7 @@ CREATE TABLE transactions (
   transfer_account_id   UUID REFERENCES accounts(id) ON DELETE RESTRICT,
   type                  transaction_type NOT NULL,
   status                transaction_status NOT NULL DEFAULT 'confirmed',
-  amount                BIGINT NOT NULL CHECK (amount > 0),
+  amount                BIGINT NOT NULL,
   description           TEXT,
   date                  DATE NOT NULL DEFAULT CURRENT_DATE,
   budget_id                 UUID REFERENCES budgets(id) ON DELETE SET NULL,
@@ -368,6 +368,12 @@ CREATE TABLE transactions (
   fixed_expense_id            UUID REFERENCES fixed_expenses(id) ON DELETE SET NULL,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  -- Amount may be negative for income/expense (e.g. a refund recorded as a
+  -- negative expense), but never zero; transfers stay strictly positive.
+  CONSTRAINT transactions_amount_check CHECK (
+    amount <> 0 AND (type <> 'transfer' OR amount > 0)
+  ),
 
   -- Transfer must reference a second account
   CONSTRAINT chk_transfer_account CHECK (
@@ -712,6 +718,23 @@ JOIN categories c ON c.id = t.category_id
 WHERE t.type = 'expense' AND t.status = 'confirmed'
 GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
 
+-- Transactions list source. Aggregates each transaction's tag IDs into a
+-- tag_ids array so the tag facet (including "untagged") becomes an ordinary SQL
+-- predicate (tag_ids && '{…}' / tag_ids = '{}'). That keeps the whole list query
+-- server-side and paginatable (.range + count); see §4.9. SECURITY INVOKER so
+-- the base tables' RLS still scopes rows to the owner.
+CREATE OR REPLACE VIEW v_transactions
+WITH (security_invoker = on) AS
+SELECT
+  t.*,
+  COALESCE(
+    array_agg(tt.tag_id) FILTER (WHERE tt.tag_id IS NOT NULL),
+    '{}'::uuid[]
+  ) AS tag_ids
+FROM transactions t
+LEFT JOIN transaction_tags tt ON tt.transaction_id = t.id
+GROUP BY t.id;
+
 -- Each account's balance as of a selected month: the latest ledger row at or
 -- before that month (balances carry forward across empty months). Returns at
 -- most one row per account regardless of history depth; the dashboard Accounts
@@ -868,42 +891,40 @@ Every table has RLS enabled. Policies ensure that a user can only read/write row
 
 ### 4.9 Transaction Filtering & Search
 
-The transaction list supports filtering on any combination of attributes (see the "Filtering & Search" requirements). Filtering is implemented entirely as **client-issued PostgREST queries against the `transactions` schema** — no filter-specific schema changes or new views are required (the category filter reuses the `category_id` column the feature already adds). RLS already scopes every query to the current user, so filters compose on top of an owner-only row set.
+The transaction list supports filtering on any combination of attributes (see the "Filtering & Search" requirements). Every filter is a **client-issued PostgREST query against the `v_transactions` view** rather than the raw `transactions` table. The view is `transactions.*` plus a `tag_ids` array (tag IDs aggregated from `transaction_tags`); reading through it lets the tag facet — including "untagged" — be expressed as ordinary SQL, so the *entire* query is server-side and can be windowed with `.range()` + `count: 'exact'` for accurate pagination. RLS still scopes every query to the current user (the view is `SECURITY INVOKER`), so filters compose on top of an owner-only row set.
 
-**Combination semantics:** filters across different dimensions are `AND`-ed; multiple values within one multi-select dimension are `OR`-ed.
+**Combination semantics:** filters across different dimensions are `AND`-ed; multiple values within one multi-select dimension are `OR`-ed. Each multi-select facet is **tri-state**: *absent* = no filter (the default "all"), *non-empty* = match any listed value, *present-but-empty* = match nothing (the user unchecked every option) — an empty facet short-circuits the whole query to no results. The category, tag, budget, and fixed-expense facets may also include a sentinel `(Blanks)` value that matches rows with **no** value for that facet.
 
-**Column-level filters** map directly to PostgREST operators on `transactions` and are backed by existing indexes:
+A single `applyFilters` helper builds the predicate set, and is shared by the paginated **list** query and the whole-set **Summary** query so their constraints can never drift.
+
+**Column-level facets** map directly to PostgREST operators and are backed by existing indexes:
 
 | Filter | Query mapping | Index |
 |---|---|---|
 | Search (description) | `ilike('description', '%term%')` | none (sequential scan over the user's rows; acceptable for a single-user dataset) |
-| Type | `eq('type', …)` | `idx_txn_type_date` |
-| Account | `or('account_id.eq.X,transfer_account_id.eq.X')` | `idx_txn_account` |
-| Status | `eq('status', …)` | `idx_txn_status` |
+| Type | `in('type', types)` (matches ANY selected) | `idx_txn_type_date` |
+| Account | `or('account_id.eq.X,transfer_account_id.eq.X', …)` over every selected account (matches the source **or** the transfer side) | `idx_txn_account` |
+| Status | `in('status', statuses)` (matches ANY selected) | `idx_txn_status` |
 | Date range | `gte('date', from)` / `lte('date', to)` | `idx_txn_date` |
 | Amount range | `gte('amount', min)` / `lte('amount', max)` | none (acceptable for single-user) |
-| Category | `in('category_id', categoryIds)` (matches ANY selected) | `idx_txn_category` |
-| Fixed-expense link | `not('fixed_expense_id','is',null)` / `is('fixed_expense_id', null)` | `idx_txn_fixed_exp` |
+| Category | `or('category_id.in.(ids)', 'category_id.is.null')` — selected ids and/or `(Blanks)` | `idx_txn_category` |
+| Tag | `or('tag_ids.ov.{ids}', 'tag_ids.eq.{}')` over the view's `tag_ids` array — overlap for selected tags, empty-array for `(Blanks)` | — (array predicate on the view) |
 
 Amounts are filtered in **minor units** (`bigint`) — the client converts the user's major-unit input via `toMinorUnits()` before querying. Date bounds are inclusive `YYYY-MM-DD` strings.
 
-**Category filter (column-level).** Category is single-select on `transactions` (`category_id`), so it maps directly to `in('category_id', categoryIds)` — a transaction matches when its one category is **any** of the selected (the `OR`-within rule), backed by `idx_txn_category`.
+**Tag filter (array predicate).** Because the read goes through `v_transactions`, tags are no longer a junction pre-query: the chosen tag IDs become `tag_ids && '{…}'` (overlap = carries **any** selected tag), and the `(Blanks)/untagged` option becomes `tag_ids = '{}'`. Both are `OR`-ed within the facet, so the tag filter stays a single server-side predicate and never blocks pagination.
 
-**Tag filter (junction table).** Because there is no `tag_id` column on `transactions`, tags are resolved with a **pre-query that collects matching transaction IDs** from `transaction_tags`, then constrains the main query with `in('id', …)`:
+**Budget & fixed-expense filters (by name).** Both budgets and fixed expenses are month-specific rows sharing a **name**, so these facets select **names**, not single ids, resolved to an id set with a pre-query and applied as `in('budget_id', …)` / `in('fixed_expense_id', …)`:
 
-1. Selected tag IDs → `transaction_tags.select('transaction_id').in('tag_id', tagIds)` yields the set of transaction IDs carrying **any** selected tag (the `OR`-within rule).
-2. The resulting ID set is applied to the main query as `in('id', ids)`, combined with all column-level filters above (including the category filter). An empty pre-query result short-circuits to no results.
+1. Budget names resolve through **`v_budget_progress`** (the same view the Budgets page and the transaction budget picker use — not the `budgets` table — so the filter offers exactly the budgets surfaced elsewhere): `v_budget_progress.select('budget_id').in('budget_name', names)`. Fixed-expense names resolve through `fixed_expenses.select('id').in('name', names)`.
+2. When a **date range** is also active, the rows are narrowed to the months the range spans via `gte('year_month', fromYM)` / `lte('year_month', toYM)`, where `fromYM`/`toYM` are the `YYYY-MM` prefixes of the date bounds. (Example: a 2026-05-30 → 2026-06-03 range matches rows in `2026-05` and `2026-06`.) With no date range, every period of that name is included.
+3. The resolved ids are combined with the facet's `(Blanks)` option as a single `or(…)` clause (e.g. `budget_id.in.(ids),budget_id.is.null`). If named values were chosen but none resolved (and `(Blanks)` was not), the whole query short-circuits to no results. The transaction `date` filter still applies independently, so the final rows are those linked to the named budget/fixed expense **and** within any selected date range.
 
-**Budget filter (by name, via `v_budget_progress`).** The budget filter selects a budget **name**, not a single `budget_id` — budgets are month-specific rows, so one name (a `(name)` lineage) spans many rows. It is resolved with a pre-query, then applied as `in('budget_id', …)`:
+The selectable budget **names** for the filter UI are read from `v_budget_progress` (distinct `budget_name`) and the fixed-expense names from `fixed_expenses`, both scoped by the same optional month range so the options reflect the active date filter.
 
-1. Read budget rows from **`v_budget_progress`** (the same view the Budgets page and the transaction budget picker use), not the `budgets` table directly, so the filter offers exactly the budgets surfaced elsewhere in the app: `v_budget_progress.select('budget_id').eq('budget_name', name)`.
-2. When a **date range** is also active, the budget rows are narrowed to the months the range spans: `gte('year_month', fromYM)` / `lte('year_month', toYM)`, where `fromYM`/`toYM` are the `YYYY-MM` prefixes of the date bounds. (Example: a 2026-05-30 → 2026-06-03 range matches budget rows in `2026-05` and `2026-06`.) With no date range, every period of that name is included.
-3. The resolved `budget_id` set is applied as `in('budget_id', ids)` (backed by `idx_txn_budget`); an empty set short-circuits to no results. The transaction `date` filter still applies independently, so the final rows are those linked to the named budget **and** within any selected date range.
+This keeps filtering entirely server-side and paginatable. For a single-user app the row counts are small enough that the un-indexed `description ilike`, `amount` range, and array overlap scans are not a concern; the text/amount filters are natural candidates for a trigram / btree index should multi-user scale ever be introduced (P1).
 
-The list of selectable budget **names** for the filter UI is likewise read from `v_budget_progress` (distinct `budget_name`), scoped by the same optional month range so the options reflect the active date filter.
-4. If a junction pre-query returns no IDs, the list is empty — short-circuit without issuing the main query.
-
-This keeps filtering server-side and index-assisted on the tag junction (`transaction_tags` is keyed on `(transaction_id, tag_id)`), avoids over-fetching, and needs no embedded-resource filter syntax. For a single-user app the row counts are small enough that the un-indexed `description ilike` and `amount` range scans are not a concern; both are natural candidates for a trigram / btree index should multi-user scale ever be introduced (P1).
+**Summary.** The Summary view re-runs `applyFilters` against `v_transactions` but selects only the money/grouping columns for the *whole* filtered set (every page, fetched on demand when the dialog opens), then hydrates account/category/budget/fixed/tag names client-side to build totals and per-facet breakdowns. Money math counts confirmed rows only (pending surfaced separately as a projection, dismissed excluded); transfers are reported as "transfer out" / "transfer in" rather than income or expense.
 
 ### 4.10 Account Avatar Images (Supabase Storage)
 
