@@ -145,6 +145,62 @@ A central overview screen that gives the user a quick snapshot of their financia
 - Budget periods can be changed to weekly, quarterly, yearly, or custom
 - Fixed expense recurrence can be changed to weekly, quarterly, yearly, or custom
 
+### Budget Installments (Spread an Expense Across Budgets)
+
+A way to absorb a large one-off expense gradually, by reserving future budget allowance instead of all of it at once. The money leaves the account immediately (the account balance is always correct), but the impact on the user's spending discipline is **spread forward**: selected budgets in the coming months are reduced so the user has to spend less to "pay the expense back" to themselves.
+
+**Goal**
+
+- A big purchase (e.g. a laptop) should not blow a single month's budget. Instead, the user voluntarily shrinks the next few months' budgets to compensate, encouraging lower spending until the expense is absorbed.
+
+**Core invariant**
+
+- The expense is **one ordinary transaction** that debits the account in full, exactly like any other expense. Account balances, cash flow, and the monthly balance ledger are unaffected by the installment.
+- The "reservation" is **purely budget-side bookkeeping** — it is *not* money and *not* a transaction. It only lowers what selected budgets show as available in future months. It can never touch an account balance because it never enters the transactions table.
+
+**What the user sets up**
+
+When recording an expense, the user can optionally turn it into an installment by choosing:
+
+1. **Start month** — *this month* or *next month*. (Choosing *next month* leaves the current month's budgets untouched, since the cash already left this month; choosing *this month* makes the current month the first installment month.)
+2. **Budgets** — one or more budgets (by name/lineage) to draw the reservation from. Drawing from several budgets each month lets the same expense be absorbed in **fewer months**.
+3. **Number of months** — how many consecutive months to spread across.
+4. **Allocation grid** — a budgets × months grid of reserved amounts. The grid is **pre-filled with an even split** (`total ÷ (number of budgets × number of months)`, with any rounding remainder placed in one cell so the grid sums exactly to the expense total). The user can then **edit any cell freely** — push more onto a larger budget, or set a cell to **0** to skip a budget in a given month.
+
+**Rules**
+
+- The grid total must equal the expense amount; the form shows a live running total and remaining-to-allocate indicator and blocks saving until they match.
+- Changing the set of budgets or the number of months **re-runs the even pre-fill** (discarding manual edits), since the grid shape changed. Editing a single cell never changes the grid shape; a "split evenly again" action re-applies the pre-fill on demand.
+- Each non-zero cell becomes one reservation for that budget in that month. Zero cells reserve nothing.
+- A reservation may exceed a budget's room for that month, pushing its remaining **negative** — this is the intended "spend nothing here" signal, not an error.
+- If a target budget has **no row yet** for a future month (budgets are created per month), creating the installment **materializes** that month's budget row (defaulting its periodic amount to the most recent value in that lineage, or 0 if the budget is new). This gives the reservation a home and keeps the budget's carry-over lineage unbroken (a missing month would otherwise reset carry-over).
+
+**How the calculation works**
+
+- For each budget month, **reserved** = the sum of all installment cells targeting that budget + month (across every installment — multiple installments can stack).
+- The budget's remaining becomes:
+
+  `remaining = periodic amount + carry-in − spent − reserved`
+
+- The reservation interacts with carry-over the simple way (**"subtract from effective, then carry normally"**): it lowers the month's available pool, and only the **true leftover** carries into the next month. The reservation itself is *use-it-or-lose-it* — it does not linger beyond its month. Because `remaining` is what feeds the next month's carry-in, an overspend still carries forward as usual on top of the next month's own reservation.
+
+**Worked example** — Laptop = $1,200, spread across **Groceries** and **Dining**, **2 months**, starting next month. Even pre-fill = $1,200 ÷ (2 budgets × 2 months) = **$300 per cell**. Both budgets have a $1,000 periodic amount.
+
+| | Reserved | periodic | carry-in | effective − reserved | (before any spend) remaining |
+|---|---|---|---|---|---|
+| Groceries — Jul | $300 | $1,000 | $0 | $700 | $700 |
+| Dining — Jul | $300 | $1,000 | $0 | $700 | $700 |
+| Groceries — Aug | $300 | $1,000 | (Jul leftover) | $700 − reserved | … |
+| Dining — Aug | $300 | $1,000 | (Jul leftover) | $700 − reserved | … |
+
+The account takes a single −$1,200 hit in July. The expense transaction itself is **not** linked to any budget (so it does not also count as July spend); the spreading is done entirely by the reservations. Each budget's reservation and carry-over are tracked independently.
+
+**Editing & cancelling**
+
+- **Cancel an installment** removes all its future reservations; the affected budgets recompute immediately and their full allowance returns. Budget rows that were materialized for the installment remain as ordinary budget rows.
+- Deleting the **source expense** cancels its installment (the spread no longer has a source).
+- Editing the source expense amount does not silently rebalance the grid; the user re-opens the installment to re-spread if needed.
+
 ### Multi-Currency Transactions
 
 - A transaction can be created in a currency different from the account's default currency

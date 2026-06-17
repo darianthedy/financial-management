@@ -375,6 +375,35 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 
 > Each row represents one fixed expense for one specific month. There is no separate periods table. Paid status is derived from whether any `transactions` row references this fixed expense via `fixed_expense_id`.
 
+**budget_installments** (P1 — see §3.9)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `UUID` | PK |
+| `user_id` | `UUID` | FK → `auth.users` |
+| `source_transaction_id` | `UUID` | FK → `transactions`, `ON DELETE CASCADE`. The real expense being spread. |
+| `total_amount` | `BIGINT` | Minor units; equals the expense amount. `> 0`. |
+| `description` | `TEXT` | Nullable |
+| `start_year_month` | `TEXT` | `'YYYY-MM'`, first reserved month (display convenience) |
+| `months` | `SMALLINT` | Span in months (display convenience) |
+| `created_at` / `updated_at` | `TIMESTAMPTZ` | |
+
+> One header per spread expense. The reservation math lives in the allocations table; the header carries display convenience fields.
+
+**budget_installment_allocations** (P1 — see §3.9)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `UUID` | PK |
+| `installment_id` | `UUID` | FK → `budget_installments`, `ON DELETE CASCADE` |
+| `user_id` | `UUID` | FK → `auth.users` (denormalized for RLS / the view join) |
+| `budget_name` | `TEXT` | The budget **lineage** this cell reserves from (not a budget `id`) |
+| `year_month` | `TEXT` | `'YYYY-MM'` |
+| `amount` | `BIGINT` | Reserved minor units, `> 0`. Zero cells are not stored. |
+| `created_at` | `TIMESTAMPTZ` | |
+
+> One row per non-zero grid cell. `UNIQUE(installment_id, budget_name, year_month)`. Reservations are **budget-side only** — never in `transactions`, never affecting account balances. `v_budget_progress` subtracts them: `remaining = periodic + carry_in − spent − reserved`.
+
 **scheduled_transactions**
 
 | Column | Type | Notes |
@@ -500,6 +529,141 @@ COMMIT;
 ```
 
 > Note: `DROP TABLE budget_periods` cascades to the old `transactions.budget_period_id` FK, so step 5's column drop and the table drop must agree on order; the script drops the column first, then the table.
+
+### 3.9 Forward Migration — Budget Installments (P1) (`20260618000001_budget_installments.sql`)
+
+Adds the two reservation tables, folds a `reserved` term into `v_budget_progress`, and provides the `create_budget_installment` RPC that persists an expense and its grid atomically. Reservations are **budget-side only** — they never enter `transactions`, so account balances and cash flow are untouched. See System Design §4.11 and Web §7.8.
+
+```sql
+-- 20260618000001_budget_installments.sql
+BEGIN;
+
+-- 1. Tables ---------------------------------------------------------------
+CREATE TABLE budget_installments (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id               UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  source_transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  total_amount          BIGINT NOT NULL CHECK (total_amount > 0),
+  description           TEXT,
+  start_year_month      TEXT NOT NULL,
+  months                SMALLINT NOT NULL CHECK (months > 0),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_budget_installments_user ON budget_installments(user_id);
+CREATE INDEX idx_budget_installments_txn  ON budget_installments(source_transaction_id);
+
+CREATE TABLE budget_installment_allocations (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  installment_id UUID NOT NULL REFERENCES budget_installments(id) ON DELETE CASCADE,
+  user_id        UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  budget_name    TEXT NOT NULL,
+  year_month     TEXT NOT NULL,
+  amount         BIGINT NOT NULL CHECK (amount > 0),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (installment_id, budget_name, year_month)
+);
+CREATE INDEX idx_bia_lookup ON budget_installment_allocations(user_id, budget_name, year_month);
+
+-- 2. RLS (standard owner policy) -----------------------------------------
+ALTER TABLE budget_installments            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_installment_allocations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY policy_owner_budget_installments ON budget_installments
+  FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY policy_owner_bia ON budget_installment_allocations
+  FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- 3. Realtime -------------------------------------------------------------
+ALTER PUBLICATION supabase_realtime ADD TABLE budget_installments;
+ALTER PUBLICATION supabase_realtime ADD TABLE budget_installment_allocations;
+
+-- 4. Fold `reserved` into v_budget_progress ------------------------------
+--    Adds a `reserved` CTE (SUM of allocations per user_id+name+year_month),
+--    LEFT JOINs it into base, and subtracts it inside the recursive remaining:
+--      anchor:  remaining = periodic_amount - spent - reserved
+--      recurse: remaining = periodic_amount + carry_in - spent - reserved
+--    effective_amount stays periodic + carry_in; a `reserved` column is exposed.
+--    (Full recursive body in the System Design doc §VIEWS / §4.11.)
+DROP VIEW IF EXISTS v_budget_progress;
+-- CREATE VIEW v_budget_progress AS WITH RECURSIVE spent AS (...),
+--   reserved AS (SELECT user_id, budget_name, year_month, SUM(amount)::BIGINT AS reserved
+--                FROM budget_installment_allocations
+--                GROUP BY user_id, budget_name, year_month),
+--   base AS (... LEFT JOIN reserved r ON r.user_id=b.user_id AND r.budget_name=b.name
+--                AND r.year_month=b.year_month, COALESCE(r.reserved,0) ...),
+--   chain AS (... recursive, remaining nets out reserved ...)
+--   SELECT ..., reserved, periodic_amount + carry_in AS effective_amount,
+--          periodic_amount + carry_in - spent - reserved AS remaining FROM chain;
+ALTER VIEW v_budget_progress SET (security_invoker = true);
+
+-- 5. RPC: persist an expense + its reservation grid atomically -----------
+--    Called by the web client (Web §7.8). p_grid is a JSON array of
+--    { budget_name, year_month, amount } objects (non-zero cells only).
+CREATE OR REPLACE FUNCTION create_budget_installment(
+  p_account_id       UUID,
+  p_amount           BIGINT,
+  p_date             DATE,
+  p_description      TEXT,
+  p_start_year_month TEXT,
+  p_months           SMALLINT,
+  p_grid             JSONB
+) RETURNS UUID
+LANGUAGE plpgsql SECURITY INVOKER AS $$
+DECLARE
+  v_user UUID := auth.uid();
+  v_txn  UUID;
+  v_inst UUID;
+  v_cell RECORD;
+  v_sum  BIGINT;
+BEGIN
+  -- Grid must reconcile to the expense amount.
+  SELECT COALESCE(SUM((c->>'amount')::BIGINT), 0) INTO v_sum
+  FROM jsonb_array_elements(p_grid) c;
+  IF v_sum <> p_amount THEN
+    RAISE EXCEPTION 'Allocation grid (%) must equal expense amount (%)', v_sum, p_amount;
+  END IF;
+
+  -- 1. The real expense. budget_id stays NULL: the spread accounts for the impact.
+  INSERT INTO transactions (user_id, account_id, type, status, amount, description, date)
+  VALUES (v_user, p_account_id, 'expense', 'confirmed', p_amount, p_description, p_date)
+  RETURNING id INTO v_txn;
+
+  -- 2. Header.
+  INSERT INTO budget_installments
+    (user_id, source_transaction_id, total_amount, description, start_year_month, months)
+  VALUES (v_user, v_txn, p_amount, p_description, p_start_year_month, p_months)
+  RETURNING id INTO v_inst;
+
+  -- 3. For each cell: materialize the budget row if missing, then insert the allocation.
+  FOR v_cell IN SELECT * FROM jsonb_array_elements(p_grid) AS c LOOP
+    INSERT INTO budgets (user_id, name, year_month, periodic_amount)
+    VALUES (
+      v_user,
+      v_cell.value->>'budget_name',
+      v_cell.value->>'year_month',
+      COALESCE((
+        SELECT b.periodic_amount FROM budgets b
+        WHERE b.user_id = v_user AND b.name = v_cell.value->>'budget_name'
+          AND b.year_month <= v_cell.value->>'year_month'
+        ORDER BY b.year_month DESC LIMIT 1
+      ), 0)
+    )
+    ON CONFLICT (user_id, name, year_month) DO NOTHING;
+
+    INSERT INTO budget_installment_allocations
+      (installment_id, user_id, budget_name, year_month, amount)
+    VALUES (v_inst, v_user, v_cell.value->>'budget_name',
+            v_cell.value->>'year_month', (v_cell.value->>'amount')::BIGINT);
+  END LOOP;
+
+  RETURN v_inst;
+END;
+$$;
+
+COMMIT;
+```
+
+> Cancelling an installment is a plain `DELETE FROM budget_installments WHERE id = ?` — the `ON DELETE CASCADE` clears its allocations and the budgets recompute. Deleting the source transaction cascades to the installment as well. Materialized `budgets` rows are intentionally left behind as ordinary rows.
 
 ---
 
@@ -731,6 +895,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE account_monthly_balances;
 ALTER PUBLICATION supabase_realtime ADD TABLE budgets;
 ALTER PUBLICATION supabase_realtime ADD TABLE fixed_expenses;
 ALTER PUBLICATION supabase_realtime ADD TABLE user_settings;
+-- P1 — Budget Installments (§3.9): reserved amounts refresh the Budgets page live
+ALTER PUBLICATION supabase_realtime ADD TABLE budget_installments;
+ALTER PUBLICATION supabase_realtime ADD TABLE budget_installment_allocations;
 ```
 
 Clients subscribe using the Supabase SDK:

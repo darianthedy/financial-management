@@ -517,6 +517,15 @@ const { data } = await supabase
 
 > Each row is one fixed expense for one specific month. Paid status is derived from linked transactions — a fixed expense is considered paid when at least one `transactions` row references it via `fixed_expense_id`.
 
+**`budget_installments` / `budget_installment_allocations` tables (P1 — Budget Installments, see §7.8):**
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `budget_installments` | `source_transaction_id` (FK → `transactions`, `ON DELETE CASCADE`), `total_amount`, `start_year_month`, `months` | One header per spread expense. |
+| `budget_installment_allocations` | `installment_id` (FK, `ON DELETE CASCADE`), `budget_name`, `year_month`, `amount` | One row per non-zero grid cell. Targets a budget **lineage by name**, not a budget `id`. `UNIQUE(installment_id, budget_name, year_month)`. |
+
+> Reservations are **budget-side only** — they never appear in `transactions` and never affect account balances or cash flow. `v_budget_progress` exposes a `reserved` column and its `remaining` already subtracts it (`periodic + carry_in − spent − reserved`). The source expense itself has `budget_id = null`.
+
 ---
 
 ## 7. Page Breakdown & Key Queries
@@ -634,6 +643,37 @@ The filter panel needs the lists of accounts (`useAccounts`), categories & tags 
 - List of active scheduled transactions with next due date.
 - Section for pending transactions awaiting confirmation.
 - Confirm / edit / dismiss actions on pending items.
+
+### 7.8 Budget Installments (P1) — Spread an Expense Across Budgets
+
+Lets a large expense be absorbed gradually by reserving future budget allowance. The account is debited in full immediately; only the **budgets** shown for future months shrink. See requirements doc → "Budget Installments" and System Design §4.11 for the model.
+
+**Where it lives.** An optional **"Spread across budgets"** toggle on the **expense** transaction form (income/transfer excluded). When enabled, the form reveals the installment builder:
+
+1. **Start month** — segmented control: *This month* / *Next month*.
+2. **Budgets** — multi-select of budget **names** (lineages). Source the candidate names from `fetchBudgetNames()` / `v_budget_progress` (the same names the Budgets page shows).
+3. **Months** — number stepper (consecutive months from the start month).
+4. **Allocation grid** — a budgets × months matrix of currency inputs, **pre-filled with an even split**: each cell = `floor(total / (budgets * months))` minor units, with the rounding remainder dropped into one cell so the grid sums exactly to the expense amount. The header shows a live **total reserved** and **remaining to allocate**; **Save is disabled until the grid total equals the expense amount.**
+   - Editing the budget set or month count **re-runs the even pre-fill** (grid shape changed). A **"Split evenly"** button re-applies it on demand. Editing a cell never changes the shape; cells may be set to `0` to skip a budget that month.
+
+**On submit (single logical operation — wrap in one RPC for atomicity):**
+
+1. Insert the expense `transactions` row as usual, with `budget_id = null` (the spread, not this row, accounts for the budget impact).
+2. For each distinct cell budget+month, **ensure the budget row exists** — `insert … on conflict (user_id, name, year_month) do nothing`, defaulting `periodic_amount` to the latest known value in that lineage (else 0). This keeps carry-over lineages unbroken.
+3. Insert one `budget_installments` header (`source_transaction_id`, `total_amount`, `start_year_month`, `months`).
+4. Bulk-insert one `budget_installment_allocations` row per **non-zero** cell (`budget_name`, `year_month`, `amount`).
+
+> A Postgres RPC (`create_budget_installment`) is the clean home for steps 1–4 so the expense and its reservations commit together. The client builds the grid; the RPC persists it.
+
+**Budgets page (§7.4) changes.** `v_budget_progress` now returns a `reserved` column and `remaining` already nets it out. Each budget card:
+
+- shows a **"Reserved $X"** line when `reserved > 0` (e.g. "−$300 installment"), distinct from the carry-over label;
+- renders **negative `remaining`** gracefully (reservations can exceed the month's room — the intended "spend nothing" signal);
+- a tooltip/expander can list the source installment(s).
+
+**Managing installments.** A lightweight list (e.g. under the Budgets page or Settings) of active installments with their source expense, total, span, and a **Cancel** action that deletes the `budget_installments` row (cascades to allocations; future budgets recover their allowance). Deleting the source transaction cancels the installment automatically (`ON DELETE CASCADE`).
+
+**Hooks.** Add `use-installments.ts` (create via the RPC, list, cancel). The existing `useBudgets` realtime channel should also subscribe to `budget_installment_allocations` changes so reserved amounts refresh live, alongside the current `budgets` / `transactions` subscriptions.
 
 ---
 
