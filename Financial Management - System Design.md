@@ -932,6 +932,70 @@ CREATE POLICY "account_images_owner_insert"
 
 **Where the image surfaces.** The account list card, the account detail header, the form preview, and the **dashboard Accounts card** render it via the shared `AccountAvatar` (image, else type icon). The **transaction list** reuses the account image too: its avatar shows the logo when the linked account has one (keeping the small transaction-direction badge), and falls back to colored initials otherwise — so the queries that hydrate transaction rows select `accounts.image_url` alongside the name.
 
+### 4.11 Budget Installments (P1) — Spreading an Expense Across Budgets
+
+This feature absorbs a large one-off expense gradually by **reserving future budget allowance**, without ever touching account balances. The design keeps the two domains the schema already separates — **money** (transactions → accounts) and **budget bookkeeping** (transactions ↔ budgets) — completely independent: the installment lives entirely on the budget side.
+
+**Core idea.** The expense itself is one ordinary `transactions` row that debits the account in full (the account ledger and cash-flow views are untouched, and that row's `budget_id` is left **NULL** so it does not also count as the current month's spend). A separate pair of tables records a budget-side **reservation grid**, and `v_budget_progress` subtracts those reservations from each affected budget month. A reservation is *not* money and never enters `transactions`, so it physically cannot affect an account balance.
+
+**Two new tables:**
+
+```sql
+-- One header per spread expense.
+CREATE TABLE budget_installments (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id               UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  source_transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  total_amount          BIGINT NOT NULL CHECK (total_amount > 0),  -- minor units; = the expense
+  description           TEXT,
+  start_year_month      TEXT NOT NULL,    -- 'YYYY-MM'; first reserved month (display convenience)
+  months                SMALLINT NOT NULL CHECK (months > 0),      -- span (display convenience)
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_budget_installments_user ON budget_installments(user_id);
+CREATE INDEX idx_budget_installments_txn  ON budget_installments(source_transaction_id);
+
+-- The budgets x months reservation grid. One row per non-zero cell.
+-- Targets a budget LINEAGE by name (budgets are per-month rows), not a budget id,
+-- so a reservation survives edits to that month's budget row and works even before
+-- the target month's budget row exists.
+CREATE TABLE budget_installment_allocations (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  installment_id UUID NOT NULL REFERENCES budget_installments(id) ON DELETE CASCADE,
+  user_id        UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  budget_name    TEXT NOT NULL,                 -- the budget lineage this cell reserves from
+  year_month     TEXT NOT NULL,                 -- 'YYYY-MM'
+  amount         BIGINT NOT NULL CHECK (amount > 0),   -- reserved minor units (zero cells not stored)
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (installment_id, budget_name, year_month)
+);
+CREATE INDEX idx_bia_lookup ON budget_installment_allocations(user_id, budget_name, year_month);
+```
+
+**View change.** `v_budget_progress` gains a `reserved` term, summed per `(user_id, budget_name, year_month)` and matched to each budget month, then subtracted inside the recursive `remaining`. Because `remaining` feeds the next month's `carry_in`, the reservation lowers the month's pool and only the *true leftover* carries — the **"subtract from effective, then carry normally"** rule (the reservation is use-it-or-lose-it; an overspend still carries as before):
+
+```sql
+-- New CTE folded into v_budget_progress:
+reserved AS (
+  SELECT user_id, budget_name, year_month, SUM(amount)::BIGINT AS reserved
+  FROM budget_installment_allocations
+  GROUP BY user_id, budget_name, year_month
+)
+-- base joins reserved on (user_id, name, year_month), COALESCE(reserved, 0).
+-- Anchor:   remaining = periodic_amount - spent - reserved
+-- Recurse:  remaining = periodic_amount + carry_in - spent - reserved
+-- Output adds a `reserved` column; effective_amount stays periodic + carry_in.
+```
+
+**Materialization (lineage continuity).** Budgets are per-month rows, so a target future month may have no budget row yet — which would leave the reservation homeless *and* break carry-over (a gap resets the chain). When an installment is created, each distinct `(budget_name, year_month)` cell **upserts a `budgets` row if absent** (`INSERT … ON CONFLICT (user_id, name, year_month) DO NOTHING`), defaulting `periodic_amount` to the latest known value in that lineage at or before the month (else 0). This keeps the reservation visible and the lineage unbroken.
+
+**Lifecycle.**
+
+- **Cancel installment** → delete the `budget_installments` row; `ON DELETE CASCADE` clears its allocations, future budgets recompute, and the full allowance returns. Materialized `budgets` rows remain as ordinary rows.
+- **Delete the source expense** → `ON DELETE CASCADE` from `transactions` removes the installment and its allocations (a spread with no source is meaningless).
+- **RLS** — both tables carry `user_id` directly and use the standard owner policy (`user_id = auth.uid()`). Add both to the `supabase_realtime` publication so the Budgets page refreshes live.
+
 ---
 
 ## 5. P1 Extension Points
@@ -940,5 +1004,6 @@ CREATE POLICY "account_images_owner_insert"
 |---|---|
 | **Receipt Scanning** | Add `receipt_url TEXT` column to `transactions`; store images in Supabase Storage; add an Edge Function that calls an OCR/AI API and pre-fills transaction fields. |
 | **Flexible Periods** | Extend `recurrence_type` enum with `'weekly'`, `'quarterly'`, `'yearly'`, `'custom'`. Add a `period_type` column to `budgets` and generalize the lineage/period key in `v_budget_progress` beyond `year_month`. Adjust cron logic. |
+| **Budget Installments** | Add `budget_installments` (header, FK → source `transactions` row, `ON DELETE CASCADE`) and `budget_installment_allocations` (budgets × months reservation grid, keyed by `budget_name` + `year_month`). Fold a `reserved` term into `v_budget_progress` (`remaining = periodic + carry_in − spent − reserved`). Materialize missing budget rows on creation to keep lineages unbroken. Account balances untouched (reservations never enter `transactions`). See §4.11. |
 | **Multi-Currency Transactions** | Add `original_amount BIGINT`, `original_currency TEXT`, and `exchange_rate NUMERIC` columns to `transactions`. The existing `amount` holds the converted value in the account's currency. The trigger uses `amount` for balance updates. |
 | **Extended Dashboard** | Queries over `fixed_expenses` (upcoming/overdue), `transactions WHERE status = 'pending'`, and `v_monthly_cashflow` grouped over multiple months. No schema changes needed. |
