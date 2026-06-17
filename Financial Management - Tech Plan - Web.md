@@ -547,10 +547,12 @@ The dashboard is **month-scoped**: a header month navigator (`ChevronLeft` / `Ch
 
 ### 7.2 Accounts Page
 
-- List all non-archived accounts with their current balance (queried from `account_monthly_balances` — latest `year_month` row per account, or via the `v_account_current_balance` view).
+- List all non-archived accounts with their current balance (queried from `account_monthly_balances` — latest `year_month` row per account, or via the `v_account_current_balance` view). A header shows the **total balance** (net worth) — the sum of every account's current balance in the single app currency.
 - Clicking an account shows its transactions filtered by `account_id`.
-- Add/edit account via dialog form.
+- Add/edit account via dialog form. Fields: **name**, **type** (bank account / credit card / digital wallet / cash / other), **starting balance**, optional avatar image, a **Show on dashboard** toggle, and a **Set as default account** toggle.
 - Archive (soft-delete) instead of hard-delete.
+- **Show on dashboard:** the form's `show_on_dashboard` toggle controls whether the account (and its balance) appears on the dashboard Accounts card. When off, the account card shows an "Off dashboard" badge but the account otherwise behaves normally.
+- **Default account:** an account can be marked as the user's default (stored on `user_settings.default_account_id` via `updateDefaultAccountId`, not on the account row). It is pre-selected when adding a new transaction. Only one account is the default at a time — checking it on another account replaces the prior one; unchecking the current default clears it.
 - **Account avatar:** each card (and the detail header) shows the account's uploaded image via the shared `AccountAvatar`, falling back to a type-based icon when `image_url` is null. The form's upload control stages the picked file locally (object-URL preview) and uploads to the `account-images` bucket on submit through `lib/storage/account-images.ts` — see System Design §4.10. The image is downsized to ≤256px WebP client-side; the replaced/removed object is deleted best-effort after the row save succeeds.
 - **Avatars reuse the image elsewhere:** the transaction row (`transaction-display.tsx`) shows the linked account's logo when present — keeping the transaction-direction badge — and falls back to colored initials otherwise, so `use-transactions` selects `image_url` and carries it through to the row's `accounts` shape. The dashboard's Accounts card (`use-dashboard` selects the full `accounts` row) renders the same `AccountAvatar`.
 

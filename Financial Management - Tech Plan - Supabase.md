@@ -195,6 +195,8 @@ CREATE TABLE accounts (
 CREATE INDEX idx_accounts_user ON accounts(user_id);
 ```
 
+> Since superseded: the `currency` column was dropped by `20260606000001_drop_currency_columns.sql` (single-currency), `20260607000002_account_images.sql` added `image_url`, and `20260617000001_account_show_on_dashboard.sql` added `show_on_dashboard`. The §3.4 DDL reference lists the current accounts shape.
+
 **Migration 4b — Account Monthly Balances**
 
 ```sql
@@ -257,10 +259,11 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 |---|---|---|
 | `user_id` | `UUID` | PK, FK → `auth.users` |
 | `default_currency` | `TEXT` | FK → `currencies(code)`. Default `'USD'` |
+| `default_account_id` | `UUID` | Nullable. FK → `accounts(id)` `ON DELETE SET NULL`. The account pre-selected when adding a new transaction. Added by `20260610000001_user_settings_default_account.sql`. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> One row per user. Created on first sign-in or when the user sets a preference. Clients upsert on save.
+> One row per user. Created on first sign-in or when the user sets a preference (default currency, default account). Clients upsert on save.
 
 **accounts**
 
@@ -269,10 +272,10 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `id` | `UUID` | PK, auto-generated |
 | `user_id` | `UUID` | FK → `auth.users` |
 | `name` | `TEXT` | |
-| `type` | `account_type` | Default `'other'` |
-| `currency` | `TEXT` | Default `'USD'` |
-| `starting_balance` | `BIGINT` | Default `0` |
-| `is_archived` | `BOOLEAN` | Default `FALSE` |
+| `type` | `account_type` | Default `'other'` (`bank_account` / `credit_card` / `digital_wallet` / `cash` / `other`) |
+| `starting_balance` | `BIGINT` | Default `0`. Minor units. The live balance is derived from the monthly-balance ledger, not stored here. |
+| `image_url` | `TEXT` | Nullable. Public URL of the account's avatar image (Supabase Storage); falls back to a type icon when null. Added by `20260607000002_account_images.sql`. |
+| `is_archived` | `BOOLEAN` | Default `FALSE`. Archiving hides the account from lists/pickers without deleting its history. |
 | `show_on_dashboard` | `BOOLEAN` | Default `TRUE`. When `FALSE`, the account (and its balance) is hidden from the dashboard Accounts card without archiving it. Added by `20260617000001_account_show_on_dashboard.sql`. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
