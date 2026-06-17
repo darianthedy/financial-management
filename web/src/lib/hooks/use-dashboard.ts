@@ -70,6 +70,7 @@ export function useDashboard(yearMonth: string) {
         .from("accounts")
         .select("*")
         .eq("is_archived", false)
+        .eq("show_on_dashboard", true)
         .order("created_at", { ascending: true }),
       // Each account's balance as of the selected month: the RPC returns the
       // latest row at or before it per account (balances carry forward across

@@ -225,6 +225,7 @@ CREATE TABLE accounts (
   starting_balance BIGINT NOT NULL DEFAULT 0,
   image_url     TEXT,                              -- public URL of the avatar in Supabase Storage (nullable)
   is_archived   BOOLEAN NOT NULL DEFAULT FALSE,
+  show_on_dashboard BOOLEAN NOT NULL DEFAULT TRUE, -- when false, hidden from the dashboard Accounts card
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -710,6 +711,25 @@ FROM transactions t
 JOIN categories c ON c.id = t.category_id
 WHERE t.type = 'expense' AND t.status = 'confirmed'
 GROUP BY t.user_id, to_char(t.date, 'YYYY-MM'), c.id, c.name, c.icon, c.color;
+
+-- Each account's balance as of a selected month: the latest ledger row at or
+-- before that month (balances carry forward across empty months). Returns at
+-- most one row per account regardless of history depth; the dashboard Accounts
+-- card calls this for the month it is showing. SECURITY INVOKER so the
+-- account_monthly_balances RLS policy still scopes rows to the owner.
+CREATE OR REPLACE FUNCTION fn_account_balances_at(p_year_month TEXT)
+RETURNS TABLE (account_id UUID, year_month TEXT, balance BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT DISTINCT ON (amb.account_id)
+    amb.account_id, amb.year_month, amb.balance
+  FROM account_monthly_balances amb
+  WHERE amb.year_month <= p_year_month
+  ORDER BY amb.account_id, amb.year_month DESC;
+$$;
 ```
 
 ---
@@ -822,16 +842,18 @@ The user then **confirms**, **edits**, or **dismisses** the pending transaction 
 
 ### 4.6 Dashboard Queries
 
-Four **Postgres views** are provided to power the dashboard and account list:
+The dashboard is **month-scoped**: a month navigator drives every widget, and each is fetched for the selected `year_month`. The client hook issues the reads in parallel and re-runs them on realtime changes to `transactions`, `budgets`, `fixed_expenses`, `accounts`, and `account_monthly_balances`.
 
-| View | Powers |
-|---|---|
-| `v_account_current_balance` | Current balance for each account (latest month from ledger) |
-| `v_monthly_cashflow` | Monthly Cash Flow (income vs. expense) |
-| `v_budget_progress` | Budget Progress bars (spent vs. limit) |
-| `v_spending_by_category` | Spending by Category breakdown |
+| Widget | Source | What it reads |
+|---|---|---|
+| **Budget Verdict** | `v_budget_progress` | Every budget for the month; the banner counts those with `remaining < 0` and sums the overage. |
+| **Accounts** | `accounts` + `fn_account_balances_at` | Active accounts with `show_on_dashboard = true`, joined to each account's end-of-month balance at the selected month (see below). |
+| **Planned Expenses** | `v_budget_progress` + `fixed_expenses` | Budgets (with `effective_amount`, `spent`, `remaining` for pace-aware bars) and every fixed expense for the month; paid status is derived from linked `transactions` (`fixed_expense_id`). |
+| **Unplanned Expenses** | `transactions` | Confirmed expenses for the month with `budget_id IS NULL` **and** `fixed_expense_id IS NULL`, aggregated by category in the client (null category → "Uncategorized"). |
 
-"Recent Transactions" is a simple query: `SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT 10`.
+**Per-month account balances — `fn_account_balances_at(p_year_month)`.** Balances live in `account_monthly_balances` and carry forward across empty months, so an account's balance "as of month M" is the latest ledger row at or before M. `v_account_current_balance` answers this only for the latest month overall; the function is the parameterized version, returning **at most one row per account** (`DISTINCT ON (account_id)` over `year_month <= p_year_month`, ordered `year_month DESC`) regardless of how far back M is. It is `SECURITY INVOKER` so `account_monthly_balances` RLS still scopes rows to the owner. Accounts with no ledger row yet fall back to their `starting_balance` in the client.
+
+> The `v_monthly_cashflow`, `v_spending_by_category`, and `v_account_current_balance` views remain defined and available, but the current dashboard does not read them — the Verdict / Accounts / Planned / Unplanned layout above replaced the original Cash-Flow / Spending-by-Category / Recent-Transactions widgets.
 
 ### 4.7 Currency Handling
 
@@ -908,7 +930,7 @@ CREATE POLICY "account_images_owner_insert"
 
 **Client responsibilities.** The upload happens on form submit (so cancelling never orphans a file). The client downsizes the picked image to ≤256px and re-encodes it to WebP before upload, keeping objects to a few KB — well within the free-tier 1 GB and avoiding the paid image-transform add-on. When an image is replaced or removed, the previous object is deleted best-effort after the row save succeeds.
 
-**Where the image surfaces.** The account list card, the account detail header, and the form preview render it via the shared `AccountAvatar` (image, else type icon). The **transaction list and dashboard "recent transactions"** reuse the account image too: their avatar shows the logo when the linked account has one (keeping the small transaction-direction badge), and falls back to colored initials otherwise — so the queries that hydrate transaction rows select `accounts.image_url` alongside the name.
+**Where the image surfaces.** The account list card, the account detail header, the form preview, and the **dashboard Accounts card** render it via the shared `AccountAvatar` (image, else type icon). The **transaction list** reuses the account image too: its avatar shows the logo when the linked account has one (keeping the small transaction-direction badge), and falls back to colored initials otherwise — so the queries that hydrate transaction rows select `accounts.image_url` alongside the name.
 
 ### 4.11 Budget Installments (P1) — Spreading an Expense Across Budgets
 

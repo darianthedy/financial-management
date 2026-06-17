@@ -18,6 +18,9 @@ export const accountFormSchema = z.object({
   // Resolved public URL of the account's avatar image, or null when unset.
   // Managed by the form (upload happens on submit), not a plain input field.
   image_url: z.string().url().nullable().optional(),
+  // Whether this account appears (with its balance) on the dashboard's
+  // Accounts card. The form always supplies it (true for new accounts).
+  show_on_dashboard: z.boolean(),
 });
 
 export type AccountFormValues = z.infer<typeof accountFormSchema>;

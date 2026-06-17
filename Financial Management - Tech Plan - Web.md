@@ -532,14 +532,18 @@ const { data } = await supabase
 
 ### 7.1 Dashboard
 
-| Widget | Data Source | Query |
-|---|---|---|
-| Monthly Cash Flow | `v_monthly_cashflow` | `.from("v_monthly_cashflow").select("*").eq("year_month", currentMonth)` |
-| Budget Progress | `v_budget_progress` | `.from("v_budget_progress").select("*").eq("year_month", currentMonth)` — returns `budget_name`, `currency`, `periodic_amount`, `carry_over_amount`, `effective_amount` (= periodic + carry-in), `spent` (net of linked expenses − income), and `remaining`, all computed live |
-| Spending by Category | `v_spending_by_category` | `.from("v_spending_by_category").select("*").eq("year_month", currentMonth)` |
-| Recent Transactions | `transactions` | `.from("transactions").select("*, accounts(name)").order("date", { ascending: false }).limit(10)` |
+The dashboard is **month-scoped**: a header month navigator (`ChevronLeft` / `ChevronRight` around the formatted month, defaulting to the current month) drives every widget, plus a "Transactions" button that opens the Transactions page pre-filtered to the shown month's date bounds (`from`/`to` query params). All reads run for the selected `year_month` inside a single `useDashboard(yearMonth)` hook (`lib/hooks/use-dashboard.ts`), which fetches them in parallel and re-runs on realtime `postgres_changes` to `transactions`, `budgets`, `fixed_expenses`, `accounts`, and `account_monthly_balances`.
 
-**Cash Flow Card layout:** Use a vertical stacked layout (one row per metric: Income, Expense, Net) with the label on the left and the formatted amount on the right. Do **not** use a 3-column side-by-side layout — currencies with long symbols (e.g., IDR `Rp1.234.567`) overflow or wrap in narrow viewports. Each amount should use `text-nowrap` with `text-ellipsis` / `overflow-hidden` as a safety net.
+| Widget | Component | Data Source | Query |
+|---|---|---|---|
+| Budget Verdict | `dashboard/verdict-banner.tsx` | `v_budget_progress` | `.from("v_budget_progress").select("*").eq("year_month", yearMonth)` — banner counts budgets with `remaining < 0` and sums the overage; on-track (green) vs. over (red). Hidden when there are no budgets. |
+| Accounts | `dashboard/accounts-card.tsx` | `accounts` + `fn_account_balances_at` RPC | `.from("accounts").select("*").eq("is_archived", false).eq("show_on_dashboard", true)` joined with `.rpc("fn_account_balances_at", { p_year_month: yearMonth })` (latest balance at or before the month per account). Accounts with no ledger row fall back to `starting_balance`. Shows each balance + the combined total in the default currency. |
+| Planned Expenses | `dashboard/planned-expenses.tsx` | `v_budget_progress` + `fixed_expenses` | Budgets reuse the `v_budget_progress` query above for pace-aware bars (fill colored by **projected** month-end using elapsed-month fraction, with a tick at linear pace mid-month); fixed expenses come from `.from("fixed_expenses").eq("year_month", yearMonth)`, split into Unpaid / Paid with subtotals. Paid status is derived from linked `transactions` (`fixed_expense_id`). Headline = Σ budget `effective_amount` + Σ fixed-expense `amount`. |
+| Unplanned Expenses | `dashboard/unplanned-expenses.tsx` | `transactions` | `.from("transactions").select("category_id, amount").eq("type", "expense").eq("status", "confirmed").is("budget_id", null).is("fixed_expense_id", null).gte("date", start).lt("date", endExclusive)` — aggregated by category in the hook (null category → "Uncategorized"), sorted by amount desc. Category metadata (`icon`, `color`, `name`) is fetched in a follow-up `categories` query for the ids present. |
+
+**Budget bar pacing:** `monthElapsedFraction(yearMonth)` gives how far through the month we are. For the in-progress month the fill is red when projected month-end spend (`spent / fractionElapsed`) exceeds `effective_amount`, and a tick marks linear pace; the marker is hidden at fraction 0 (future) or 1 (past), where the bar falls back to actual over/under.
+
+**Currency:** all amounts render in the default currency via `formatCurrency` (the app is single-currency); the `v_monthly_cashflow`, `v_spending_by_category`, and `v_account_current_balance` views are not read by this layout.
 
 ### 7.2 Accounts Page
 
@@ -548,7 +552,7 @@ const { data } = await supabase
 - Add/edit account via dialog form.
 - Archive (soft-delete) instead of hard-delete.
 - **Account avatar:** each card (and the detail header) shows the account's uploaded image via the shared `AccountAvatar`, falling back to a type-based icon when `image_url` is null. The form's upload control stages the picked file locally (object-URL preview) and uploads to the `account-images` bucket on submit through `lib/storage/account-images.ts` — see System Design §4.10. The image is downsized to ≤256px WebP client-side; the replaced/removed object is deleted best-effort after the row save succeeds.
-- **Transaction-list avatars reuse the image:** the transaction row (`transaction-display.tsx`) and the dashboard's recent-transactions card show the linked account's logo when present — keeping the transaction-direction badge — and fall back to colored initials otherwise. `use-transactions` and `use-dashboard` therefore select `image_url` in their account lookup and carry it through to the row's `accounts` shape.
+- **Avatars reuse the image elsewhere:** the transaction row (`transaction-display.tsx`) shows the linked account's logo when present — keeping the transaction-direction badge — and falls back to colored initials otherwise, so `use-transactions` selects `image_url` and carries it through to the row's `accounts` shape. The dashboard's Accounts card (`use-dashboard` selects the full `accounts` row) renders the same `AccountAvatar`.
 
 ### 7.3 Transactions Page
 
