@@ -59,8 +59,10 @@ Active filters are shown as removable chips with a "Clear all" action, alongside
 Budgets allow the user to set spending limits for a given period and track remaining allowance.
 
 - User can have multiple budgets
-- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **periodic amount**, and a computed **remaining amount**
+- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **periodic amount**, an optional **note**, and a computed **remaining amount**
 - For P0, budget period is fixed to **monthly**
+- User can **edit** the name, monthly amount, or note of any budget, and **remove** an individual budget for a month (other months are unaffected)
+- **Copy from Previous Month**: the user can copy every budget from the previous month into the current month, preserving name, note, and periodic amount. Budgets whose name already exists in the current month are skipped. This is the primary way to carry a budget set forward into a new month.
 
 **Identity**
 

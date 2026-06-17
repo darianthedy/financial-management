@@ -176,7 +176,7 @@ CREATE POLICY policy_owner_user_settings ON user_settings FOR ALL
 
 **Migration 4 — Accounts**
 
-> **Note on Budgets:** The original budgets schema (a `budgets` header + `budget_periods` child, with a stored `carry_over_amount` snapshot and an `enable_carry_over` toggle) has been **superseded**. Budgets are now a single flat table identified by **name + currency**, one row per month, with carry-over always on and computed live in `v_budget_progress`. Because the schema is already deployed, this is delivered as a **forward migration** (`20260604000001_restructure_budgets.sql`, see §3.7), not by editing the original create migration. Refer to the System Design doc for the full target DDL.
+> **Note on Budgets:** The original budgets schema (a `budgets` header + `budget_periods` child, with a stored `carry_over_amount` snapshot and an `enable_carry_over` toggle) has been **superseded**. Budgets are now a single flat table identified by **name**, one row per month, with carry-over always on and computed live in `v_budget_progress`. Because the schema is already deployed, this is delivered as a **forward migration** (`20260604000001_restructure_budgets.sql`, see §3.8), not by editing the original create migration. That restructure originally kept a per-row `currency` column, which the later single-currency migration (`20260606000001_drop_currency_columns.sql`) dropped along with the rest of the per-record currencies; `20260613000001_budget_description.sql` then added the optional `description` note. Refer to the System Design doc for the full target DDL.
 
 ```sql
 -- 20260509000004_create_accounts.sql
@@ -350,14 +350,14 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 |---|---|---|
 | `id` | `UUID` | PK |
 | `user_id` | `UUID` | FK → `auth.users` |
-| `name` | `TEXT` | Part of identity (name + currency) |
+| `name` | `TEXT` | Identity (with `year_month`) |
 | `year_month` | `TEXT` | Format: `'YYYY-MM'` |
-| `currency` | `TEXT` | FK → `currencies`, default `'USD'`. Part of identity. |
 | `periodic_amount` | `BIGINT` | Minor units |
+| `description` | `TEXT` | Nullable; optional free-text note |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> Flat, self-contained one row per budget per month, like `fixed_expenses`. `UNIQUE(user_id, name, currency, year_month)`. There is **no** `budget_periods` table, no `is_active`/`enable_carry_over`, and no stored carry-over column. Carry-over is always on and derived in `v_budget_progress`: it compounds along each `(user_id, name, currency)` lineage, resets to 0 after any missing month, and `spent` is net (linked expenses − linked income).
+> Flat, self-contained one row per budget per month, like `fixed_expenses`. `UNIQUE(user_id, name, year_month)`. The app is single-currency, so budgets carry **no** per-row `currency`. There is **no** `budget_periods` table, no `is_active`/`enable_carry_over`, and no stored carry-over column. Carry-over is always on and derived in `v_budget_progress`: it compounds along each `(user_id, name)` lineage, resets to 0 after any missing month, and `spent` is net (linked expenses − linked income).
 
 **fixed_expenses**
 
@@ -530,6 +530,8 @@ COMMIT;
 ```
 
 > Note: `DROP TABLE budget_periods` cascades to the old `transactions.budget_period_id` FK, so step 5's column drop and the table drop must agree on order; the script drops the column first, then the table.
+
+> **Superseded since:** this migration's `currency` column (and its place in the budget identity / lineage) was later dropped by `20260606000001_drop_currency_columns.sql` when the app went single-currency — budget identity is now `(user_id, name, year_month)` and the carry-over chain runs on `(user_id, name)`. `20260613000001_budget_description.sql` then added the optional `description` note and recreated `v_budget_progress` to surface it. The §3.4 DDL reference reflects this current shape.
 
 ### 3.9 Forward Migrations — Dashboard
 

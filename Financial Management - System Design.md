@@ -760,7 +760,7 @@ The requirement states that budgets and fixed expenses are **period-specific** â
 
 **Budgets** use the same **flat, self-contained** pattern as fixed expenses: each row in `budgets` represents one budget for one specific month, carrying both the identity (`user_id`, `name`) and the period-specific detail (`year_month`, `periodic_amount`). A budget's identity is **name** â€” `UNIQUE(user_id, name, year_month)` prevents duplicates.
 
-When the user "removes" a budget in July, we simply stop creating new `budgets` rows from July onward. May and June rows remain untouched. There is no separate header or periods table.
+When the user "removes" a budget in July, we simply stop creating new `budgets` rows from July onward. May and June rows remain untouched. There is no separate header or periods table. A budget row also carries an optional free-text `description` (note). Like fixed expenses, budgets provide a **"Copy from Previous Month"** action that duplicates month M-1's budget rows into month M (preserving `name`, `description`, and `periodic_amount`), skipping any name already present in month M.
 
 **Fixed expenses** use a **flat, self-contained** pattern: each row in `fixed_expenses` represents one fixed expense for one specific month. The table carries both the identity (`name`, `user_id`) and the period-specific details (`year_month`, `amount`, `due_day`). A UNIQUE constraint on `(user_id, name, year_month)` prevents duplicates. To set up a new month, the user copies entries from the previous month (amounts can be adjusted). Historical entries are preserved even if the user stops copying forward.
 
