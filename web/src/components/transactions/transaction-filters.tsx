@@ -329,18 +329,20 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
                   </button>
                 )}
               </div>
-              {/* Both date inputs stay side by side with a dash between, even on
-                  the narrowest phones. The popover is only ~256px wide inside its
-                  padding at 320px, so on mobile the inputs shrink (smaller text,
-                  tighter padding) and drop their per-field calendar button —
-                  tapping the field still opens the native picker there. */}
-              <div className="mt-2 flex items-center gap-1.5">
+              {/* The popover is only ~320px wide inside its padding on a phone —
+                  too narrow for two date fields side by side, where the native
+                  value would collide with the clear button. So on mobile the
+                  fields stack vertically (each gets the full width) and the dash
+                  is hidden; desktop lays them in a row with the dash between. */}
+              <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center">
                 <DateInput
                   value={filters.dateFrom}
                   onChange={(v) => (v ? patch({ dateFrom: v }) : clear("dateFrom"))}
                   ariaLabel="From date"
                 />
-                <span className="text-[var(--color-muted-foreground)]">–</span>
+                <span className="hidden text-[var(--color-muted-foreground)] sm:inline">
+                  –
+                </span>
                 <DateInput
                   value={filters.dateTo}
                   onChange={(v) => (v ? patch({ dateTo: v }) : clear("dateTo"))}
