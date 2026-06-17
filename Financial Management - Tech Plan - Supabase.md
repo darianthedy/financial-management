@@ -318,24 +318,19 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `transfer_account_id` | `UUID` | FK → `accounts`, nullable. Required when `type = 'transfer'` |
 | `type` | `transaction_type` | |
 | `status` | `transaction_status` | Default `'confirmed'` |
-| `amount` | `BIGINT` | Stored in minor units (cents) |
-| `currency` | `TEXT` | Default `'USD'` |
+| `amount` | `BIGINT` | Minor units. `CHECK (amount <> 0 AND (type <> 'transfer' OR amount > 0))` — income/expense may be **negative** (e.g. a refund as a negative expense), transfers are strictly positive, zero is never allowed. |
 | `description` | `TEXT` | Nullable |
 | `date` | `DATE` | Default `CURRENT_DATE` |
 | `budget_id` | `UUID` | FK → `budgets`, nullable. Set via the budget dropdown; only income/expense (not transfers) may link. |
+| `category_id` | `UUID` | FK → `categories`, nullable, `ON DELETE SET NULL`. At most one category per transaction (single-select). |
 | `scheduled_txn_id` | `UUID` | FK → `scheduled_transactions`, nullable |
 | `fixed_expense_id` | `UUID` | FK → `fixed_expenses`, nullable. Links this transaction to a fixed expense to indicate payment. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> **Important:** The date column is named `date`, not `transaction_date`. The transfer account column is named `transfer_account_id`, not `to_account_id`. There is no `category_id` column on this table — categories are linked via the `transaction_categories` junction table.
+> **Important:** The date column is named `date`, not `transaction_date`. The transfer account column is named `transfer_account_id`, not `to_account_id`. Category is **single-select** via the `category_id` column directly on this table — there is no `transaction_categories` junction (it was dropped when categories became single-select). There is **no** per-row `currency` column either; the app is single-currency (`user_settings.default_currency`).
 
-**transaction_categories** (junction table — many-to-many)
-
-| Column | Type | Notes |
-|---|---|---|
-| `transaction_id` | `UUID` | FK → `transactions`, composite PK |
-| `category_id` | `UUID` | FK → `categories`, composite PK |
+> **`v_transactions` view.** The Transactions list and Summary read from `v_transactions` (`transactions.*` plus a `tag_ids` UUID array aggregated from `transaction_tags`), `SECURITY INVOKER`, so the tag facet — including "untagged" (`tag_ids = '{}'`) — is an ordinary SQL predicate and the whole query stays paginatable.
 
 **transaction_tags** (junction table — many-to-many)
 
