@@ -273,6 +273,7 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `currency` | `TEXT` | Default `'USD'` |
 | `starting_balance` | `BIGINT` | Default `0` |
 | `is_archived` | `BOOLEAN` | Default `FALSE` |
+| `show_on_dashboard` | `BOOLEAN` | Default `TRUE`. When `FALSE`, the account (and its balance) is hidden from the dashboard Accounts card without archiving it. Added by `20260617000001_account_show_on_dashboard.sql`. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
@@ -285,7 +286,7 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `balance` | `BIGINT` | End-of-month balance, maintained by trigger + cron |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> One row per account per month. Created by a monthly cron job (`fn_create_monthly_balance_rows`) and recalculated by a trigger on `transactions` changes. To get an account's current balance, query the latest `year_month` row. A convenience view `v_account_current_balance` is provided.
+> One row per account per month. Created by a monthly cron job (`fn_create_monthly_balance_rows`) and recalculated by a trigger on `transactions` changes. To get an account's current balance, query the latest `year_month` row. The `v_account_current_balance` view returns this latest-overall balance per account; for a balance **as of an arbitrary past month** (what the month-scoped dashboard needs), call `fn_account_balances_at('YYYY-MM')` — see §3.9.
 
 **categories**
 
@@ -500,6 +501,35 @@ COMMIT;
 ```
 
 > Note: `DROP TABLE budget_periods` cascades to the old `transactions.budget_period_id` FK, so step 5's column drop and the table drop must agree on order; the script drops the column first, then the table.
+
+### 3.9 Forward Migrations — Dashboard
+
+Two later migrations support the month-scoped dashboard (see Web Tech Plan §7.1 and System Design §4.6):
+
+**`20260614000001_account_balances_at.sql` — per-month account balances.** The dashboard Accounts card needs each account's balance *as of the month it is showing*. Balances carry forward across empty months, so that is the latest `account_monthly_balances` row at or before the month. `v_account_current_balance` only answers for the latest month overall; this function is the parameterized version, returning at most one row per account regardless of history depth (the `(account_id, year_month)` PK lets the `DISTINCT ON` run as an index scan). `SECURITY INVOKER` so `account_monthly_balances` RLS still scopes rows to the owner.
+
+```sql
+CREATE OR REPLACE FUNCTION fn_account_balances_at(p_year_month TEXT)
+RETURNS TABLE (account_id UUID, year_month TEXT, balance BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT DISTINCT ON (amb.account_id)
+    amb.account_id, amb.year_month, amb.balance
+  FROM account_monthly_balances amb
+  WHERE amb.year_month <= p_year_month
+  ORDER BY amb.account_id, amb.year_month DESC;
+$$;
+```
+
+**`20260617000001_account_show_on_dashboard.sql` — hide accounts from the dashboard.** Adds a per-account toggle so a user can hide an account (and its balance) from the dashboard Accounts card without archiving it. Defaults to `TRUE` so existing accounts keep showing; `NOT NULL` keeps the flag unambiguous.
+
+```sql
+ALTER TABLE accounts
+  ADD COLUMN show_on_dashboard BOOLEAN NOT NULL DEFAULT TRUE;
+```
 
 ---
 

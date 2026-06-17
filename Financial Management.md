@@ -125,12 +125,12 @@ The user can set a default currency used across the app.
 
 ### Dashboard
 
-A central overview screen that gives the user a quick snapshot of their financial status.
+A central overview screen that gives the user a quick snapshot of their financial status for a selected month. A month navigator (previous / next) defaults to the current month, and every widget reflects the chosen month. A shortcut opens the Transactions list scoped to that month, and the dashboard updates live as transactions, budgets, fixed expenses, or accounts change.
 
-- **Monthly Cash Flow**: Income vs. expenses for the current month
-- **Budget Progress**: Progress bars for each active budget showing amount spent vs. periodic limit
-- **Spending by Category**: Breakdown of expenses by category for the current period
-- **Recent Transactions**: Quick-access list of the latest transactions (e.g., last 5–10)
+- **Budget Verdict**: A banner at the top answering "am I overspending?" — how many budgets are over and the total overage across the month, color-coded on-track (green) or over (red). Hidden when there are no budgets.
+- **Accounts**: Each account's end-of-month balance for the selected month plus the combined total. Accounts can be individually hidden from the dashboard without archiving them.
+- **Planned Expenses**: What the user committed to spend this month — every budget (with a pace-aware progress bar) and every fixed expense (split into paid / unpaid with subtotals), summed into a single planned total.
+- **Unplanned Expenses**: Confirmed spending this month that no budget or fixed expense accounts for, broken down by category (spend with no category collapses into a single "Uncategorized" row).
 
 ---
 
