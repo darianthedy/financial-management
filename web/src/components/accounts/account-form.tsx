@@ -98,6 +98,7 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
       name: "",
       type: "bank_account",
       starting_balance: 0,
+      show_on_dashboard: true,
     },
   });
 
@@ -112,11 +113,13 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
               account.starting_balance,
               currencyDecimals(defaultCurrency),
             ),
+            show_on_dashboard: account.show_on_dashboard,
           }
         : {
             name: "",
             type: "bank_account",
             starting_balance: 0,
+            show_on_dashboard: true,
           },
     );
     setSubmitError("");
@@ -269,6 +272,21 @@ export function AccountForm({ open, onOpenChange, account, onSaved }: Props) {
               }
             />
             <FieldError message={errors.starting_balance?.message} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
+              <input
+                type="checkbox"
+                {...register("show_on_dashboard")}
+                className="h-4 w-4 cursor-pointer rounded border-[var(--color-input)] accent-[var(--color-primary)]"
+              />
+              Show on dashboard
+            </label>
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              When off, this account and its balance are hidden from the
+              dashboard's Accounts card.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
