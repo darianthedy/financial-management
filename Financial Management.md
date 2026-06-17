@@ -16,10 +16,13 @@ A personal finance management app for tracking income, expenses, budgets, and ac
 
 Accounts represent any source or store of money the user wants to track — not limited to traditional bank accounts.
 
-- User can have multiple accounts and add/remove them as needed
-- An account can represent a bank account, credit card, digital wallet, cash, or any other financial store
-- Each account has a name, starting balance, and current balance
+- User can have multiple accounts and add, edit, or archive them as needed
+- Each account has a **type** — bank account, credit card, digital wallet, cash, or other — which drives its default icon
+- Each account has a name and a **starting balance**; its **current balance** is computed from the starting balance plus all confirmed transactions (it is not entered by hand)
 - Each account can have an optional **custom image** (e.g. a bank or card logo) shown as its avatar. The image is uploaded by the user; when none is set, an icon based on the account type is shown instead
+- **Archiving** an account hides it from lists and pickers while preserving its transaction history — accounts are archived rather than hard-deleted, so past records stay intact
+- Each account can be **shown or hidden on the dashboard** independently of archiving, so a rarely-watched account can be kept out of the dashboard Accounts card without losing it
+- The user can mark one account as the **default account**, which is pre-selected when adding a new transaction
 
 ### Transactions
 
