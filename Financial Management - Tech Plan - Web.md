@@ -107,7 +107,7 @@ src/
 │   │   └── account-form.tsx          # Includes the avatar upload/remove control
 │   ├── budgets/
 │   │   ├── budget-card.tsx          # Shows effective amount + carry-over badge (from v_budget_progress)
-│   │   └── budget-form.tsx          # Name, currency, periodic amount (no carry-over toggle)
+│   │   └── budget-form.tsx          # Name, monthly amount, note (no carry-over toggle)
 │   └── fixed-expenses/
 │       ├── fixed-expense-row.tsx
 │       └── fixed-expense-form.tsx
@@ -626,12 +626,15 @@ The filter panel needs the lists of accounts (`useAccounts`), categories & tags 
 ### 7.4 Budgets Page
 
 - Current month's budgets with progress bars showing **net spent** vs. **effective amount** (periodic + carry-in), read from `v_budget_progress`.
-- Display the carry-in as a label when non-zero (e.g., "+$10 carried over" or "−$20 overspent"). Carry-over is always on; there is no toggle.
+- Display the carry-in and the optional note in a per-card info popover (shown only when the carry-in is non-zero or a note exists), e.g. "+$10 carried over" / "−$20 overspent". Carry-over is always on; there is no toggle.
+- Clicking a budget card opens the Transactions list filtered to that budget's **name** and scoped to the budget's own month (so it shows the spend the card's bar reflects).
+- Overspent budgets (`remaining < 0`) render the bar and the "$X over" label in the danger color.
 - Month navigator (prev / next). On mobile/touch viewports, support swipe left/right to navigate months.
-- Add budget → inserts a single `budgets` row for the selected month (`name`, `currency`, `periodic_amount`). Identity is name + currency; the same name in a different currency is a separate budget. There is no header record.
-- Edit `periodic_amount` (or `name`) for the selected month only — past months are untouched, but because carry-over is computed live, editing an earlier month re-flows every later month in the lineage.
+- Add budget → inserts a single `budgets` row for the selected month (`name`, `periodic_amount`, optional `description`). Identity is **name** (the app is single-currency, so budgets carry no per-row currency). There is no header record.
+- Edit `periodic_amount`, `name`, or the note for the selected month only — past months are untouched, but because carry-over is computed live, editing an earlier month re-flows every later month in the lineage.
 - "Remove" a budget for a month = delete that month's row. Future months stop being created; a deliberate gap resets that lineage's carry-over to 0.
-- No carry-over is stored or precomputed — `v_budget_progress` derives it on read by chaining each `(name, currency)` lineage across consecutive months.
+- **Copy from Previous Month:** copies every budget from the previous month into the current month (same `name`, `description`, `periodic_amount`), skipping names that already exist for the current month.
+- No carry-over is stored or precomputed — `v_budget_progress` derives it on read by chaining each `(name)` lineage across consecutive months.
 
 ### 7.5 Fixed Expenses Page
 
