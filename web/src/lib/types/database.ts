@@ -22,6 +22,7 @@ type AccountRow = {
   starting_balance: number;
   image_url: string | null;
   is_archived: boolean;
+  show_on_dashboard: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -150,6 +151,7 @@ export interface Database {
           starting_balance?: number;
           image_url?: string | null;
           is_archived?: boolean;
+          show_on_dashboard?: boolean;
         };
         Update: {
           id?: string;
@@ -159,6 +161,7 @@ export interface Database {
           starting_balance?: number;
           image_url?: string | null;
           is_archived?: boolean;
+          show_on_dashboard?: boolean;
         };
         Relationships: [];
       };

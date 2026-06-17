@@ -34,7 +34,10 @@ export function AccountCard({ account, onClick, onEdit, onArchive }: Props) {
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="truncate font-medium">{account.name}</span>
-          <Badge>{accountTypeLabel(account.type)}</Badge>
+          <div className="flex flex-wrap items-center gap-1">
+            <Badge>{accountTypeLabel(account.type)}</Badge>
+            {!account.show_on_dashboard && <Badge>Off dashboard</Badge>}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <span

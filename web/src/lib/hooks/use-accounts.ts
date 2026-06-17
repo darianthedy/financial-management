@@ -80,6 +80,7 @@ export async function createAccount(
       type: values.type,
       starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
       image_url: values.image_url ?? null,
+      show_on_dashboard: values.show_on_dashboard,
     })
     .select("id")
     .single();
@@ -99,6 +100,7 @@ export async function updateAccount(
       type: values.type,
       starting_balance: toMinorUnits(values.starting_balance, decimalPlaces),
       image_url: values.image_url ?? null,
+      show_on_dashboard: values.show_on_dashboard,
     })
     .eq("id", id);
   if (error) throw error;
