@@ -672,9 +672,11 @@ Lets a large expense be absorbed gradually by reserving future budget allowance.
 4. **Allocation grid** — a budgets × months matrix of currency inputs, **pre-filled with an even split**: each cell = `floor(total / (budgets * months))` minor units, with the rounding remainder dropped into one cell so the grid sums exactly to the expense amount. The header shows a live **total reserved** and **remaining to allocate**; **Save is disabled until the grid total equals the expense amount.**
    - Editing the budget set or month count **re-runs the even pre-fill** (grid shape changed). A **"Split evenly"** button re-applies it on demand. Editing a cell never changes the shape; cells may be set to `0` to skip a budget that month.
 
+> **Fields that stay.** Spreading replaces only the single **budget** link, so the budget picker is hidden while the toggle is on. The **category**, **fixed-expense**, and **tags** controls stay visible: a new spread passes them to `create_budget_installment` (`p_category_id` / `p_fixed_expense_id` / `p_tag_ids`); an existing expense being spread keeps whatever it already had (and any edits are saved before the conversion).
+
 **On submit (single logical operation — wrap in one RPC for atomicity):**
 
-1. Insert the expense `transactions` row as usual, with `budget_id = null` (the spread, not this row, accounts for the budget impact).
+1. Insert the expense `transactions` row as usual, with `budget_id = null` (the spread, not this row, accounts for the budget impact) but carrying its `category_id`, `fixed_expense_id`, and tag links like any expense.
 2. For each distinct cell budget+month, **ensure the budget row exists** — `insert … on conflict (user_id, name, year_month) do nothing`, defaulting `periodic_amount` to the latest known value in that lineage (else 0). This keeps carry-over lineages unbroken.
 3. Insert one `budget_installments` header (`source_transaction_id`, `total_amount`, `start_year_month`, `months`).
 4. Bulk-insert one `budget_installment_allocations` row per **non-zero** cell (`budget_name`, `year_month`, `amount`).

@@ -21,13 +21,20 @@ export interface CreateInstallmentParams {
   months: number;
   /** Non-zero cells only; their amounts must sum to `amount`. */
   grid: InstallmentGridCell[];
+  /** Optional category for the source expense. */
+  categoryId?: string | null;
+  /** Optional fixed-expense link for the source expense. */
+  fixedExpenseId?: string | null;
+  /** Optional tag ids to attach to the source expense. */
+  tagIds?: string[];
 }
 
 /**
  * Create a Budget Installment via the `create_budget_installment` RPC. The RPC
- * inserts the source expense (with `budget_id = NULL`), the installment header,
- * and one allocation per grid cell atomically, materializing any missing budget
- * rows. Returns the new `budget_installments` id.
+ * inserts the source expense (with `budget_id = NULL`, but carrying any category,
+ * fixed-expense link, and tags), the installment header, and one allocation per
+ * grid cell atomically, materializing any missing budget rows. Returns the new
+ * `budget_installments` id.
  */
 export async function createInstallment(
   params: CreateInstallmentParams,
@@ -41,6 +48,9 @@ export async function createInstallment(
     p_months: params.months,
     // The grid is a JSON array of { budget_name, year_month, amount } cells.
     p_grid: params.grid as unknown as Json,
+    p_category_id: params.categoryId ?? null,
+    p_fixed_expense_id: params.fixedExpenseId ?? null,
+    p_tag_ids: params.tagIds ?? null,
   });
   if (error) throw error;
   return data;

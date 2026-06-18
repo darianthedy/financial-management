@@ -564,6 +564,8 @@ ALTER TABLE accounts
 
 Adds the two reservation tables, folds a `reserved` term into `v_budget_progress`, and provides the `create_budget_installment` RPC that persists an expense and its grid atomically. Reservations are **budget-side only** — they never enter `transactions`, so account balances and cash flow are untouched. See System Design §4.11 and Web §7.8.
 
+> **Follow-up (`20260618000003_installment_category_tags.sql`).** `create_budget_installment` was later widened so the source expense carries a **category**, a **fixed-expense link**, and **tags** — only the single `budget_id` stays NULL. The RPC gains `p_category_id UUID`, `p_fixed_expense_id UUID`, and `p_tag_ids UUID[]` (all `DEFAULT NULL`); it writes the first two onto the `transactions` row and bulk-inserts the tag ids into `transaction_tags`. The block below shows the original 7-arg version for context.
+
 ```sql
 -- 20260618000001_budget_installments.sql
 BEGIN;

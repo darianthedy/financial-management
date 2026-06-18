@@ -392,6 +392,11 @@ export function TransactionForm({
             startYearMonth: installment.startYearMonth,
             months: installment.months,
             grid: installment.grid,
+            // The spread replaces only the single budget link; category, the
+            // fixed-expense link, and tags carry through like any expense.
+            categoryId: values.category_id ?? null,
+            fixedExpenseId: values.fixed_expense_id ?? null,
+            tagIds: values.tag_ids ?? [],
           });
         }
       } else if (transaction) {
@@ -558,8 +563,8 @@ export function TransactionForm({
             <>
               <p className="text-xs text-[var(--color-muted-foreground)]">
                 {transaction
-                  ? "Reserves the amount across budgets and months. The expense is detached from its single budget; its category, tags, and fixed-expense link stay."
-                  : "Reserves the amount across budgets and months. The expense itself is recorded without a single budget, category, tag, or fixed-expense link."}
+                  ? "Reserves the amount across budgets and months. The expense is detached from its single budget; its category, tags, and fixed-expense link stay editable below."
+                  : "Reserves the amount across budgets and months. The expense is recorded without a single budget — the spread takes its place — but you can still set a category, tags, and a fixed-expense link below."}
               </p>
               <InstallmentBuilder
                 amountMinor={amountMinor}
@@ -613,8 +618,9 @@ export function TransactionForm({
         </div>
       )}
 
-      {/* Category (expense/income only) */}
-      {type !== "transfer" && !spreadActive && (
+      {/* Category (expense/income only) — kept available while spreading; only
+          the single budget link is replaced by the reservation grid. */}
+      {type !== "transfer" && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="category_id">Category</Label>
           <Select
@@ -654,7 +660,7 @@ export function TransactionForm({
       )}
 
       {/* Fixed expense (expense only) — linking marks that expense paid */}
-      {type === "expense" && !spreadActive && (
+      {type === "expense" && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="fixed_expense_id">Fixed expense</Label>
           <Select
@@ -687,7 +693,6 @@ export function TransactionForm({
       )}
 
       {/* Tags */}
-      {!spreadActive && (
       <div className="flex flex-col gap-1.5">
         <Label>Tags</Label>
 
@@ -788,7 +793,6 @@ export function TransactionForm({
           </PopoverContent>
         </Popover>
       </div>
-      )}
 
       <FieldError message={submitError} />
 
