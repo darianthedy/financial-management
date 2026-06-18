@@ -35,8 +35,17 @@ import { fetchBudgetsForMonth } from "@/lib/hooks/use-budgets";
 import { BudgetForm } from "@/components/budgets/budget-form";
 import { fetchFixedExpensesForMonth } from "@/lib/hooks/use-fixed-expenses";
 import { FixedExpenseForm } from "@/components/fixed-expenses/fixed-expense-form";
+import {
+  InstallmentBuilder,
+  type InstallmentValue,
+} from "@/components/transactions/installment-builder";
+import { createInstallment } from "@/lib/hooks/use-installments";
 import { todayIso, yearMonthOf } from "@/lib/utils/date";
-import { toDisplayAmount, formatCurrency } from "@/lib/utils/currency";
+import {
+  toDisplayAmount,
+  toMinorUnits,
+  formatCurrency,
+} from "@/lib/utils/currency";
 import type { TransactionWithRelations } from "@/lib/hooks/use-transactions";
 import type {
   Category,
@@ -94,6 +103,11 @@ export function TransactionForm({
     [],
   );
   const [fixedExpenseFormOpen, setFixedExpenseFormOpen] = useState(false);
+  // Budget Installments: when on, the expense is spread across budgets via the
+  // create_budget_installment RPC instead of being linked to a single budget.
+  // Only offered when creating a new expense.
+  const [spread, setSpread] = useState(false);
+  const [installment, setInstallment] = useState<InstallmentValue | null>(null);
 
   // Prefill values for edit mode. Using react-hook-form's `values` prop (rather
   // than reset() in an effect) syncs during render, so prefill is deterministic
@@ -175,6 +189,7 @@ export function TransactionForm({
   const type = watch("type");
   const accountId = watch("account_id");
   const date = watch("date");
+  const amount = watch("amount");
   const budgetId = watch("budget_id") ?? null;
   const categoryId = watch("category_id") ?? null;
   const fixedExpenseId = watch("fixed_expense_id") ?? null;
@@ -182,6 +197,17 @@ export function TransactionForm({
 
   // Budgets that can be linked: same month (derived from the date).
   const budgetMonth = yearMonthOf(date);
+
+  // Installment spreading is only offered when creating a new expense; the RPC
+  // has no edit path and the spread record carries no single budget/category.
+  const spreadAvailable = !transaction && type === "expense";
+  const spreadActive = spreadAvailable && spread;
+  const decimals = decimalsFor(defaultCurrency);
+  const amountMinor = toMinorUnits(amount, decimals);
+  const handleInstallmentChange = useCallback(
+    (v: InstallmentValue) => setInstallment(v),
+    [],
+  );
 
   // True once the user edits the date field. The form first renders at the
   // default date (today) and then settles to the edited transaction's date,
@@ -312,8 +338,21 @@ export function TransactionForm({
 
   async function onSubmit(values: TransactionFormValues) {
     try {
-      const decimals = decimalsFor(defaultCurrency);
-      if (transaction) {
+      if (spreadActive) {
+        if (!installment?.valid) {
+          setSubmitError("Allocate the full amount across the budgets first.");
+          return;
+        }
+        await createInstallment({
+          accountId: values.account_id,
+          amount: toMinorUnits(values.amount, decimals),
+          date: values.date,
+          description: values.description?.trim() || null,
+          startYearMonth: installment.startYearMonth,
+          months: installment.months,
+          grid: installment.grid,
+        });
+      } else if (transaction) {
         await updateTransaction(transaction.id, values, decimals);
       } else {
         await createTransaction(values, decimals);
@@ -341,8 +380,11 @@ export function TransactionForm({
                 setValue("type", t.value);
                 if (t.value !== "transfer") setValue("transfer_account_id", null);
                 else setValue("budget_id", null);
-                // Fixed-expense link is expense-only.
-                if (t.value !== "expense") setValue("fixed_expense_id", null);
+                // Fixed-expense link and installment spreading are expense-only.
+                if (t.value !== "expense") {
+                  setValue("fixed_expense_id", null);
+                  setSpread(false);
+                }
               }}
               className={`flex-1 rounded-[var(--radius)] border px-3 py-2 text-sm font-medium transition-colors ${
                 type === t.value
@@ -458,8 +500,38 @@ export function TransactionForm({
         />
       </div>
 
+      {/* Spread across budgets (new expense only) */}
+      {spreadAvailable && (
+        <div className="flex flex-col gap-2">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={spread}
+              onChange={(e) => setSpread(e.target.checked)}
+              className="h-4 w-4 accent-[var(--color-primary)]"
+            />
+            Spread across budgets
+          </label>
+          {spreadActive && (
+            <>
+              <p className="text-xs text-[var(--color-muted-foreground)]">
+                Reserves the amount across budgets and months. The expense itself
+                is recorded without a single budget, category, tag, or
+                fixed-expense link.
+              </p>
+              <InstallmentBuilder
+                amountMinor={amountMinor}
+                decimals={decimals}
+                baseMonth={budgetMonth}
+                onChange={handleInstallmentChange}
+              />
+            </>
+          )}
+        </div>
+      )}
+
       {/* Budget (expense/income only) */}
-      {type !== "transfer" && (
+      {type !== "transfer" && !spreadActive && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="budget_id">Budget</Label>
           <Select
@@ -492,7 +564,7 @@ export function TransactionForm({
       )}
 
       {/* Category (expense/income only) */}
-      {type !== "transfer" && (
+      {type !== "transfer" && !spreadActive && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="category_id">Category</Label>
           <Select
@@ -532,7 +604,7 @@ export function TransactionForm({
       )}
 
       {/* Fixed expense (expense only) — linking marks that expense paid */}
-      {type === "expense" && (
+      {type === "expense" && !spreadActive && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="fixed_expense_id">Fixed expense</Label>
           <Select
@@ -565,6 +637,7 @@ export function TransactionForm({
       )}
 
       {/* Tags */}
+      {!spreadActive && (
       <div className="flex flex-col gap-1.5">
         <Label>Tags</Label>
 
@@ -665,6 +738,7 @@ export function TransactionForm({
           </PopoverContent>
         </Popover>
       </div>
+      )}
 
       <FieldError message={submitError} />
 
@@ -674,12 +748,18 @@ export function TransactionForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting} className="flex-1">
+        <Button
+          type="submit"
+          disabled={isSubmitting || (spreadActive && !installment?.valid)}
+          className="flex-1"
+        >
           {isSubmitting
             ? "Saving…"
             : transaction
               ? "Update transaction"
-              : "Add transaction"}
+              : spreadActive
+                ? "Spread expense"
+                : "Add transaction"}
         </Button>
       </div>
     </form>

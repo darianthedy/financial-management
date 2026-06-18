@@ -46,7 +46,7 @@ export function AccountsCard({ accounts }: Props) {
                 currency={defaultCurrency}
                 numberWidthCh={amountWidthCh}
                 className={cn(
-                  "text-nowrap font-semibold",
+                  "text-nowrap text-sm font-semibold",
                   total < 0 && "text-[var(--color-danger)]",
                 )}
               />

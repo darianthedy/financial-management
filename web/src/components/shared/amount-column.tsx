@@ -34,20 +34,22 @@ export function AmountColumn({
   const { sign, symbol, number } = formatCurrencyParts(minorUnits, currency);
   const leadingSign = sign || (signed ? "+" : "");
 
+  // Reserve room for the symbol and a sign slot on top of the numeric body, then
+  // right-align the whole thing. Every row in a list shares one width (same
+  // symbol, same +1 sign slot), so the digits' right edges line up while the
+  // symbol stays flush against the number — any slack falls to the left of the
+  // symbol instead of opening a gap between the symbol and the digits.
+  const minWidthCh =
+    numberWidthCh != null ? numberWidthCh + symbol.length + 1 : undefined;
+
   return (
-    <span className={cn("inline-flex tabular-nums", className)}>
-      <span className="shrink-0">
-        {leadingSign}
-        {symbol}
-      </span>
-      <span
-        className="text-right"
-        style={
-          numberWidthCh ? { minWidth: `${numberWidthCh}ch` } : undefined
-        }
-      >
-        {number}
-      </span>
+    <span
+      className={cn("inline-block text-right tabular-nums", className)}
+      style={minWidthCh != null ? { minWidth: `${minWidthCh}ch` } : undefined}
+    >
+      {leadingSign}
+      {symbol}
+      {number}
     </span>
   );
 }
