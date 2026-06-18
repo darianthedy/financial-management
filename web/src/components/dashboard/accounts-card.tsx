@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
-import { formatCurrency } from "@/lib/utils/currency";
+import { AmountColumn } from "@/components/shared/amount-column";
+import { maxCurrencyNumberWidth } from "@/lib/utils/currency";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { cn } from "@/lib/utils/cn";
 import type { AccountMonthBalance } from "@/lib/hooks/use-dashboard";
@@ -18,6 +19,10 @@ interface Props {
 export function AccountsCard({ accounts }: Props) {
   const { defaultCurrency } = useCurrencies();
   const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+  const amountWidthCh = maxCurrencyNumberWidth(
+    [total, ...accounts.map((a) => a.balance)],
+    defaultCurrency,
+  );
 
   return (
     <Card>
@@ -36,14 +41,15 @@ export function AccountsCard({ accounts }: Props) {
               <span className="text-sm text-[var(--color-muted-foreground)]">
                 Total balance
               </span>
-              <span
+              <AmountColumn
+                minorUnits={total}
+                currency={defaultCurrency}
+                numberWidthCh={amountWidthCh}
                 className={cn(
                   "text-nowrap font-semibold",
                   total < 0 && "text-[var(--color-danger)]",
                 )}
-              >
-                {formatCurrency(total, defaultCurrency)}
-              </span>
+              />
             </div>
             <div className="flex flex-col gap-2">
               {accounts.map((account) => (
@@ -61,14 +67,15 @@ export function AccountsCard({ accounts }: Props) {
                     />
                     <span className="truncate font-medium">{account.name}</span>
                   </span>
-                  <span
+                  <AmountColumn
+                    minorUnits={account.balance}
+                    currency={defaultCurrency}
+                    numberWidthCh={amountWidthCh}
                     className={cn(
                       "text-nowrap font-semibold",
                       account.balance < 0 && "text-[var(--color-danger)]",
                     )}
-                  >
-                    {formatCurrency(account.balance, defaultCurrency)}
-                  </span>
+                  />
                 </div>
               ))}
             </div>

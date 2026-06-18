@@ -176,7 +176,7 @@ CREATE POLICY policy_owner_user_settings ON user_settings FOR ALL
 
 **Migration 4 — Accounts**
 
-> **Note on Budgets:** The original budgets schema (a `budgets` header + `budget_periods` child, with a stored `carry_over_amount` snapshot and an `enable_carry_over` toggle) has been **superseded**. Budgets are now a single flat table identified by **name + currency**, one row per month, with carry-over always on and computed live in `v_budget_progress`. Because the schema is already deployed, this is delivered as a **forward migration** (`20260604000001_restructure_budgets.sql`, see §3.7), not by editing the original create migration. Refer to the System Design doc for the full target DDL.
+> **Note on Budgets:** The original budgets schema (a `budgets` header + `budget_periods` child, with a stored `carry_over_amount` snapshot and an `enable_carry_over` toggle) has been **superseded**. Budgets are now a single flat table identified by **name**, one row per month, with carry-over always on and computed live in `v_budget_progress`. Because the schema is already deployed, this is delivered as a **forward migration** (`20260604000001_restructure_budgets.sql`, see §3.8), not by editing the original create migration. That restructure originally kept a per-row `currency` column, which the later single-currency migration (`20260606000001_drop_currency_columns.sql`) dropped along with the rest of the per-record currencies; `20260613000001_budget_description.sql` then added the optional `description` note. Refer to the System Design doc for the full target DDL.
 
 ```sql
 -- 20260509000004_create_accounts.sql
@@ -194,6 +194,8 @@ CREATE TABLE accounts (
 
 CREATE INDEX idx_accounts_user ON accounts(user_id);
 ```
+
+> Since superseded: the `currency` column was dropped by `20260606000001_drop_currency_columns.sql` (single-currency), `20260607000002_account_images.sql` added `image_url`, and `20260617000001_account_show_on_dashboard.sql` added `show_on_dashboard`. The §3.4 DDL reference lists the current accounts shape.
 
 **Migration 4b — Account Monthly Balances**
 
@@ -257,10 +259,11 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 |---|---|---|
 | `user_id` | `UUID` | PK, FK → `auth.users` |
 | `default_currency` | `TEXT` | FK → `currencies(code)`. Default `'USD'` |
+| `default_account_id` | `UUID` | Nullable. FK → `accounts(id)` `ON DELETE SET NULL`. The account pre-selected when adding a new transaction. Added by `20260610000001_user_settings_default_account.sql`. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> One row per user. Created on first sign-in or when the user sets a preference. Clients upsert on save.
+> One row per user. Created on first sign-in or when the user sets a preference (default currency, default account). Clients upsert on save.
 
 **accounts**
 
@@ -269,10 +272,10 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `id` | `UUID` | PK, auto-generated |
 | `user_id` | `UUID` | FK → `auth.users` |
 | `name` | `TEXT` | |
-| `type` | `account_type` | Default `'other'` |
-| `currency` | `TEXT` | Default `'USD'` |
-| `starting_balance` | `BIGINT` | Default `0` |
-| `is_archived` | `BOOLEAN` | Default `FALSE` |
+| `type` | `account_type` | Default `'other'` (`bank_account` / `credit_card` / `digital_wallet` / `cash` / `other`) |
+| `starting_balance` | `BIGINT` | Default `0`. Minor units. The live balance is derived from the monthly-balance ledger, not stored here. |
+| `image_url` | `TEXT` | Nullable. Public URL of the account's avatar image (Supabase Storage); falls back to a type icon when null. Added by `20260607000002_account_images.sql`. |
+| `is_archived` | `BOOLEAN` | Default `FALSE`. Archiving hides the account from lists/pickers without deleting its history. |
 | `show_on_dashboard` | `BOOLEAN` | Default `TRUE`. When `FALSE`, the account (and its balance) is hidden from the dashboard Accounts card without archiving it. Added by `20260617000001_account_show_on_dashboard.sql`. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
@@ -318,24 +321,19 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `transfer_account_id` | `UUID` | FK → `accounts`, nullable. Required when `type = 'transfer'` |
 | `type` | `transaction_type` | |
 | `status` | `transaction_status` | Default `'confirmed'` |
-| `amount` | `BIGINT` | Stored in minor units (cents) |
-| `currency` | `TEXT` | Default `'USD'` |
+| `amount` | `BIGINT` | Minor units. `CHECK (amount <> 0 AND (type <> 'transfer' OR amount > 0))` — income/expense may be **negative** (e.g. a refund as a negative expense), transfers are strictly positive, zero is never allowed. |
 | `description` | `TEXT` | Nullable |
 | `date` | `DATE` | Default `CURRENT_DATE` |
 | `budget_id` | `UUID` | FK → `budgets`, nullable. Set via the budget dropdown; only income/expense (not transfers) may link. |
+| `category_id` | `UUID` | FK → `categories`, nullable, `ON DELETE SET NULL`. At most one category per transaction (single-select). |
 | `scheduled_txn_id` | `UUID` | FK → `scheduled_transactions`, nullable |
 | `fixed_expense_id` | `UUID` | FK → `fixed_expenses`, nullable. Links this transaction to a fixed expense to indicate payment. |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> **Important:** The date column is named `date`, not `transaction_date`. The transfer account column is named `transfer_account_id`, not `to_account_id`. There is no `category_id` column on this table — categories are linked via the `transaction_categories` junction table.
+> **Important:** The date column is named `date`, not `transaction_date`. The transfer account column is named `transfer_account_id`, not `to_account_id`. Category is **single-select** via the `category_id` column directly on this table — there is no `transaction_categories` junction (it was dropped when categories became single-select). There is **no** per-row `currency` column either; the app is single-currency (`user_settings.default_currency`).
 
-**transaction_categories** (junction table — many-to-many)
-
-| Column | Type | Notes |
-|---|---|---|
-| `transaction_id` | `UUID` | FK → `transactions`, composite PK |
-| `category_id` | `UUID` | FK → `categories`, composite PK |
+> **`v_transactions` view.** The Transactions list and Summary read from `v_transactions` (`transactions.*` plus a `tag_ids` UUID array aggregated from `transaction_tags`), `SECURITY INVOKER`, so the tag facet — including "untagged" (`tag_ids = '{}'`) — is an ordinary SQL predicate and the whole query stays paginatable.
 
 **transaction_tags** (junction table — many-to-many)
 
@@ -350,14 +348,14 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 |---|---|---|
 | `id` | `UUID` | PK |
 | `user_id` | `UUID` | FK → `auth.users` |
-| `name` | `TEXT` | Part of identity (name + currency) |
+| `name` | `TEXT` | Identity (with `year_month`) |
 | `year_month` | `TEXT` | Format: `'YYYY-MM'` |
-| `currency` | `TEXT` | FK → `currencies`, default `'USD'`. Part of identity. |
 | `periodic_amount` | `BIGINT` | Minor units |
+| `description` | `TEXT` | Nullable; optional free-text note |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |
 
-> Flat, self-contained one row per budget per month, like `fixed_expenses`. `UNIQUE(user_id, name, currency, year_month)`. There is **no** `budget_periods` table, no `is_active`/`enable_carry_over`, and no stored carry-over column. Carry-over is always on and derived in `v_budget_progress`: it compounds along each `(user_id, name, currency)` lineage, resets to 0 after any missing month, and `spent` is net (linked expenses − linked income).
+> Flat, self-contained one row per budget per month, like `fixed_expenses`. `UNIQUE(user_id, name, year_month)`. The app is single-currency, so budgets carry **no** per-row `currency`. There is **no** `budget_periods` table, no `is_active`/`enable_carry_over`, and no stored carry-over column. Carry-over is always on and derived in `v_budget_progress`: it compounds along each `(user_id, name)` lineage, resets to 0 after any missing month, and `spent` is net (linked expenses − linked income).
 
 **fixed_expenses**
 
@@ -530,6 +528,8 @@ COMMIT;
 ```
 
 > Note: `DROP TABLE budget_periods` cascades to the old `transactions.budget_period_id` FK, so step 5's column drop and the table drop must agree on order; the script drops the column first, then the table.
+
+> **Superseded since:** this migration's `currency` column (and its place in the budget identity / lineage) was later dropped by `20260606000001_drop_currency_columns.sql` when the app went single-currency — budget identity is now `(user_id, name, year_month)` and the carry-over chain runs on `(user_id, name)`. `20260613000001_budget_description.sql` then added the optional `description` note and recreated `v_budget_progress` to surface it. The §3.4 DDL reference reflects this current shape.
 
 ### 3.9 Forward Migrations — Dashboard
 

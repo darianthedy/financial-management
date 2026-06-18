@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
-import { formatCurrency } from "@/lib/utils/currency";
+import { AmountColumn } from "@/components/shared/amount-column";
+import { maxCurrencyNumberWidth } from "@/lib/utils/currency";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { cn } from "@/lib/utils/cn";
 import type { UnplannedCategorySpend } from "@/lib/hooks/use-dashboard";
@@ -17,6 +18,10 @@ interface Props {
 export function UnplannedExpensesCard({ spending }: Props) {
   const { defaultCurrency } = useCurrencies();
   const total = spending.reduce((sum, c) => sum + c.total_amount, 0);
+  const amountWidthCh = maxCurrencyNumberWidth(
+    [total, ...spending.map((c) => c.total_amount)],
+    defaultCurrency,
+  );
 
   return (
     <Card>
@@ -35,9 +40,12 @@ export function UnplannedExpensesCard({ spending }: Props) {
               <span className="text-sm text-[var(--color-muted-foreground)]">
                 Total unplanned
               </span>
-              <span className="text-nowrap font-semibold">
-                {formatCurrency(total, defaultCurrency)}
-              </span>
+              <AmountColumn
+                minorUnits={total}
+                currency={defaultCurrency}
+                numberWidthCh={amountWidthCh}
+                className="text-nowrap font-semibold"
+              />
             </div>
             <div className="flex flex-col gap-2">
               {spending.map((c) => {
@@ -62,9 +70,12 @@ export function UnplannedExpensesCard({ spending }: Props) {
                         {c.category_name}
                       </span>
                     </span>
-                    <span className="text-nowrap font-semibold">
-                      {formatCurrency(c.total_amount, defaultCurrency)}
-                    </span>
+                    <AmountColumn
+                      minorUnits={c.total_amount}
+                      currency={defaultCurrency}
+                      numberWidthCh={amountWidthCh}
+                      className="text-nowrap font-semibold"
+                    />
                   </div>
                 );
               })}

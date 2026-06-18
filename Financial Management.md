@@ -16,10 +16,13 @@ A personal finance management app for tracking income, expenses, budgets, and ac
 
 Accounts represent any source or store of money the user wants to track — not limited to traditional bank accounts.
 
-- User can have multiple accounts and add/remove them as needed
-- An account can represent a bank account, credit card, digital wallet, cash, or any other financial store
-- Each account has a name, starting balance, and current balance
+- User can have multiple accounts and add, edit, or archive them as needed
+- Each account has a **type** — bank account, credit card, digital wallet, cash, or other — which drives its default icon
+- Each account has a name and a **starting balance**; its **current balance** is computed from the starting balance plus all confirmed transactions (it is not entered by hand)
 - Each account can have an optional **custom image** (e.g. a bank or card logo) shown as its avatar. The image is uploaded by the user; when none is set, an icon based on the account type is shown instead
+- **Archiving** an account hides it from lists and pickers while preserving its transaction history — accounts are archived rather than hard-deleted, so past records stay intact
+- Each account can be **shown or hidden on the dashboard** independently of archiving, so a rarely-watched account can be kept out of the dashboard Accounts card without losing it
+- The user can mark one account as the **default account**, which is pre-selected when adding a new transaction
 
 ### Transactions
 
@@ -33,34 +36,38 @@ Transactions are the core records of money moving in, out, or between accounts.
   - A single **category** (optional, at most one per transaction) and multiple **tags**
   - A description
   - A date
-  - An amount
+  - An amount. Income and expenses may be **negative** — e.g. a refund recorded as a negative expense, which adds cash back to the account and reduces the expense/category/budget totals instead of inflating income. Transfers must be positive (reverse a transfer by swapping its accounts), and a zero amount is never allowed for any type.
 
 **Filtering & Search**
 
 The transaction list can be narrowed by any combination of the following filters:
 
+Every facet except search, date range, and amount range is a **multi-select** (pick one or more values; a transaction matches if it matches **any** of them). The category, tag, budget, and fixed-expense facets additionally offer a **"(Blanks)"** option that matches transactions with no value for that facet (e.g. uncategorized or untagged rows).
+
 - **Search**: free-text match on the transaction description
-- **Type**: income, expense, or transfer
-- **Account**: a specific account (matches whether it is the source or the transfer destination)
-- **Status**: confirmed, pending, or dismissed
+- **Type**: one or more of income, expense, transfer
+- **Account**: one or more accounts (an account matches whether it is the source or the transfer destination)
+- **Status**: one or more of confirmed, pending, dismissed
 - **Date range**: a from/to range, with quick presets (this month, last month, last 3 months, this year, all time)
-- **Categories**: one or more categories — a transaction matches if its category is **any** of the selected ones
-- **Tags**: one or more tags — a transaction matches if it carries **any** of the selected tags
+- **Categories**: one or more categories (or "(Blanks)" for uncategorized) — a transaction matches if its category is **any** of the selected ones
+- **Tags**: one or more tags (or "(Blanks)" for untagged) — a transaction matches if it carries **any** of the selected tags
 - **Amount range**: a minimum and/or maximum amount
-- **Budget**: a specific budget by **name**. The list offers all existing budgets across every period (matched by name, since a budget name spans multiple monthly entries). When a **date range** is also active, the available budgets are limited to those that exist within the selected range's months (e.g., a 30 May – 3 June range offers budgets present in May or June). Selecting a budget shows transactions linked to that budget's name within the selected date range, or across all dates when no date range is set.
-- **Fixed-expense link**: "linked to a fixed expense" (paid) or "not linked" (unpaid)
+- **Budget**: one or more budgets by **name** (or "(Blanks)" for transactions with no budget). The list offers all existing budgets across every period (matched by name, since a budget name spans multiple monthly entries). When a **date range** is also active, the available budgets are limited to those that exist within the selected range's months (e.g., a 30 May – 3 June range offers budgets present in May or June). Selecting a budget shows transactions linked to that budget's name within the selected date range, or across all dates when no date range is set.
+- **Fixed expense**: one or more fixed expenses by **name** (or "(Blanks)" for transactions not linked to any), matched by name across every month exactly like the budget filter
 
-Combination semantics: filters across different dimensions are combined with **AND**; multiple selections within a single multi-select dimension (categories, tags) are combined with **OR**. Example: `type = expense` **AND** category ∈ {Food, Travel} (a transaction has at most one category, so this matches when that one category is Food or Travel).
+Combination semantics: filters across different dimensions are combined with **AND**; multiple selections within a single multi-select dimension are combined with **OR**. Example: `type = expense` **AND** category ∈ {Food, Travel} (a transaction has at most one category, so this matches when that one category is Food or Travel).
 
-Active filters are shown as removable chips with a "Clear all" action, alongside a count of matching transactions. For P0, filters are not persisted across sessions (they reset on reload).
+Active filters are shown as removable chips with a "Clear all" action, alongside a count of matching transactions. The matching list is **paginated** (selectable page size), and the active filters are reflected in the URL so a filtered view can be shared or reloaded. A **Summary** view reduces the *entire* filtered set (across all pages) to totals — income, expense, net, transfers in/out, count, largest expense — with collapsible breakdowns by account, category, budget, fixed expense, and tag. Summary money math uses confirmed rows only (pending shown separately as a projection; dismissed excluded).
 
 ### Budgets
 
 Budgets allow the user to set spending limits for a given period and track remaining allowance.
 
 - User can have multiple budgets
-- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **periodic amount**, and a computed **remaining amount**
+- Each budget is one self-contained row for one specific period, with a **name**, a **period** (`year_month`), a **periodic amount**, an optional **note**, and a computed **remaining amount**
 - For P0, budget period is fixed to **monthly**
+- User can **edit** the name, monthly amount, or note of any budget, and **remove** an individual budget for a month (other months are unaffected)
+- **Copy from Previous Month**: the user can copy every budget from the previous month into the current month, preserving name, note, and periodic amount. Budgets whose name already exists in the current month are skipped. This is the primary way to carry a budget set forward into a new month.
 
 **Identity**
 

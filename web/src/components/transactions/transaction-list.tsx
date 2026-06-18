@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import type { TransactionWithRelations } from "@/lib/hooks/use-transactions";
+import { maxCurrencyNumberWidth } from "@/lib/utils/currency";
 import { TransactionRow } from "./transaction-row";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner, EmptyState } from "@/components/ui/misc";
@@ -25,6 +26,12 @@ export function TransactionList({
   onMutated,
 }: Props) {
   const navigate = useNavigate();
+
+  // Size the amount column to the widest value so every row's currency symbol
+  // and digits align into a single tidy column.
+  const amountWidthCh = maxCurrencyNumberWidth(
+    transactions.map((t) => t.amount),
+  );
 
   if (loading) return <CenteredSpinner />;
 
@@ -61,7 +68,12 @@ export function TransactionList({
       ) : (
         <div className="divide-y divide-[var(--color-border)]">
           {transactions.map((txn) => (
-            <TransactionRow key={txn.id} txn={txn} onMutated={onMutated} />
+            <TransactionRow
+              key={txn.id}
+              txn={txn}
+              amountWidthCh={amountWidthCh}
+              onMutated={onMutated}
+            />
           ))}
         </div>
       )}
