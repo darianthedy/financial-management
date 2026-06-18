@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Info, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Info, Lock, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -21,14 +21,22 @@ interface Props {
 export function BudgetCard({ budget, onEdit, onRemove }: Props) {
   const navigate = useNavigate();
   const { effective_amount, spent, remaining, carry_over_amount } = budget;
+  // Falls back to 0 so the card still renders correctly if the installments
+  // migration (#85) that adds `reserved` to v_budget_progress hasn't been
+  // applied yet.
+  const reserved = budget.reserved ?? 0;
   const overspent = remaining < 0;
 
-  // Bar fills with net spend against the effective amount (periodic + carry-in).
-  // A non-positive effective amount (deep carried-over overspend) reads as full.
+  // Bar fills with net spend PLUS installment reservations (both consume the
+  // month's allowance; reservations are use-it-or-lose-it) against the effective
+  // amount (periodic + carry-in). A non-positive effective amount (deep
+  // carried-over overspend) reads as full. Keeping `reserved` in the fill keeps
+  // the bar consistent with `remaining`, which already nets it out.
+  const committed = spent + reserved;
   const pct =
     effective_amount > 0
-      ? Math.min(100, Math.max(0, (spent / effective_amount) * 100))
-      : spent > 0
+      ? Math.min(100, Math.max(0, (committed / effective_amount) * 100))
+      : committed > 0
         ? 100
         : 0;
 
@@ -148,6 +156,18 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
               : `${formatCurrency(remaining)} left`}
           </span>
         </div>
+
+        {/* Installment reservation: a distinct, muted line separate from the
+            carry-over label (which lives in the Info popover). Shown only when a
+            budget has reserved allowance for future installment payments. */}
+        {reserved > 0 && (
+          <div className="-mt-1 flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+            <Lock className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              −{formatCurrency(reserved)} reserved for installments
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

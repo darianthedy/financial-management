@@ -39,6 +39,13 @@ export function useBudgets(yearMonth: string) {
         { event: "*", schema: "public", table: "transactions" },
         () => fetch(),
       )
+      // Installment reservations feed v_budget_progress.reserved, so refetch
+      // when the allocation grid changes (create/cancel an installment) too.
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "budget_installment_allocations" },
+        () => fetch(),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
