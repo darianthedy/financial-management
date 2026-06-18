@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ interface Props {
  * the displayed month are shown; hidden entirely when none apply.
  */
 export function InstallmentList({ yearMonth }: Props) {
+  const navigate = useNavigate();
   const { installments, loading, refetch } = useInstallments();
   // The installment pending cancellation drives the confirm dialog; null hides it.
   const [cancelTarget, setCancelTarget] = useState<InstallmentSummary | null>(
@@ -82,17 +83,23 @@ export function InstallmentList({ yearMonth }: Props) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {visible.map((it) => (
-          <Card key={it.id}>
+          <Card
+            key={it.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate(`/transactions/${it.sourceTransactionId}/edit`)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(`/transactions/${it.sourceTransactionId}/edit`);
+              }
+            }}
+            className="cursor-pointer transition-colors hover:bg-[var(--color-muted)]"
+          >
             <CardContent className="flex flex-col gap-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <Link
-                    to={`/transactions/${it.sourceTransactionId}/edit`}
-                    className="block truncate font-medium hover:underline"
-                    title="View the source transaction"
-                  >
-                    {it.title}
-                  </Link>
+                  <p className="block truncate font-medium">{it.title}</p>
                   <p className="text-sm text-[var(--color-muted-foreground)]">
                     {formatCurrency(it.totalAmount)}
                   </p>
@@ -100,7 +107,7 @@ export function InstallmentList({ yearMonth }: Props) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => openCancel(it)}
+                  onClick={(e) => { e.stopPropagation(); openCancel(it); }}
                   aria-label="Cancel installment"
                   className="shrink-0 text-[var(--color-danger)]"
                 >
