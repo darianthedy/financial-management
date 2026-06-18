@@ -73,7 +73,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
               <AmountColumn
                 minorUnits={plannedTotal}
                 numberWidthCh={amountWidthCh}
-                className="text-nowrap font-semibold"
+                className="text-nowrap text-sm font-semibold"
               />
             </div>
 
@@ -150,7 +150,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                       <AmountColumn
                         minorUnits={unpaidTotal}
                         numberWidthCh={amountWidthCh}
-                        className="text-nowrap text-base font-semibold"
+                        className="text-nowrap text-sm font-semibold"
                       />
                     </div>
                     {unpaidFx.map((f) => (
@@ -179,7 +179,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                       <AmountColumn
                         minorUnits={paidTotal}
                         numberWidthCh={amountWidthCh}
-                        className="text-nowrap text-base font-semibold text-[var(--color-success)]"
+                        className="text-nowrap text-sm font-semibold text-[var(--color-success)]"
                       />
                     </div>
                     {paidFx.map((f) => (
