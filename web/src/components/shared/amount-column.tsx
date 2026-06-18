@@ -10,7 +10,8 @@ interface Props {
    * Width (in `ch`) reserved for the numeric body, typically the widest amount
    * in the surrounding list (see `maxCurrencyNumberWidth`). With tabular digits
    * this lines the currency symbol up on the left and right-aligns the value so
-   * every row's symbol and digits sit in the same column.
+   * every row's symbol and digits sit in the same column. Omit it for a
+   * standalone amount that isn't being aligned against anything.
    */
   numberWidthCh?: number;
   /** Force a leading sign even for positives (e.g. "+$5.00" for inflows). */
@@ -34,22 +35,35 @@ export function AmountColumn({
   const { sign, symbol, number } = formatCurrencyParts(minorUnits, currency);
   const leadingSign = sign || (signed ? "+" : "");
 
-  // Reserve room for the symbol and a sign slot on top of the numeric body, then
-  // right-align the whole thing. Every row in a list shares one width (same
-  // symbol, same +1 sign slot), so the digits' right edges line up while the
-  // symbol stays flush against the number — any slack falls to the left of the
-  // symbol instead of opening a gap between the symbol and the digits.
-  const minWidthCh =
-    numberWidthCh != null ? numberWidthCh + symbol.length + 1 : undefined;
+  // Standalone (no shared width): nothing to line up against, so just render the
+  // pieces in their natural order.
+  if (numberWidthCh == null) {
+    return (
+      <span className={cn("inline-block tabular-nums", className)}>
+        {leadingSign}
+        {symbol}
+        {number}
+      </span>
+    );
+  }
 
+  // Inside a list: lay the amount out as three fixed slots so columns line up
+  // row-to-row — a sign slot, the currency symbol pinned to the left, and the
+  // digits right-aligned within a shared-width slot. Every row uses the same
+  // `numberWidthCh` (and the same symbol), so all the symbols stack in one
+  // column on the left and all the digits' right edges stack in another on the
+  // right, with any slack opening up as a gap between symbol and digits.
   return (
-    <span
-      className={cn("inline-block text-right tabular-nums", className)}
-      style={minWidthCh != null ? { minWidth: `${minWidthCh}ch` } : undefined}
-    >
-      {leadingSign}
-      {symbol}
-      {number}
+    <span className={cn("inline-flex items-baseline tabular-nums", className)}>
+      {/* Sign slot: reserved even when empty so a leading "-"/"+" never nudges
+          the symbol out of alignment with the unsigned rows. */}
+      <span className="shrink-0 text-right" style={{ width: "1ch" }}>
+        {leadingSign}
+      </span>
+      <span className="shrink-0">{symbol}</span>
+      <span className="text-right" style={{ minWidth: `${numberWidthCh}ch` }}>
+        {number}
+      </span>
     </span>
   );
 }
