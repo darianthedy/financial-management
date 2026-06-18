@@ -126,7 +126,7 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      <InstallmentList />
+      <InstallmentList yearMonth={yearMonth} />
 
       <BudgetForm
         open={formOpen}
