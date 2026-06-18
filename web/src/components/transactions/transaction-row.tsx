@@ -7,6 +7,7 @@ import {
   Pencil,
   Trash2,
   Clock,
+  LayoutGrid,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils/cn";
@@ -32,6 +33,8 @@ import {
   deleteTransaction,
   type TransactionWithRelations,
 } from "@/lib/hooks/use-transactions";
+import { isTransactionSpread } from "@/lib/hooks/use-installments";
+import { CreateInstallmentDialog } from "@/components/transactions/installment-dialog";
 
 interface Props {
   txn: TransactionWithRelations;
@@ -44,6 +47,12 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
+  // Whether this expense is already spread across budgets. Looked up lazily when
+  // the actions menu first opens (rather than per-row up front) so the "Create
+  // virtual installment" item can hide once a spread exists — a second spread is
+  // rejected by the RPC anyway. `null` means not yet checked.
+  const [isSpread, setIsSpread] = useState<boolean | null>(null);
 
   const isPending = txn.status === "pending";
 
@@ -69,6 +78,18 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
   function goToEdit() {
     navigate(`/transactions/${txn.id}/edit`);
   }
+
+  // Spreading is expense-only. Check the already-spread status the first time
+  // the menu opens so the option can be hidden for expenses already spread.
+  function handleMenuOpenChange(open: boolean) {
+    if (open && txn.type === "expense" && isSpread === null) {
+      isTransactionSpread(txn.id)
+        .then(setIsSpread)
+        .catch(() => setIsSpread(false));
+    }
+  }
+
+  const canSpread = txn.type === "expense" && isSpread !== true;
 
   async function handleDelete() {
     setDeleting(true);
@@ -154,7 +175,7 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
         )}
       </div>
 
-      <DropdownMenu.Root>
+      <DropdownMenu.Root onOpenChange={handleMenuOpenChange}>
         <DropdownMenu.Trigger
           className="rounded p-1 hover:bg-[var(--color-card)]"
           onClick={(e) => e.stopPropagation()}
@@ -175,6 +196,14 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
             >
               <Pencil className="h-4 w-4" /> Edit
             </DropdownMenu.Item>
+            {canSpread && (
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)]"
+                onSelect={() => setInstallOpen(true)}
+              >
+                <LayoutGrid className="h-4 w-4" /> Create virtual installment
+              </DropdownMenu.Item>
+            )}
             <DropdownMenu.Item
               className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm text-[var(--color-danger)] outline-none data-[highlighted]:bg-[var(--color-muted)]"
               onSelect={() => setConfirmOpen(true)}
@@ -184,6 +213,16 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+
+      <CreateInstallmentDialog
+        transaction={txn}
+        open={installOpen}
+        onOpenChange={setInstallOpen}
+        onSaved={() => {
+          setIsSpread(true);
+          onMutated?.();
+        }}
+      />
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent

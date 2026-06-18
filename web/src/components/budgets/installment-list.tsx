@@ -3,6 +3,13 @@ import { Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   useInstallments,
   cancelInstallment,
   type InstallmentSummary,
@@ -18,51 +25,62 @@ function spanLabel(it: InstallmentSummary): string {
   return `${start} – ${end}`;
 }
 
+interface Props {
+  /** The month currently shown on the Budgets page, 'YYYY-MM'. */
+  yearMonth: string;
+}
+
 /**
  * Active installments under the Budgets page, each cancellable. Cancelling
  * deletes the header row (allocations cascade away), releasing the reserved
- * allowance on the listed budgets. Hidden entirely when there are none.
+ * allowance on the listed budgets. Only installments that reserve allowance in
+ * the displayed month are shown; hidden entirely when none apply.
  */
-export function InstallmentList() {
+export function InstallmentList({ yearMonth }: Props) {
   const { installments, loading, refetch } = useInstallments();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // The installment pending cancellation drives the confirm dialog; null hides it.
+  const [cancelTarget, setCancelTarget] = useState<InstallmentSummary | null>(
+    null,
+  );
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
-  async function handleCancel(it: InstallmentSummary) {
-    const label = it.description?.trim() || "this installment";
-    if (
-      !confirm(
-        `Cancel ${label}? The reserved amounts on ${it.budgetNames.join(", ")} ` +
-          `will be released. The budgets themselves stay; only the reservation is removed.`,
-      )
-    )
-      return;
-    setBusyId(it.id);
+  function openCancel(it: InstallmentSummary) {
+    setCancelError("");
+    setCancelTarget(it);
+  }
+
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    setCancelError("");
     try {
-      await cancelInstallment(it.id);
+      await cancelInstallment(cancelTarget.id);
+      setCancelTarget(null);
       refetch();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to cancel installment");
+      setCancelError(
+        e instanceof Error ? e.message : "Failed to cancel installment",
+      );
     } finally {
-      setBusyId(null);
+      setCancelling(false);
     }
   }
 
+  // Only installments reserving allowance in the displayed month belong here.
+  const visible = installments.filter((it) =>
+    it.reservedMonths.includes(yearMonth),
+  );
+
   // Keep the page uncluttered when there's nothing to show.
-  if (loading || installments.length === 0) return null;
+  if (loading || visible.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold">Active installments</h2>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Expenses spread across budgets. Cancelling releases the reserved
-          allowance; deleting the source transaction cancels the installment
-          too.
-        </p>
-      </div>
+      <h2 className="text-lg font-semibold">Active installments</h2>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {installments.map((it) => (
+        {visible.map((it) => (
           <Card key={it.id}>
             <CardContent className="flex flex-col gap-2 p-4">
               <div className="flex items-start justify-between gap-2">
@@ -77,8 +95,7 @@ export function InstallmentList() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => handleCancel(it)}
-                  disabled={busyId === it.id}
+                  onClick={() => openCancel(it)}
                   aria-label="Cancel installment"
                   className="shrink-0 text-[var(--color-danger)]"
                 >
@@ -107,6 +124,46 @@ export function InstallmentList() {
           </Card>
         ))}
       </div>
+
+      <Dialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel installment?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            The reserved amounts on{" "}
+            <span className="font-medium text-[var(--color-foreground)]">
+              {cancelTarget?.budgetNames.join(", ")}
+            </span>{" "}
+            will be released. The budgets themselves stay; only the reservation
+            is removed. This can't be undone.
+          </p>
+          {cancelError && (
+            <p className="text-sm text-[var(--color-danger)]">{cancelError}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCancelTarget(null)}
+              disabled={cancelling}
+            >
+              Keep
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? "Cancelling…" : "Cancel installment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

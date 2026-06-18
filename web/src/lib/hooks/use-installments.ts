@@ -118,6 +118,8 @@ export interface InstallmentSummary {
   sourceTransactionId: string;
   /** Distinct budget lineages this installment reserves from, sorted. */
   budgetNames: string[];
+  /** Distinct 'YYYY-MM' months that actually carry a reservation. */
+  reservedMonths: string[];
 }
 
 interface InstallmentRow {
@@ -127,7 +129,7 @@ interface InstallmentRow {
   start_year_month: string;
   months: number;
   source_transaction_id: string;
-  allocations: { budget_name: string }[] | null;
+  allocations: { budget_name: string; year_month: string }[] | null;
 }
 
 /**
@@ -139,7 +141,7 @@ export async function fetchInstallments(): Promise<InstallmentSummary[]> {
     .from("budget_installments")
     .select(
       "id, total_amount, description, start_year_month, months, source_transaction_id, " +
-        "allocations:budget_installment_allocations(budget_name)",
+        "allocations:budget_installment_allocations(budget_name, year_month)",
     )
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -152,6 +154,9 @@ export async function fetchInstallments(): Promise<InstallmentSummary[]> {
     sourceTransactionId: row.source_transaction_id,
     budgetNames: [
       ...new Set((row.allocations ?? []).map((a) => a.budget_name)),
+    ].sort((a, b) => a.localeCompare(b)),
+    reservedMonths: [
+      ...new Set((row.allocations ?? []).map((a) => a.year_month)),
     ].sort((a, b) => a.localeCompare(b)),
   }));
 }

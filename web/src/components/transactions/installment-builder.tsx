@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { format, parse } from "date-fns";
-import { Plus, Minus, X } from "lucide-react";
+import { Plus, Minus, X, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { Label } from "@/components/ui/input";
 import { CurrencyAmountInput } from "@/components/shared/currency-amount-input";
 import { fetchBudgetNames } from "@/lib/hooks/use-budgets";
@@ -81,6 +81,21 @@ export function InstallmentBuilder({
   const [startOffset, setStartOffset] = useState<0 | 1>(0);
   const [budgetNames, setBudgetNames] = useState<string[]>([]);
   const [months, setMonths] = useState(1);
+  // Which month panels are open in the per-month allocation accordion. Tracked
+  // by position (0-based) so it survives month-count and start-month changes;
+  // the first month opens by default.
+  const [openMonths, setOpenMonths] = useState<Set<number>>(
+    () => new Set([0]),
+  );
+
+  function toggleMonth(index: number) {
+    setOpenMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetchBudgetNames().then(setAvailableNames);
@@ -122,6 +137,20 @@ export function InstallmentBuilder({
         ri === b ? row.map((c, ci) => (ci === m ? value : c)) : row,
       ),
     }));
+  }
+
+  // Copy one budget's amount in month `m` to every month for that same budget,
+  // so a flat monthly figure can be entered once and propagated.
+  function copyBudgetToAllMonths(b: number, m: number) {
+    setGrid((prev) => {
+      const value = prev.cells[b]?.[m] ?? 0;
+      return {
+        sig: prev.sig,
+        cells: prev.cells.map((row, ri) =>
+          ri === b ? row.map(() => value) : row,
+        ),
+      };
+    });
   }
 
   function splitEvenly() {
@@ -276,7 +305,9 @@ export function InstallmentBuilder({
         </div>
       </div>
 
-      {/* Allocation grid */}
+      {/* Allocation — one collapsible panel per month. Months are the long
+          dimension here, so they stack vertically (no horizontal scroll) and
+          each panel holds the per-budget inputs for that month. */}
       {budgetNames.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
@@ -289,44 +320,76 @@ export function InstallmentBuilder({
               Split evenly
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="border-separate border-spacing-1">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 bg-[var(--color-card)]" />
-                  {monthList.map((ym) => (
-                    <th
-                      key={ym}
-                      className="px-1 pb-1 text-center text-xs font-medium text-[var(--color-muted-foreground)] whitespace-nowrap"
-                    >
+          <div className="flex flex-col gap-2">
+            {monthList.map((ym, m) => {
+              const isOpen = openMonths.has(m);
+              const monthTotalMinor = budgetNames.reduce(
+                (sum, _name, b) =>
+                  sum + toMinorUnits(cells[b]?.[m] ?? 0, decimals),
+                0,
+              );
+              return (
+                <div
+                  key={ym}
+                  className="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-background)]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleMonth(m)}
+                    aria-expanded={isOpen}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 opacity-60" />
+                      )}
                       {monthLabel(ym)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {budgetNames.map((name, b) => (
-                  <tr key={name}>
-                    <td className="sticky left-0 z-10 bg-[var(--color-card)] pr-2 text-sm font-medium whitespace-nowrap">
-                      {name}
-                    </td>
-                    {monthList.map((ym, m) => (
-                      <td key={ym}>
-                        <CurrencyAmountInput
-                          value={cells[b]?.[m] ?? 0}
-                          decimals={decimals}
-                          onChange={(v) =>
-                            setCell(b, m, Number.isFinite(v) ? v : 0)
-                          }
-                          aria-label={`${name} ${monthLabel(ym)}`}
-                          className="w-28 text-right"
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                    <span className="text-sm tabular-nums text-[var(--color-muted-foreground)]">
+                      {formatCurrency(monthTotalMinor)}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-col gap-2 px-3 pb-3">
+                      {budgetNames.map((name, b) => (
+                        <div
+                          key={name}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <span className="min-w-0 truncate text-sm">
+                            {name}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <CurrencyAmountInput
+                              value={cells[b]?.[m] ?? 0}
+                              decimals={decimals}
+                              onChange={(v) =>
+                                setCell(b, m, Number.isFinite(v) ? v : 0)
+                              }
+                              aria-label={`${name} ${monthLabel(ym)}`}
+                              className="w-32 text-right"
+                            />
+                            {months > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => copyBudgetToAllMonths(b, m)}
+                                aria-label={`Copy ${name} value to all months`}
+                                title="Copy to all months"
+                                className="flex h-9 w-9 items-center justify-center rounded-[var(--radius)] text-[var(--color-muted-foreground)] transition-colors hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
