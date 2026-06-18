@@ -26,7 +26,7 @@ interface Props {
  */
 export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props) {
   const plannedTotal =
-    budgets.reduce((s, b) => s + b.effective_amount, 0) +
+    budgets.reduce((s, b) => s + b.effective_amount - (b.reserved ?? 0), 0) +
     fixedExpenses.reduce((s, f) => s + f.amount, 0);
 
   const fractionElapsed = monthElapsedFraction(yearMonth);
@@ -57,7 +57,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
   // the widest figure across every budget so the spent and total columns each
   // right-align row-to-row, matching the aligned amounts elsewhere in the card.
   const widestBudgetAmount = widestCurrencyNumber(
-    budgets.flatMap((b) => [b.spent, b.effective_amount]),
+    budgets.flatMap((b) => [b.spent, b.effective_amount - (b.reserved ?? 0)]),
   );
 
   return (
@@ -91,17 +91,18 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                 </p>
                 {budgets.map((b) => {
                   const overspent = b.remaining < 0;
+                  const effectiveBudget = b.effective_amount - (b.reserved ?? 0);
                   const pct =
-                    b.effective_amount > 0
-                      ? Math.min(100, Math.max(0, (b.spent / b.effective_amount) * 100))
+                    effectiveBudget > 0
+                      ? Math.min(100, Math.max(0, (b.spent / effectiveBudget) * 100))
                       : b.spent > 0
                         ? 100
                         : 0;
                   // Color by projected month-end pace when we can project;
                   // otherwise fall back to whether it's actually over.
-                  const canProject = fractionElapsed > 0 && b.effective_amount > 0;
+                  const canProject = fractionElapsed > 0 && effectiveBudget > 0;
                   const projectedOver = canProject
-                    ? b.spent / fractionElapsed > b.effective_amount
+                    ? b.spent / fractionElapsed > effectiveBudget
                     : overspent;
                   return (
                     <div key={b.budget_id} className="flex flex-col gap-1">
@@ -121,7 +122,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                           />
                           <span aria-hidden>/</span>
                           <AmountColumn
-                            minorUnits={b.effective_amount}
+                            minorUnits={effectiveBudget}
                             widestNumber={widestBudgetAmount}
                           />
                         </span>

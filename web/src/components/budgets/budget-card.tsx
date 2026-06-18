@@ -27,16 +27,14 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
   const reserved = budget.reserved ?? 0;
   const overspent = remaining < 0;
 
-  // Bar fills with net spend PLUS installment reservations (both consume the
-  // month's allowance; reservations are use-it-or-lose-it) against the effective
-  // amount (periodic + carry-in). A non-positive effective amount (deep
-  // carried-over overspend) reads as full. Keeping `reserved` in the fill keeps
-  // the bar consistent with `remaining`, which already nets it out.
-  const committed = spent + reserved;
+  // Effective budget is periodic + carry-in minus installment reservations.
+  // Both the bar and the "spent of X" label use this figure so the user sees
+  // what is actually available to spend this month.
+  const effectiveBudget = effective_amount - reserved;
   const pct =
-    effective_amount > 0
-      ? Math.min(100, Math.max(0, (committed / effective_amount) * 100))
-      : committed > 0
+    effectiveBudget > 0
+      ? Math.min(100, Math.max(0, (spent / effectiveBudget) * 100))
+      : spent > 0
         ? 100
         : 0;
 
@@ -141,7 +139,7 @@ export function BudgetCard({ budget, onEdit, onRemove }: Props) {
 
         <div className="flex items-center justify-between text-sm">
           <span className="text-[var(--color-muted-foreground)]">
-            {formatCurrency(spent)} of {formatCurrency(effective_amount)}
+            {formatCurrency(spent)} of {formatCurrency(effectiveBudget)}
           </span>
           <span
             className={cn(
