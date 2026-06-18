@@ -11,6 +11,8 @@ export type TransactionWithRelations = Transaction & {
   tags: Tag[];
   budget: { name: string } | null;
   fixedExpense: { name: string } | null;
+  /** True when this expense is the source of a virtual budget installment. */
+  hasInstallment: boolean;
 };
 
 export type TransactionType = "income" | "expense" | "transfer";
@@ -461,9 +463,10 @@ export function useTransactions(
       ...new Set(rows.map((r) => r.fixed_expense_id).filter(Boolean)),
     ] as string[];
 
-    // Fetch account names, budget names, categories, fixed-expense names, and
-    // tag rows in parallel.
-    const [accountResult, budgetResult, categoryResult, fixedExpenseResult, tagResult] = await Promise.all([
+    // Fetch account names, budget names, categories, fixed-expense names, tag
+    // rows, and which of these expenses are spread into a virtual installment,
+    // all in parallel.
+    const [accountResult, budgetResult, categoryResult, fixedExpenseResult, tagResult, installmentResult] = await Promise.all([
       accountIds.length
         ? supabase.from("accounts").select("id, name, image_url").in("id", accountIds)
         : Promise.resolve({
@@ -486,6 +489,12 @@ export function useTransactions(
             data: Array<{ transaction_id: string; tags: Tag | null }> | null;
           }>)
         : Promise.resolve({ data: [] as Array<{ transaction_id: string; tags: Tag | null }> }),
+      ids.length
+        ? supabase
+            .from("budget_installments")
+            .select("source_transaction_id")
+            .in("source_transaction_id", ids)
+        : Promise.resolve({ data: [] as Array<{ source_transaction_id: string }> }),
     ]);
 
     const accountById = new Map(
@@ -508,6 +517,12 @@ export function useTransactions(
       tagsByTxn.set(link.transaction_id, tags);
     }
 
+    // Source transactions that have been spread into a virtual installment, so
+    // the row can flag them without a per-row lookup.
+    const installmentSourceIds = new Set(
+      (installmentResult.data ?? []).map((r) => r.source_transaction_id),
+    );
+
     // Tags are filtered in SQL (via the view's tag_ids array), so the fetched
     // rows are already the final set — just hydrate names for display.
     const mapped = rows.map((r) => ({
@@ -527,6 +542,7 @@ export function useTransactions(
       fixedExpense: r.fixed_expense_id
         ? { name: fixedExpenseNameById.get(r.fixed_expense_id) ?? "" }
         : null,
+      hasInstallment: installmentSourceIds.has(r.id),
     }));
     setTransactions(mapped);
     setLoading(false);

@@ -48,11 +48,14 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
-  // Whether this expense is already spread across budgets. Looked up lazily when
-  // the actions menu first opens (rather than per-row up front) so the "Create
-  // virtual installment" item can hide once a spread exists — a second spread is
-  // rejected by the RPC anyway. `null` means not yet checked.
-  const [isSpread, setIsSpread] = useState<boolean | null>(null);
+  // Whether this expense is already spread across budgets. Seeded from the row's
+  // `hasInstallment` flag (so the "Create virtual installment" item can hide
+  // immediately — a second spread is rejected by the RPC anyway); otherwise
+  // looked up lazily the first time the actions menu opens. `null` means not yet
+  // checked.
+  const [isSpread, setIsSpread] = useState<boolean | null>(
+    txn.hasInstallment ? true : null,
+  );
 
   const isPending = txn.status === "pending";
 
@@ -132,6 +135,12 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
               <Clock className="h-3 w-3" />
               Pending
             </span>
+          )}
+          {txn.hasInstallment && (
+            <LayoutGrid
+              aria-label="Spread into a virtual installment"
+              className="h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]"
+            />
           )}
         </div>
         {subtitle && (
