@@ -126,20 +126,23 @@ export function formatCurrencyParts(
 }
 
 /**
- * Widest numeric body (in characters) across a set of amounts, for sizing an
- * amount column so every symbol and digit lines up. Returns a `ch` count.
+ * The widest numeric body across a set of amounts, for sizing an amount column
+ * so every symbol and digit lines up. Returns the formatted number string itself
+ * (not a width) so callers can size the column with an invisible spacer: a `ch`
+ * count would over-reserve, since group separators and the decimal point render
+ * narrower than a tabular digit, leaving a gap even beside the longest amount.
  */
-export function maxCurrencyNumberWidth(
+export function widestCurrencyNumber(
   amounts: ReadonlyArray<number>,
   currency = appCurrency,
   decimalPlaces = currencyDecimals(currency),
-): number {
-  let max = 0;
+): string {
+  let widest = "";
   for (const amount of amounts) {
     const { number } = formatCurrencyParts(amount, currency, decimalPlaces);
-    if (number.length > max) max = number.length;
+    if (number.length > widest.length) widest = number;
   }
-  return max;
+  return widest;
 }
 
 /** Signed display for a transaction amount (negative for outflows). */

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { AccountAvatar } from "@/components/accounts/account-avatar";
 import { AmountColumn } from "@/components/shared/amount-column";
-import { maxCurrencyNumberWidth } from "@/lib/utils/currency";
+import { widestCurrencyNumber } from "@/lib/utils/currency";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { cn } from "@/lib/utils/cn";
 import type { AccountMonthBalance } from "@/lib/hooks/use-dashboard";
@@ -19,7 +19,7 @@ interface Props {
 export function AccountsCard({ accounts }: Props) {
   const { defaultCurrency } = useCurrencies();
   const total = accounts.reduce((sum, a) => sum + a.balance, 0);
-  const amountWidthCh = maxCurrencyNumberWidth(
+  const widestAmount = widestCurrencyNumber(
     [total, ...accounts.map((a) => a.balance)],
     defaultCurrency,
   );
@@ -44,7 +44,7 @@ export function AccountsCard({ accounts }: Props) {
               <AmountColumn
                 minorUnits={total}
                 currency={defaultCurrency}
-                numberWidthCh={amountWidthCh}
+                widestNumber={widestAmount}
                 className={cn(
                   "text-nowrap text-sm font-semibold",
                   total < 0 && "text-[var(--color-danger)]",
@@ -70,7 +70,7 @@ export function AccountsCard({ accounts }: Props) {
                   <AmountColumn
                     minorUnits={account.balance}
                     currency={defaultCurrency}
-                    numberWidthCh={amountWidthCh}
+                    widestNumber={widestAmount}
                     className={cn(
                       "text-nowrap font-semibold",
                       account.balance < 0 && "text-[var(--color-danger)]",

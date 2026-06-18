@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { AmountColumn } from "@/components/shared/amount-column";
-import { maxCurrencyNumberWidth } from "@/lib/utils/currency";
+import { widestCurrencyNumber } from "@/lib/utils/currency";
 import { useCurrencies } from "@/lib/hooks/use-currencies";
 import { cn } from "@/lib/utils/cn";
 import type { UnplannedCategorySpend } from "@/lib/hooks/use-dashboard";
@@ -18,7 +18,7 @@ interface Props {
 export function UnplannedExpensesCard({ spending }: Props) {
   const { defaultCurrency } = useCurrencies();
   const total = spending.reduce((sum, c) => sum + c.total_amount, 0);
-  const amountWidthCh = maxCurrencyNumberWidth(
+  const widestAmount = widestCurrencyNumber(
     [total, ...spending.map((c) => c.total_amount)],
     defaultCurrency,
   );
@@ -43,7 +43,7 @@ export function UnplannedExpensesCard({ spending }: Props) {
               <AmountColumn
                 minorUnits={total}
                 currency={defaultCurrency}
-                numberWidthCh={amountWidthCh}
+                widestNumber={widestAmount}
                 className="text-nowrap text-sm font-semibold"
               />
             </div>
@@ -73,7 +73,7 @@ export function UnplannedExpensesCard({ spending }: Props) {
                     <AmountColumn
                       minorUnits={c.total_amount}
                       currency={defaultCurrency}
-                      numberWidthCh={amountWidthCh}
+                      widestNumber={widestAmount}
                       className="text-nowrap font-semibold"
                     />
                   </div>

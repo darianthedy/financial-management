@@ -35,12 +35,12 @@ import {
 
 interface Props {
   txn: TransactionWithRelations;
-  /** Shared numeric-column width (in `ch`) so amounts align across the list. */
-  amountWidthCh?: number;
+  /** Widest amount's numeric body so amounts align across the list. */
+  widestAmount?: string;
   onMutated?: () => void;
 }
 
-export function TransactionRow({ txn, amountWidthCh, onMutated }: Props) {
+export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -128,7 +128,7 @@ export function TransactionRow({ txn, amountWidthCh, onMutated }: Props) {
       <div className="flex shrink-0 flex-col items-end gap-1">
         <AmountColumn
           minorUnits={txn.amount}
-          numberWidthCh={amountWidthCh}
+          widestNumber={widestAmount}
           className={cn("text-nowrap text-sm font-semibold", amountColor)}
         />
         <span className="text-xs text-[var(--color-muted-foreground)]">

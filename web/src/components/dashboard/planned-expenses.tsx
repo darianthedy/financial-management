@@ -2,7 +2,7 @@ import { CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { AmountColumn } from "@/components/shared/amount-column";
-import { formatCurrency, maxCurrencyNumberWidth } from "@/lib/utils/currency";
+import { formatCurrency, widestCurrencyNumber } from "@/lib/utils/currency";
 import { monthElapsedFraction } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 import type { BudgetProgress } from "@/lib/types/database";
@@ -46,7 +46,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
 
   // One shared width for every single-amount figure in this card so their
   // currency symbols and digits line up into a tidy column.
-  const amountWidthCh = maxCurrencyNumberWidth([
+  const widestAmount = widestCurrencyNumber([
     plannedTotal,
     unpaidTotal,
     paidTotal,
@@ -72,7 +72,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
               </span>
               <AmountColumn
                 minorUnits={plannedTotal}
-                numberWidthCh={amountWidthCh}
+                widestNumber={widestAmount}
                 className="text-nowrap text-sm font-semibold"
               />
             </div>
@@ -149,7 +149,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                       </span>
                       <AmountColumn
                         minorUnits={unpaidTotal}
-                        numberWidthCh={amountWidthCh}
+                        widestNumber={widestAmount}
                         className="text-nowrap text-sm font-semibold"
                       />
                     </div>
@@ -161,7 +161,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         <span className="truncate">{f.name}</span>
                         <AmountColumn
                           minorUnits={f.amount}
-                          numberWidthCh={amountWidthCh}
+                          widestNumber={widestAmount}
                           className="text-nowrap"
                         />
                       </div>
@@ -178,7 +178,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                       </span>
                       <AmountColumn
                         minorUnits={paidTotal}
-                        numberWidthCh={amountWidthCh}
+                        widestNumber={widestAmount}
                         className="text-nowrap text-sm font-semibold text-[var(--color-success)]"
                       />
                     </div>
@@ -190,7 +190,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         <span className="truncate font-medium">{f.name}</span>
                         <AmountColumn
                           minorUnits={f.amount}
-                          numberWidthCh={amountWidthCh}
+                          widestNumber={widestAmount}
                           className="text-nowrap"
                         />
                       </div>
