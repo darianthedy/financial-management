@@ -2,7 +2,7 @@ import { CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
 import { AmountColumn } from "@/components/shared/amount-column";
-import { formatCurrency, widestCurrencyNumber } from "@/lib/utils/currency";
+import { widestCurrencyNumber } from "@/lib/utils/currency";
 import { monthElapsedFraction } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 import type { BudgetProgress } from "@/lib/types/database";
@@ -53,6 +53,13 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
     ...fixedExpenses.map((f) => f.amount),
   ]);
 
+  // The budgets list shows a "spent / total" pair per row. Size both sides to
+  // the widest figure across every budget so the spent and total columns each
+  // right-align row-to-row, matching the aligned amounts elsewhere in the card.
+  const widestBudgetAmount = widestCurrencyNumber(
+    budgets.flatMap((b) => [b.spent, b.effective_amount]),
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -102,13 +109,21 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         <span className="truncate font-medium">{b.budget_name}</span>
                         <span
                           className={cn(
-                            "text-nowrap text-xs",
+                            "flex items-baseline gap-1 text-nowrap text-xs",
                             overspent
                               ? "text-[var(--color-danger)]"
                               : "text-[var(--color-muted-foreground)]",
                           )}
                         >
-                          {formatCurrency(b.spent)} / {formatCurrency(b.effective_amount)}
+                          <AmountColumn
+                            minorUnits={b.spent}
+                            widestNumber={widestBudgetAmount}
+                          />
+                          <span aria-hidden>/</span>
+                          <AmountColumn
+                            minorUnits={b.effective_amount}
+                            widestNumber={widestBudgetAmount}
+                          />
                         </span>
                       </div>
                       <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-muted)]">
