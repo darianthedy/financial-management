@@ -44,7 +44,7 @@ export function UnplannedExpensesCard({ spending }: Props) {
                 minorUnits={total}
                 currency={defaultCurrency}
                 numberWidthCh={amountWidthCh}
-                className="text-nowrap font-semibold"
+                className="text-nowrap text-sm font-semibold"
               />
             </div>
             <div className="flex flex-col gap-2">
