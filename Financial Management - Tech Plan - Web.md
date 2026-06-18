@@ -660,11 +660,11 @@ The filter panel needs the lists of accounts (`useAccounts`), categories & tags 
 - Section for pending transactions awaiting confirmation.
 - Confirm / edit / dismiss actions on pending items.
 
-### 7.8 Budget Installments (P1) — Spread an Expense Across Budgets
+### 7.8 Budget / Virtual Installments (P1) — Spread an Expense Across Budgets
 
-Lets a large expense be absorbed gradually by reserving future budget allowance. The account is debited in full immediately; only the **budgets** shown for future months shrink. See requirements doc → "Budget Installments" and System Design §4.11 for the model.
+Lets a large expense be absorbed gradually by reserving future budget allowance. The account is debited in full immediately; only the **budgets** shown for future months shrink. In the UI this is called a **virtual installment**. See requirements doc → "Budget Installments / Virtual Installments" and System Design §4.11 for the model.
 
-**Where it lives.** An optional **"Spread across budgets"** toggle on the **expense** transaction form (income/transfer excluded). When enabled, the form reveals the installment builder:
+**Where it lives.** A virtual installment is created from an **already-recorded expense**, not from the add/edit form (the form carries no "spread" toggle). The entry point is the **"Create virtual installment"** action in the transaction row's actions menu (`transaction-row.tsx`), shown only when the row is an **expense** that is **not already spread** (income/transfer never show it; a second spread is rejected by the RPC). Selecting it opens `CreateInstallmentDialog` (`installment-dialog.tsx`), which renders the installment builder over the expense's own amount:
 
 1. **Start month** — segmented control: *This month* / *Next month*.
 2. **Budgets** — multi-select of budget **names** (lineages). Source the candidate names from `fetchBudgetNames()` / `v_budget_progress` (the same names the Budgets page shows).
@@ -672,16 +672,19 @@ Lets a large expense be absorbed gradually by reserving future budget allowance.
 4. **Allocation grid** — a budgets × months matrix of currency inputs, **pre-filled with an even split**: each cell = `floor(total / (budgets * months))` minor units, with the rounding remainder dropped into one cell so the grid sums exactly to the expense amount. The header shows a live **total reserved** and **remaining to allocate**; **Save is disabled until the grid total equals the expense amount.**
    - Editing the budget set or month count **re-runs the even pre-fill** (grid shape changed). A **"Split evenly"** button re-applies it on demand. Editing a cell never changes the shape; cells may be set to `0` to skip a budget that month.
 
-> **Fields that stay.** Spreading replaces only the single **budget** link, so the budget picker is hidden while the toggle is on. The **category**, **fixed-expense**, and **tags** controls stay visible: a new spread passes them to `create_budget_installment` (`p_category_id` / `p_fixed_expense_id` / `p_tag_ids`); an existing expense being spread keeps whatever it already had (and any edits are saved before the conversion).
+> **Fields that stay.** Spreading replaces only the single **budget** link. The expense's existing **category**, **fixed-expense**, and **tags** are left untouched — converting an existing expense never re-prompts for them. (The legacy `create_budget_installment` path, which inserts a fresh expense and accepts `p_category_id` / `p_fixed_expense_id` / `p_tag_ids`, is no longer wired to any screen but remains in `use-installments.ts` and the database.)
 
-**On submit (single logical operation — wrap in one RPC for atomicity):**
+**On submit (single RPC for atomicity — `spread_existing_transaction`):**
 
-1. Insert the expense `transactions` row as usual, with `budget_id = null` (the spread, not this row, accounts for the budget impact) but carrying its `category_id`, `fixed_expense_id`, and tag links like any expense.
-2. For each distinct cell budget+month, **ensure the budget row exists** — `insert … on conflict (user_id, name, year_month) do nothing`, defaulting `periodic_amount` to the latest known value in that lineage (else 0). This keeps carry-over lineages unbroken.
-3. Insert one `budget_installments` header (`source_transaction_id`, `total_amount`, `start_year_month`, `months`).
-4. Bulk-insert one `budget_installment_allocations` row per **non-zero** cell (`budget_name`, `year_month`, `amount`).
+1. Load the source expense; reject if it is not an expense, or is already spread, or the grid does not sum to its amount.
+2. `UPDATE transactions SET budget_id = NULL` on the source row — the spread, not this row, now accounts for the budget impact (so it does not double-count as that budget's spend). The amount, category, fixed-expense link, and tags are kept as-is.
+3. For each distinct cell budget+month, **ensure the budget row exists** — `insert … on conflict (user_id, name, year_month) do nothing`, defaulting `periodic_amount` to the latest known value in that lineage (else 0). This keeps carry-over lineages unbroken.
+4. Insert one `budget_installments` header (`source_transaction_id`, `total_amount`, `start_year_month`, `months`).
+5. Bulk-insert one `budget_installment_allocations` row per **non-zero** cell (`budget_name`, `year_month`, `amount`).
 
-> A Postgres RPC (`create_budget_installment`) is the clean home for steps 1–4 so the expense and its reservations commit together. The client builds the grid; the RPC persists it.
+> `spread_existing_transaction` (Supabase §3.10) is the live flow; the client builds the grid and the RPC persists it atomically. The expense's amount and description come from the existing row, not from arguments.
+
+**Transactions Page (§7.3) changes.** `useTransactions` flags which expenses are installment sources (one batched lookup against `budget_installments.source_transaction_id`, exposed as `hasInstallment` on each row). `transaction-row.tsx` renders a small grid icon next to the title of any flagged row.
 
 **Budgets page (§7.4) changes.** `v_budget_progress` now returns a `reserved` column and `remaining` already nets it out. Each budget card:
 
@@ -689,9 +692,9 @@ Lets a large expense be absorbed gradually by reserving future budget allowance.
 - renders **negative `remaining`** gracefully (reservations can exceed the month's room — the intended "spend nothing" signal);
 - a tooltip/expander can list the source installment(s).
 
-**Managing installments.** A lightweight list (e.g. under the Budgets page or Settings) of active installments with their source expense, total, span, and a **Cancel** action that deletes the `budget_installments` row (cascades to allocations; future budgets recover their allowance). Deleting the source transaction cancels the installment automatically (`ON DELETE CASCADE`).
+The page also renders an **"Active installments"** section (`installment-list.tsx`) below the budgets, showing only installments that reserve allowance in the **currently displayed month** (`reservedMonths.includes(yearMonth)`). Each card shows the source expense's derived title, total, month span, and the budget-name chips it draws from. The whole card is **clickable** — it navigates to the source transaction's edit route (`/transactions/:id/edit`) — and a per-card **Cancel** action deletes the `budget_installments` row (cascades to allocations; future budgets recover their allowance). Deleting the source transaction cancels the installment automatically (`ON DELETE CASCADE`).
 
-**Hooks.** Add `use-installments.ts` (create via the RPC, list, cancel). The existing `useBudgets` realtime channel should also subscribe to `budget_installment_allocations` changes so reserved amounts refresh live, alongside the current `budgets` / `transactions` subscriptions.
+**Hooks.** `use-installments.ts` exports `spreadExistingTransaction` (the wired flow), `createInstallment` (legacy `create_budget_installment` RPC, retained), `isTransactionSpread` (drives the menu-item visibility), `fetchInstallments` / `useInstallments` (live list, derives each title from the source expense), and `cancelInstallment`. `useInstallments` subscribes to both installment tables **and** `transactions` (titles follow the source expense). The existing `useBudgets` realtime channel also subscribes to `budget_installment_allocations` changes so reserved amounts refresh live, alongside the current `budgets` / `transactions` subscriptions.
 
 ---
 

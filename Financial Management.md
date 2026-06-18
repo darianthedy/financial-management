@@ -152,9 +152,11 @@ A central overview screen that gives the user a quick snapshot of their financia
 - Budget periods can be changed to weekly, quarterly, yearly, or custom
 - Fixed expense recurrence can be changed to weekly, quarterly, yearly, or custom
 
-### Budget Installments (Spread an Expense Across Budgets)
+### Budget Installments / Virtual Installments (Spread an Expense Across Budgets)
 
 A way to absorb a large one-off expense gradually, by reserving future budget allowance instead of all of it at once. The money leaves the account immediately (the account balance is always correct), but the impact on the user's spending discipline is **spread forward**: selected budgets in the coming months are reduced so the user has to spend less to "pay the expense back" to themselves.
+
+In the app this is surfaced as a **virtual installment**: the word *virtual* underlines the core invariant below — nothing is actually financed or borrowed, and no extra money moves. It is purely a forward reservation against budgets.
 
 **Goal**
 
@@ -165,9 +167,13 @@ A way to absorb a large one-off expense gradually, by reserving future budget al
 - The expense is **one ordinary transaction** that debits the account in full, exactly like any other expense. Account balances, cash flow, and the monthly balance ledger are unaffected by the installment.
 - The "reservation" is **purely budget-side bookkeeping** — it is *not* money and *not* a transaction. It only lowers what selected budgets show as available in future months. It can never touch an account balance because it never enters the transactions table.
 
+**How the user starts one**
+
+A virtual installment is created from an expense that **already exists**, not while the expense is being recorded. The user records the expense as an ordinary expense first (with its account, category, tags, and — optionally — a single budget), then opens that transaction's actions menu (the ⋮ on its row) and chooses **"Create virtual installment."** The option appears only on **expenses** and only while the expense is **not already spread** (income and transfers never show it, and a second spread of the same expense is rejected). Converting it detaches the expense from its single budget (so it no longer counts as that budget's spend) and replaces that link with the reservation grid below.
+
 **What the user sets up**
 
-When recording an expense, the user can optionally turn it into an installment by choosing:
+In the "Create virtual installment" dialog, the user chooses:
 
 1. **Start month** — *this month* or *next month*. (Choosing *next month* leaves the current month's budgets untouched, since the cash already left this month; choosing *this month* makes the current month the first installment month.)
 2. **Budgets** — one or more budgets (by name/lineage) to draw the reservation from. Drawing from several budgets each month lets the same expense be absorbed in **fewer months**.
@@ -202,9 +208,14 @@ When recording an expense, the user can optionally turn it into an installment b
 
 The account takes a single −$1,200 hit in July. The expense transaction itself is **not** linked to any budget (so it does not also count as July spend); the spreading is done entirely by the reservations. Each budget's reservation and carry-over are tracked independently.
 
+**Where it shows up**
+
+- The **source expense's transaction row** carries a small grid indicator next to its title, flagging that it has been spread into a virtual installment.
+- The **Budgets page** lists **Active installments** for the month being viewed — only installments that reserve allowance in that month appear. Each entry shows the expense's title, its total, the month span it covers, and the budgets it draws from. Tapping an entry opens its **source expense**; a per-entry action **cancels** the installment.
+
 **Editing & cancelling**
 
-- **Cancel an installment** removes all its future reservations; the affected budgets recompute immediately and their full allowance returns. Budget rows that were materialized for the installment remain as ordinary budget rows.
+- **Cancel an installment** removes all its future reservations; the affected budgets recompute immediately and their full allowance returns. Budget rows that were materialized for the installment remain as ordinary budget rows. Cancelling does **not** delete the source expense — the money already spent stays recorded; only the budget-side reservation is released.
 - Deleting the **source expense** cancels its installment (the spread no longer has a source).
 - Editing the source expense amount does not silently rebalance the grid; the user re-opens the installment to re-spread if needed.
 

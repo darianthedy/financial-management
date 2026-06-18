@@ -564,7 +564,9 @@ ALTER TABLE accounts
 
 Adds the two reservation tables, folds a `reserved` term into `v_budget_progress`, and provides the `create_budget_installment` RPC that persists an expense and its grid atomically. Reservations are **budget-side only** — they never enter `transactions`, so account balances and cash flow are untouched. See System Design §4.11 and Web §7.8.
 
-> **Follow-up (`20260618000003_installment_category_tags.sql`).** `create_budget_installment` was later widened so the source expense carries a **category**, a **fixed-expense link**, and **tags** — only the single `budget_id` stays NULL. The RPC gains `p_category_id UUID`, `p_fixed_expense_id UUID`, and `p_tag_ids UUID[]` (all `DEFAULT NULL`); it writes the first two onto the `transactions` row and bulk-inserts the tag ids into `transaction_tags`. The block below shows the original 7-arg version for context.
+> **Follow-up (`20260618000002_spread_existing_transaction.sql`).** The wired UI flow ("Create virtual installment" on a transaction row) does **not** insert a new expense — it converts one the user already recorded. This companion RPC, `spread_existing_transaction`, is documented below the main block. `create_budget_installment` stays in the schema but is no longer wired to a screen.
+
+> **Follow-up (`20260618000003_installment_category_tags.sql`).** `create_budget_installment` was later widened so the source expense carries a **category**, a **fixed-expense link**, and **tags** — only the single `budget_id` stays NULL. The RPC gains `p_category_id UUID`, `p_fixed_expense_id UUID`, and `p_tag_ids UUID[]` (all `DEFAULT NULL`); it writes the first two onto the `transactions` row and bulk-inserts the tag ids into `transaction_tags`. The block below shows the original 7-arg version for context. (`spread_existing_transaction` needs no such widening — it keeps whatever the existing expense already carries.)
 
 ```sql
 -- 20260618000001_budget_installments.sql
@@ -696,6 +698,76 @@ COMMIT;
 ```
 
 > Cancelling an installment is a plain `DELETE FROM budget_installments WHERE id = ?` — the `ON DELETE CASCADE` clears its allocations and the budgets recompute. Deleting the source transaction cascades to the installment as well. Materialized `budgets` rows are intentionally left behind as ordinary rows.
+
+**Companion RPC — spread an EXISTING expense (`20260618000002_spread_existing_transaction.sql`).** This is the RPC the web client actually calls (Web §7.8). Instead of inserting a new source expense, it converts an expense the user already recorded: it loads the row, validates it, **nulls its `budget_id`** so the reservation grid (not the row) accounts for the budget impact, then writes the header and allocations exactly like `create_budget_installment`. The amount and description come from the existing transaction, so it takes no `p_amount` / `p_description` / category / tag arguments — the expense keeps whatever it already had.
+
+```sql
+-- 20260618000002_spread_existing_transaction.sql
+CREATE OR REPLACE FUNCTION spread_existing_transaction(
+  p_transaction_id   UUID,
+  p_start_year_month TEXT,
+  p_months           SMALLINT,
+  p_grid             JSONB
+) RETURNS UUID
+LANGUAGE plpgsql SECURITY INVOKER AS $$
+DECLARE
+  v_user UUID := auth.uid();
+  v_txn  transactions%ROWTYPE;
+  v_inst UUID;
+  v_cell RECORD;
+  v_sum  BIGINT;
+BEGIN
+  -- Load + guard the source expense (RLS limits visibility to the owner).
+  SELECT * INTO v_txn FROM transactions WHERE id = p_transaction_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transaction % not found', p_transaction_id;
+  END IF;
+  IF v_txn.type <> 'expense' THEN
+    RAISE EXCEPTION 'Only expenses can be spread across budgets';
+  END IF;
+  IF EXISTS (SELECT 1 FROM budget_installments
+             WHERE source_transaction_id = p_transaction_id) THEN
+    RAISE EXCEPTION 'Transaction % is already spread across budgets', p_transaction_id;
+  END IF;
+
+  -- Grid must reconcile to the EXISTING expense's amount.
+  SELECT COALESCE(SUM((c->>'amount')::BIGINT), 0) INTO v_sum
+  FROM jsonb_array_elements(p_grid) c;
+  IF v_sum <> v_txn.amount THEN
+    RAISE EXCEPTION 'Allocation grid (%) must equal expense amount (%)', v_sum, v_txn.amount;
+  END IF;
+
+  -- Detach from a single budget: the reservation grid now accounts for the impact.
+  UPDATE transactions SET budget_id = NULL WHERE id = p_transaction_id;
+
+  -- Header carries the expense's own amount + description.
+  INSERT INTO budget_installments
+    (user_id, source_transaction_id, total_amount, description, start_year_month, months)
+  VALUES (v_user, p_transaction_id, v_txn.amount, v_txn.description, p_start_year_month, p_months)
+  RETURNING id INTO v_inst;
+
+  -- Materialize missing budget rows + insert one allocation per cell (as above).
+  FOR v_cell IN SELECT * FROM jsonb_array_elements(p_grid) AS c LOOP
+    INSERT INTO budgets (user_id, name, year_month, periodic_amount)
+    VALUES (
+      v_user, v_cell.value->>'budget_name', v_cell.value->>'year_month',
+      COALESCE((SELECT b.periodic_amount FROM budgets b
+                WHERE b.user_id = v_user AND b.name = v_cell.value->>'budget_name'
+                  AND b.year_month <= v_cell.value->>'year_month'
+                ORDER BY b.year_month DESC LIMIT 1), 0)
+    )
+    ON CONFLICT (user_id, name, year_month) DO NOTHING;
+
+    INSERT INTO budget_installment_allocations
+      (installment_id, user_id, budget_name, year_month, amount)
+    VALUES (v_inst, v_user, v_cell.value->>'budget_name',
+            v_cell.value->>'year_month', (v_cell.value->>'amount')::BIGINT);
+  END LOOP;
+
+  RETURN v_inst;
+END;
+$$;
+```
 
 ---
 
