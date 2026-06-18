@@ -7,6 +7,7 @@ import {
 } from "@/lib/hooks/use-budgets";
 import { BudgetCard } from "@/components/budgets/budget-card";
 import { BudgetForm } from "@/components/budgets/budget-form";
+import { InstallmentList } from "@/components/budgets/installment-list";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner, EmptyState } from "@/components/ui/misc";
 import {
@@ -124,6 +125,8 @@ export default function BudgetsPage() {
           ))}
         </div>
       )}
+
+      <InstallmentList />
 
       <BudgetForm
         open={formOpen}
