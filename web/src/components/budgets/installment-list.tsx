@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,9 +86,13 @@ export function InstallmentList({ yearMonth }: Props) {
             <CardContent className="flex flex-col gap-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {it.description?.trim() || "Untitled expense"}
-                  </p>
+                  <Link
+                    to={`/transactions/${it.sourceTransactionId}/edit`}
+                    className="block truncate font-medium hover:underline"
+                    title="View the source transaction"
+                  >
+                    {it.title}
+                  </Link>
                   <p className="text-sm text-[var(--color-muted-foreground)]">
                     {formatCurrency(it.totalAmount)}
                   </p>
