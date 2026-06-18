@@ -28,7 +28,7 @@ export const navItems: NavItem[] = [
     icon: ArrowLeftRight,
     primary: true,
   },
-  { to: "/budgets", label: "Budgets", icon: PiggyBank, primary: false },
+  { to: "/budgets", label: "Budgets", icon: PiggyBank, primary: true },
   { to: "/categories", label: "Categories", icon: Shapes, primary: false },
   { to: "/tags", label: "Tags", icon: Tags, primary: false },
   {

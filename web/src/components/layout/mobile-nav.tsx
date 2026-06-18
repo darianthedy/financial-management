@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils/cn";
 
 // Bottom nav on small screens shows the primary destinations plus a "More"
 // button that opens a bottom sheet with everything else. This keeps the bar to
-// 4 thumb-sized targets while still reaching every page.
+// 5 thumb-sized targets while still reaching every page.
 export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const { pathname } = useLocation();
