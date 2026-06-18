@@ -46,6 +46,56 @@ export async function createInstallment(
   return data;
 }
 
+export interface SpreadTransactionParams {
+  /** Existing expense to convert into a spread. */
+  transactionId: string;
+  /** First month of the spread, 'YYYY-MM'. */
+  startYearMonth: string;
+  /** Number of consecutive months the spread covers. */
+  months: number;
+  /** Non-zero cells only; their amounts must sum to the transaction's amount. */
+  grid: InstallmentGridCell[];
+}
+
+/**
+ * Convert an existing expense into a Budget Installment via the
+ * `spread_existing_transaction` RPC. The RPC detaches the expense from any
+ * single budget (`budget_id = NULL`), inserts the installment header, and writes
+ * one allocation per grid cell atomically, materializing any missing budget
+ * rows. The grid must sum to the transaction's own amount. Returns the new
+ * `budget_installments` id.
+ */
+export async function spreadExistingTransaction(
+  params: SpreadTransactionParams,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("spread_existing_transaction", {
+    p_transaction_id: params.transactionId,
+    p_start_year_month: params.startYearMonth,
+    p_months: params.months,
+    // The grid is a JSON array of { budget_name, year_month, amount } cells.
+    p_grid: params.grid as unknown as Json,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Whether a transaction is already the source of a Budget Installment. Used to
+ * hide the "spread" option when editing an expense that's already spread (the
+ * RPC would reject a second spread anyway).
+ */
+export async function isTransactionSpread(
+  transactionId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("budget_installments")
+    .select("id")
+    .eq("source_transaction_id", transactionId)
+    .maybeSingle();
+  if (error) throw error;
+  return data != null;
+}
+
 /** An active Budget Installment with its span and the budgets it reserves from. */
 export interface InstallmentSummary {
   id: string;
