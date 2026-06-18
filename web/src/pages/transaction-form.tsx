@@ -56,6 +56,8 @@ export default function TransactionFormPage() {
         tags: (tagLinks ?? []).map((t) => t.tags).filter(Boolean) as import("@/lib/types/database").Tag[],
         budget: budgetRow ? { name: budgetRow.name } : null,
         fixedExpense: fixedExpenseRow ? { name: fixedExpenseRow.name } : null,
+        // Only the list row surfaces the installment indicator; the form doesn't.
+        hasInstallment: false,
       });
       setLoading(false);
     })();
