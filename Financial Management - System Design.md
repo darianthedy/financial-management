@@ -955,11 +955,13 @@ CREATE POLICY "account_images_owner_insert"
 
 ### 4.11 Budget Installments (P1) — Spreading an Expense Across Budgets
 
-This feature absorbs a large one-off expense gradually by **reserving future budget allowance**, without ever touching account balances. The design keeps the two domains the schema already separates — **money** (transactions → accounts) and **budget bookkeeping** (transactions ↔ budgets) — completely independent: the installment lives entirely on the budget side.
+This feature absorbs a large one-off expense gradually by **reserving future budget allowance**, without ever touching account balances. The design keeps the two domains the schema already separates — **money** (transactions → accounts) and **budget bookkeeping** (transactions ↔ budgets) — completely independent: the installment lives entirely on the budget side. The app surfaces it as a **virtual installment** — *virtual* because nothing is financed or borrowed; it is a pure budget-side reservation.
 
 **Core idea.** The expense itself is one ordinary `transactions` row that debits the account in full (the account ledger and cash-flow views are untouched, and that row's `budget_id` is left **NULL** so it does not also count as the current month's spend). A separate pair of tables records a budget-side **reservation grid**, and `v_budget_progress` subtracts those reservations from each affected budget month. A reservation is *not* money and never enters `transactions`, so it physically cannot affect an account balance.
 
 Only the **single `budget_id`** is dropped — the reservation grid takes its place. The source expense otherwise behaves like any expense: it still carries a **category**, a **fixed-expense link**, and **tags**, supplied on creation (`create_budget_installment`) or preserved when an existing expense is spread (`spread_existing_transaction`).
+
+**Entry point.** The live flow always spreads an **already-recorded expense**: the user records the expense normally, then converts it via `spread_existing_transaction` (Supabase §3.10), which nulls the row's `budget_id` and writes the grid. The expense's amount, category, fixed-expense link, and tags are preserved untouched. `create_budget_installment` (insert a fresh expense + grid in one call) remains in the schema as a companion but is not currently wired to a screen.
 
 **Two new tables:**
 
@@ -1018,6 +1020,8 @@ reserved AS (
 - **Cancel installment** → delete the `budget_installments` row; `ON DELETE CASCADE` clears its allocations, future budgets recompute, and the full allowance returns. Materialized `budgets` rows remain as ordinary rows.
 - **Delete the source expense** → `ON DELETE CASCADE` from `transactions` removes the installment and its allocations (a spread with no source is meaningless).
 - **RLS** — both tables carry `user_id` directly and use the standard owner policy (`user_id = auth.uid()`). Add both to the `supabase_realtime` publication so the Budgets page refreshes live.
+
+**Surfacing.** A source expense's transaction row shows a grid indicator (the client flags it with one batched lookup against `source_transaction_id`). The Budgets page renders an **"Active installments"** list, filtered to installments that reserve in the displayed month; each entry derives its title from the source expense, links back to it, and offers a **Cancel** action (the header delete above).
 
 ---
 
