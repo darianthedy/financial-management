@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import type { Json } from "@/lib/types/database";
+import type { Category, Json, TransactionType } from "@/lib/types/database";
+import { deriveTitle } from "@/components/transactions/transaction-display";
 
 /** One non-zero cell of the allocation grid, in minor units. */
 export interface InstallmentGridCell {
@@ -111,8 +112,13 @@ export interface InstallmentSummary {
   id: string;
   /** Source expense total, in minor units. */
   totalAmount: number;
-  /** Description carried from the source expense (may be empty). */
-  description: string | null;
+  /**
+   * Display title, derived live from the source expense with the same
+   * precedence the Transactions list uses (fixed expense → category →
+   * description → "Expense"). Budget never applies — the source row is detached
+   * from any single budget — so it never resolves to a budget name.
+   */
+  title: string;
   startYearMonth: string;
   months: number;
   sourceTransactionId: string;
@@ -130,6 +136,13 @@ interface InstallmentRow {
   months: number;
   source_transaction_id: string;
   allocations: { budget_name: string; year_month: string }[] | null;
+  /** Source expense, embedded so the title can follow the Transactions rule. */
+  source: {
+    type: TransactionType;
+    description: string | null;
+    category: Category | null;
+    fixedExpense: { name: string } | null;
+  } | null;
 }
 
 /**
@@ -141,24 +154,41 @@ export async function fetchInstallments(): Promise<InstallmentSummary[]> {
     .from("budget_installments")
     .select(
       "id, total_amount, description, start_year_month, months, source_transaction_id, " +
-        "allocations:budget_installment_allocations(budget_name, year_month)",
+        "allocations:budget_installment_allocations(budget_name, year_month), " +
+        "source:transactions!source_transaction_id(type, description, " +
+        "category:categories(*), fixedExpense:fixed_expenses(name))",
     )
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return ((data ?? []) as unknown as InstallmentRow[]).map((row) => ({
-    id: row.id,
-    totalAmount: row.total_amount,
-    description: row.description,
-    startYearMonth: row.start_year_month,
-    months: row.months,
-    sourceTransactionId: row.source_transaction_id,
-    budgetNames: [
-      ...new Set((row.allocations ?? []).map((a) => a.budget_name)),
-    ].sort((a, b) => a.localeCompare(b)),
-    reservedMonths: [
-      ...new Set((row.allocations ?? []).map((a) => a.year_month)),
-    ].sort((a, b) => a.localeCompare(b)),
-  }));
+  return ((data ?? []) as unknown as InstallmentRow[]).map((row) => {
+    // Title follows the Transactions list rule. The source row's own
+    // description is preferred, but we fall back to the header's snapshot if the
+    // embed is somehow missing. Budget/transfer never apply to a source expense.
+    const { title } = deriveTitle({
+      type: row.source?.type ?? "expense",
+      description: row.source?.description ?? row.description,
+      accounts: null,
+      transfer_accounts: null,
+      category: row.source?.category ?? null,
+      tags: [],
+      budget: null,
+      fixedExpense: row.source?.fixedExpense ?? null,
+    });
+    return {
+      id: row.id,
+      totalAmount: row.total_amount,
+      title,
+      startYearMonth: row.start_year_month,
+      months: row.months,
+      sourceTransactionId: row.source_transaction_id,
+      budgetNames: [
+        ...new Set((row.allocations ?? []).map((a) => a.budget_name)),
+      ].sort((a, b) => a.localeCompare(b)),
+      reservedMonths: [
+        ...new Set((row.allocations ?? []).map((a) => a.year_month)),
+      ].sort((a, b) => a.localeCompare(b)),
+    };
+  });
 }
 
 /**
@@ -206,6 +236,13 @@ export function useInstallments() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "budget_installment_allocations" },
+        () => refetch(),
+      )
+      // Titles are derived from the source expense, so refresh when a
+      // transaction changes (e.g. its description or category is edited).
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "transactions" },
         () => refetch(),
       )
       .subscribe();
