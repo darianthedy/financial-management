@@ -959,6 +959,8 @@ This feature absorbs a large one-off expense gradually by **reserving future bud
 
 **Core idea.** The expense itself is one ordinary `transactions` row that debits the account in full (the account ledger and cash-flow views are untouched, and that row's `budget_id` is left **NULL** so it does not also count as the current month's spend). A separate pair of tables records a budget-side **reservation grid**, and `v_budget_progress` subtracts those reservations from each affected budget month. A reservation is *not* money and never enters `transactions`, so it physically cannot affect an account balance.
 
+Only the **single `budget_id`** is dropped — the reservation grid takes its place. The source expense otherwise behaves like any expense: it still carries a **category**, a **fixed-expense link**, and **tags**, supplied on creation (`create_budget_installment`) or preserved when an existing expense is spread (`spread_existing_transaction`).
+
 **Two new tables:**
 
 ```sql

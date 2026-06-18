@@ -461,6 +461,11 @@ export interface Database {
           p_start_year_month: string;
           p_months: number;
           p_grid: Json;
+          // The source expense carries these like any ordinary expense; only the
+          // single budget_id stays NULL (the reservation grid replaces it).
+          p_category_id?: string | null;
+          p_fixed_expense_id?: string | null;
+          p_tag_ids?: string[] | null;
         };
         Returns: string;
       };
