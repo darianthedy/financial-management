@@ -464,6 +464,20 @@ export interface Database {
         };
         Returns: string;
       };
+      // Convert an EXISTING expense into a Budget Installment: detaches it from
+      // any single budget (budget_id NULL) and writes one allocation per non-zero
+      // grid cell (materializing any missing budget rows). p_grid is a JSON array
+      // of { budget_name, year_month, amount } and must sum to the transaction's
+      // own amount. Returns the new budget_installments id.
+      spread_existing_transaction: {
+        Args: {
+          p_transaction_id: string;
+          p_start_year_month: string;
+          p_months: number;
+          p_grid: Json;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       account_type: AccountType;

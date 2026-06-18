@@ -39,7 +39,11 @@ import {
   InstallmentBuilder,
   type InstallmentValue,
 } from "@/components/transactions/installment-builder";
-import { createInstallment } from "@/lib/hooks/use-installments";
+import {
+  createInstallment,
+  spreadExistingTransaction,
+  isTransactionSpread,
+} from "@/lib/hooks/use-installments";
 import { todayIso, yearMonthOf } from "@/lib/utils/date";
 import {
   toDisplayAmount,
@@ -103,11 +107,15 @@ export function TransactionForm({
     [],
   );
   const [fixedExpenseFormOpen, setFixedExpenseFormOpen] = useState(false);
-  // Budget Installments: when on, the expense is spread across budgets via the
-  // create_budget_installment RPC instead of being linked to a single budget.
-  // Only offered when creating a new expense.
+  // Budget Installments: when on, the expense is spread across budgets via a
+  // reservation grid instead of being linked to a single budget. A new expense
+  // goes through create_budget_installment; an existing one is converted with
+  // spread_existing_transaction.
   const [spread, setSpread] = useState(false);
   const [installment, setInstallment] = useState<InstallmentValue | null>(null);
+  // True when editing an expense that is already spread across budgets — the
+  // option is hidden then (managing the spread happens on the Budgets page).
+  const [alreadySpread, setAlreadySpread] = useState(false);
 
   // Prefill values for edit mode. Using react-hook-form's `values` prop (rather
   // than reset() in an effect) syncs during render, so prefill is deterministic
@@ -169,6 +177,26 @@ export function TransactionForm({
     fetchTags().then(setAllTags);
   }, []);
 
+  // In edit mode, find out whether this expense is already spread so the option
+  // is hidden (a second spread is rejected by the RPC anyway).
+  useEffect(() => {
+    if (!transaction) {
+      setAlreadySpread(false);
+      return;
+    }
+    let active = true;
+    isTransactionSpread(transaction.id)
+      .then((spread) => {
+        if (active) setAlreadySpread(spread);
+      })
+      .catch(() => {
+        /* Treat lookup failures as "not spread" so editing still works. */
+      });
+    return () => {
+      active = false;
+    };
+  }, [transaction]);
+
   // New transactions: pre-select the user's default account preference. Skip in
   // edit mode and when the URL already pinned an account (e.g. opened from an
   // account page), and don't clobber a choice made while this was loading.
@@ -198,9 +226,10 @@ export function TransactionForm({
   // Budgets that can be linked: same month (derived from the date).
   const budgetMonth = yearMonthOf(date);
 
-  // Installment spreading is only offered when creating a new expense; the RPC
-  // has no edit path and the spread record carries no single budget/category.
-  const spreadAvailable = !transaction && type === "expense";
+  // Installment spreading is offered for any expense — a new one (created via
+  // create_budget_installment) or an existing one not yet spread (converted via
+  // spread_existing_transaction). Already-spread expenses are managed elsewhere.
+  const spreadAvailable = type === "expense" && !alreadySpread;
   const spreadActive = spreadAvailable && spread;
   const decimals = decimalsFor(defaultCurrency);
   const amountMinor = toMinorUnits(amount, decimals);
@@ -343,15 +372,28 @@ export function TransactionForm({
           setSubmitError("Allocate the full amount across the budgets first.");
           return;
         }
-        await createInstallment({
-          accountId: values.account_id,
-          amount: toMinorUnits(values.amount, decimals),
-          date: values.date,
-          description: values.description?.trim() || null,
-          startYearMonth: installment.startYearMonth,
-          months: installment.months,
-          grid: installment.grid,
-        });
+        if (transaction) {
+          // Persist any field edits first so the stored amount the RPC validates
+          // the grid against matches what the user just allocated, then convert
+          // the existing expense into a spread (which also clears its budget).
+          await updateTransaction(transaction.id, values, decimals);
+          await spreadExistingTransaction({
+            transactionId: transaction.id,
+            startYearMonth: installment.startYearMonth,
+            months: installment.months,
+            grid: installment.grid,
+          });
+        } else {
+          await createInstallment({
+            accountId: values.account_id,
+            amount: toMinorUnits(values.amount, decimals),
+            date: values.date,
+            description: values.description?.trim() || null,
+            startYearMonth: installment.startYearMonth,
+            months: installment.months,
+            grid: installment.grid,
+          });
+        }
       } else if (transaction) {
         await updateTransaction(transaction.id, values, decimals);
       } else {
@@ -500,7 +542,7 @@ export function TransactionForm({
         />
       </div>
 
-      {/* Spread across budgets (new expense only) */}
+      {/* Spread across budgets (any not-yet-spread expense) */}
       {spreadAvailable && (
         <div className="flex flex-col gap-2">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
@@ -515,9 +557,9 @@ export function TransactionForm({
           {spreadActive && (
             <>
               <p className="text-xs text-[var(--color-muted-foreground)]">
-                Reserves the amount across budgets and months. The expense itself
-                is recorded without a single budget, category, tag, or
-                fixed-expense link.
+                {transaction
+                  ? "Reserves the amount across budgets and months. The expense is detached from its single budget; its category, tags, and fixed-expense link stay."
+                  : "Reserves the amount across budgets and months. The expense itself is recorded without a single budget, category, tag, or fixed-expense link."}
               </p>
               <InstallmentBuilder
                 amountMinor={amountMinor}
@@ -528,6 +570,14 @@ export function TransactionForm({
             </>
           )}
         </div>
+      )}
+
+      {/* Already spread: editing here can't reshape the spread — point elsewhere. */}
+      {transaction && type === "expense" && alreadySpread && (
+        <p className="text-xs text-[var(--color-muted-foreground)]">
+          This expense is spread across budgets. Manage or cancel the spread from
+          the Budgets page.
+        </p>
       )}
 
       {/* Budget (expense/income only) */}
@@ -755,10 +805,10 @@ export function TransactionForm({
         >
           {isSubmitting
             ? "Saving…"
-            : transaction
-              ? "Update transaction"
-              : spreadActive
-                ? "Spread expense"
+            : spreadActive
+              ? "Spread expense"
+              : transaction
+                ? "Update transaction"
                 : "Add transaction"}
         </Button>
       </div>
