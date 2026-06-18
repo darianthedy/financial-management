@@ -31,7 +31,13 @@
   --radius: 0.625rem;
 }
 
+:root {
+  color-scheme: light;
+}
+
 .dark {
+  color-scheme: dark;
+
   --color-border: hsl(217 19% 24%);
   --color-input: hsl(217 19% 24%);
   --color-ring: hsl(217 91% 60%);
