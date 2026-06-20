@@ -12,3 +12,6 @@ iOS/**/build/
 iOS/**/*.ipa
 iOS/**/*.xcarchive
 iOS/FinancialManagement/vendor/bundle/
+
+# iOS environment config (per-machine Supabase URL + anon key)
+iOS/**/Config/*.xcconfig

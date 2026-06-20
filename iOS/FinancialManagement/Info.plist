@@ -6,6 +6,10 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library is used to choose an account avatar image.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera is used to scan receipts.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

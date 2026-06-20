@@ -2,13 +2,24 @@ import Foundation
 import Observation
 import Supabase
 
+/// Global app state: auth status plus the single-currency context (default
+/// currency, its decimal places, the full currencies list, and the default
+/// account) that every formatter and form reads. See iOS Tech Plan §4.3.
 @Observable
 @MainActor
 final class AppState {
     var isAuthenticated = false
     var currentUser: User?
-    var defaultCurrency: String = "USD"
+
+    // Single-currency context, loaded once after sign-in.
+    var defaultCurrency = "USD"
+    var defaultAccountId: UUID?
     var currencies: [Currency] = []
+
+    /// decimal_places for the active default currency (drives minor-unit scaling).
+    var decimalPlaces: Int {
+        currencies.first { $0.code == defaultCurrency }?.decimalPlaces ?? 2
+    }
 
     private let supabase = SupabaseService.shared.client
     private let currencyRepo = CurrencyRepository()
@@ -20,6 +31,7 @@ final class AppState {
                 if let session {
                     isAuthenticated = true
                     currentUser = session.user
+                    await loadCurrencyData()
                 } else {
                     isAuthenticated = false
                     currentUser = nil
@@ -28,6 +40,7 @@ final class AppState {
                 isAuthenticated = false
                 currentUser = nil
                 defaultCurrency = "USD"
+                defaultAccountId = nil
                 currencies = []
             default:
                 break
@@ -36,23 +49,19 @@ final class AppState {
     }
 
     func loadCurrencyData() async {
-        do {
-            currencies = try await currencyRepo.getAllCurrencies()
-            CurrencyUtils.configure(with: currencies)
-            if let settings = try await currencyRepo.getUserSettings() {
-                defaultCurrency = settings.defaultCurrency
-            }
-        } catch {
-            // Non-fatal: fall back to "USD"
+        currencies = (try? await currencyRepo.getAllCurrencies()) ?? []
+        CurrencyUtils.configure(with: currencies)
+        if let settings = try? await currencyRepo.getUserSettings() {
+            defaultCurrency = settings.defaultCurrency
+            defaultAccountId = settings.defaultAccountId
         }
     }
 
+    /// Updates the default currency (the picker lives in Settings, P10). Reloads
+    /// `defaultCurrency` so every formatter picks up the new `decimalPlaces`.
     func updateDefaultCurrency(_ code: String) async {
-        do {
-            let settings = try await currencyRepo.upsertDefaultCurrency(code)
+        if let settings = try? await currencyRepo.upsertDefaultCurrency(code) {
             defaultCurrency = settings.defaultCurrency
-        } catch {
-            // Non-fatal
         }
     }
 
