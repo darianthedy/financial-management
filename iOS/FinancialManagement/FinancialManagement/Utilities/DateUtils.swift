@@ -13,6 +13,17 @@ enum DateUtils {
         return f
     }()
 
+    private static let yearMonthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// `YYYY-MM-DD` for writing a Postgres `date` column (no time component).
+    static func yearMonthDay(from date: Date) -> String {
+        yearMonthDayFormatter.string(from: date)
+    }
+
     static func currentYearMonth() -> String {
         yearMonthFormatter.string(from: Date())
     }

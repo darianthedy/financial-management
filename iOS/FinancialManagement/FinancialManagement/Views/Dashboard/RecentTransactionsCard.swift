@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RecentTransactionsCard: View {
+    @Environment(AppState.self) private var appState
     let transactions: [Transaction]
 
     var body: some View {
@@ -30,7 +31,7 @@ struct RecentTransactionsCard: View {
 
                     Spacer()
 
-                    Text(txn.type == .income ? "+\(txn.amount.asCurrency(code: txn.currency))" : "-\(txn.amount.asCurrency(code: txn.currency))")
+                    Text(txn.type == .income ? "+\(txn.amount.asCurrency(code: appState.defaultCurrency))" : "-\(txn.amount.asCurrency(code: appState.defaultCurrency))")
                         .font(.subheadline.monospacedDigit().bold())
                         .foregroundStyle(txn.type == .income ? .green : .red)
                 }

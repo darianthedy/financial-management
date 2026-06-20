@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PendingTransactionRow: View {
+    @Environment(AppState.self) private var appState
     let pending: Transaction
     var onConfirm: () async -> Void
     var onDismiss: () async -> Void
@@ -23,7 +24,7 @@ struct PendingTransactionRow: View {
 
                 Spacer()
 
-                Text(pending.amount.asCurrency(code: pending.currency))
+                Text(pending.amount.asCurrency(code: appState.defaultCurrency))
                     .font(.body.monospacedDigit().bold())
             }
 

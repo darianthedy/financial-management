@@ -1,34 +1,62 @@
 import SwiftUI
 
 struct TransactionRow: View {
+    @Environment(AppState.self) private var appState
     let transaction: Transaction
+    /// The transaction's source account, used for the avatar (§ row reuses the
+    /// linked account image). Falls back to a type glyph when unavailable.
+    var account: Account?
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: iconName)
-                .font(.title3)
-                .foregroundStyle(iconColor)
-                .frame(width: 32)
+            if let account {
+                AccountAvatar(imageUrl: account.imageUrl, accountType: account.type, size: 36)
+                    .overlay(alignment: .bottomTrailing) { typeBadge }
+            } else {
+                Image(systemName: typeIcon)
+                    .font(.title3)
+                    .foregroundStyle(typeColor)
+                    .frame(width: 36)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(transaction.description ?? transaction.type.rawValue.capitalized)
                     .font(.body)
                     .lineLimit(1)
-                Text(transaction.transactionDate, style: .date)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(transaction.transactionDate, style: .date)
+                    if transaction.status == .pending {
+                        Text("Pending")
+                            .foregroundStyle(.orange)
+                    } else if transaction.status == .dismissed {
+                        Text("Dismissed")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             Text(formattedAmount)
                 .font(.body.monospacedDigit().bold())
-                .foregroundStyle(amountColor)
+                .foregroundStyle(typeColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .opacity(transaction.status == .dismissed ? 0.4 : 1)
         }
         .padding(.vertical, 2)
     }
 
-    private var iconName: String {
+    private var typeBadge: some View {
+        Image(systemName: typeIcon)
+            .font(.system(size: 12))
+            .foregroundStyle(typeColor)
+            .background(Circle().fill(.background).padding(-1))
+    }
+
+    private var typeIcon: String {
         switch transaction.type {
         case .income: return "arrow.down.circle.fill"
         case .expense: return "arrow.up.circle.fill"
@@ -36,15 +64,7 @@ struct TransactionRow: View {
         }
     }
 
-    private var iconColor: Color {
-        switch transaction.type {
-        case .income: return .green
-        case .expense: return .red
-        case .transfer: return .blue
-        }
-    }
-
-    private var amountColor: Color {
+    private var typeColor: Color {
         switch transaction.type {
         case .income: return .green
         case .expense: return .red
@@ -53,11 +73,16 @@ struct TransactionRow: View {
     }
 
     private var formattedAmount: String {
-        let formatted = transaction.amount.asCurrency(code: transaction.currency)
+        let formatted = abs(transaction.amount).asCurrency(code: appState.defaultCurrency)
         switch transaction.type {
-        case .income: return "+\(formatted)"
-        case .expense: return "-\(formatted)"
-        case .transfer: return formatted
+        case .transfer:
+            return formatted
+        case .income:
+            // Signed amounts allowed: a negative income reduces cash.
+            return transaction.amount < 0 ? "-\(formatted)" : "+\(formatted)"
+        case .expense:
+            // Expenses reduce cash; a negative expense (refund) adds it back.
+            return transaction.amount < 0 ? "+\(formatted)" : "-\(formatted)"
         }
     }
 }
