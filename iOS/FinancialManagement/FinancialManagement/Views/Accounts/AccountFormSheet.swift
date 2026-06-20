@@ -1,5 +1,7 @@
 import SwiftUI
 import Supabase
+import PhotosUI
+import UIKit
 
 struct AccountFormSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,7 +20,14 @@ struct AccountFormSheet: View {
     @State private var errorMessage: String?
     @State private var didLoad = false
 
+    // Avatar staged locally; uploaded only on submit so cancelling never orphans
+    // a Storage object. `removeImage` flags clearing an existing image.
+    @State private var photoItem: PhotosPickerItem?
+    @State private var stagedImage: UIImage?
+    @State private var removeImage = false
+
     private let repository = AccountRepository()
+    private let imageService = AccountImageService()
 
     init(account: Account? = nil, onSaved: (() async -> Void)? = nil) {
         self.account = account
@@ -30,6 +39,27 @@ struct AccountFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Avatar") {
+                    HStack(spacing: 16) {
+                        avatarPreview
+                        VStack(alignment: .leading, spacing: 8) {
+                            PhotosPicker(selection: $photoItem, matching: .images) {
+                                Label(hasImage ? "Change Photo" : "Choose Photo",
+                                      systemImage: "photo")
+                            }
+                            if hasImage {
+                                Button(role: .destructive) {
+                                    stagedImage = nil
+                                    photoItem = nil
+                                    removeImage = true
+                                } label: {
+                                    Label("Remove Photo", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Section("Account Details") {
                     TextField("Account Name", text: $name)
 
@@ -71,7 +101,38 @@ struct AccountFormSheet: View {
                 }
             }
             .onAppear(perform: loadInitialValues)
+            .onChange(of: photoItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        stagedImage = image
+                        removeImage = false
+                    }
+                }
+            }
         }
+    }
+
+    /// Shows the freshly picked image, the existing avatar, or the type fallback.
+    @ViewBuilder
+    private var avatarPreview: some View {
+        if let stagedImage {
+            Image(uiImage: stagedImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 64, height: 64)
+                .clipShape(Circle())
+        } else {
+            AccountAvatar(imageUrl: removeImage ? nil : account?.imageUrl,
+                          accountType: type, size: 64)
+        }
+    }
+
+    private var hasImage: Bool {
+        if stagedImage != nil { return true }
+        if removeImage { return false }
+        return account?.imageUrl != nil
     }
 
     private func loadInitialValues() {
@@ -93,21 +154,38 @@ struct AccountFormSheet: View {
         let balance = CurrencyUtils.toMinorUnits(Double(startingBalance) ?? 0, decimalPlaces: decimalPlaces)
 
         do {
+            // Resolve the avatar: upload a newly staged image, clear it, or keep it.
+            // Upload happens here (on submit) so cancelling never orphans an object.
+            let oldImageUrl = account?.imageUrl
+            var imageUrlToSave: String? = oldImageUrl
+            var imageChanged = false
+            if let stagedImage {
+                imageUrlToSave = try await imageService.upload(image: stagedImage)
+                imageChanged = true
+            } else if removeImage {
+                imageUrlToSave = nil
+                imageChanged = true
+            }
+
             let accountId: UUID
             if let account {
-                try await repository.update(id: account.id, fields: [
+                var fields: [String: AnyJSON] = [
                     "name": .string(name),
                     "type": .string(type.rawValue),
                     "starting_balance": .integer(Int(balance)),
                     "show_on_dashboard": .bool(showOnDashboard)
-                ])
+                ]
+                if imageChanged {
+                    fields["image_url"] = imageUrlToSave.map { .string($0) } ?? .null
+                }
+                try await repository.update(id: account.id, fields: fields)
                 accountId = account.id
             } else {
                 let created = try await repository.create(
                     name: name,
                     type: type,
                     startingBalance: balance,
-                    imageUrl: nil,                 // avatars are P03
+                    imageUrl: imageUrlToSave,
                     showOnDashboard: showOnDashboard
                 )
                 accountId = created.id
@@ -119,6 +197,11 @@ struct AccountFormSheet: View {
                 try await appState.setDefaultAccount(accountId)
             } else if !setAsDefault && wasDefault {
                 try await appState.setDefaultAccount(nil)
+            }
+
+            // Best-effort delete of the replaced/removed object, AFTER the row save.
+            if imageChanged, let oldImageUrl, oldImageUrl != imageUrlToSave {
+                await imageService.deletePreviousObject(publicURL: oldImageUrl)
             }
 
             await onSaved?()
