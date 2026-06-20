@@ -44,4 +44,21 @@ actor CurrencyRepository {
             .execute()
             .value
     }
+
+    func updateDefaultAccountId(_ accountId: UUID?) async throws -> UserSettings {
+        let userId = try await client.auth.session.user.id
+
+        struct Upsert: Encodable {
+            let user_id: UUID
+            let default_account_id: UUID?
+        }
+
+        return try await client
+            .from("user_settings")
+            .upsert(Upsert(user_id: userId, default_account_id: accountId))
+            .select()
+            .single()
+            .execute()
+            .value
+    }
 }

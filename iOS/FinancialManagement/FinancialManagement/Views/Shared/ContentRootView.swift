@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct ContentRootView: View {
-    @Environment(AppState.self) private var appState
-
     var body: some View {
         TabView {
             NavigationStack {
@@ -29,9 +27,6 @@ struct ContentRootView: View {
                 MoreView()
             }
             .tabItem { Label("More", systemImage: "ellipsis") }
-        }
-        .task {
-            await appState.loadCurrencyData()
         }
     }
 }
