@@ -6,12 +6,10 @@ import Observation
 final class AccountDetailViewModel {
     var account: Account?
     var currentBalance: Int64 = 0
-    var transactions: [Transaction] = []
     var isLoading = false
     var errorMessage: String?
 
     private let accountRepo = AccountRepository()
-    private let transactionRepo = TransactionRepository()
 
     let accountId: UUID
 
@@ -19,6 +17,8 @@ final class AccountDetailViewModel {
         self.accountId = accountId
     }
 
+    // The account's own transaction list is wired up with the Transactions
+    // feature (P04); the detail screen here shows account info + edit/archive.
     func load() async {
         isLoading = true
         defer { isLoading = false }
@@ -26,11 +26,9 @@ final class AccountDetailViewModel {
         do {
             async let accountResult = accountRepo.getById(accountId)
             async let balanceResult = accountRepo.getCurrentBalance(accountId: accountId)
-            async let txnResult = transactionRepo.getAll(accountId: accountId)
 
             account = try await accountResult
             currentBalance = try await balanceResult
-            transactions = try await txnResult
         } catch {
             errorMessage = error.localizedDescription
         }

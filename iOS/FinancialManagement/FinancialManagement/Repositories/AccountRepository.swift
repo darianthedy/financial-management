@@ -28,15 +28,17 @@ actor AccountRepository {
             .value
     }
 
-    func create(name: String, type: AccountType, currency: String, startingBalance: Int64) async throws -> Account {
+    func create(name: String, type: AccountType, startingBalance: Int64,
+                imageUrl: String?, showOnDashboard: Bool) async throws -> Account {
         let userId = try await client.auth.session.user.id
 
         struct Insert: Encodable {
             let user_id: UUID
             let name: String
             let type: AccountType
-            let currency: String
             let starting_balance: Int64
+            let image_url: String?
+            let show_on_dashboard: Bool
         }
 
         let account: Account = try await client
@@ -45,15 +47,17 @@ actor AccountRepository {
                 user_id: userId,
                 name: name,
                 type: type,
-                currency: currency,
-                starting_balance: startingBalance
+                starting_balance: startingBalance,
+                image_url: imageUrl,
+                show_on_dashboard: showOnDashboard
             ))
             .select()
             .single()
             .execute()
             .value
 
-        let yearMonth = Self.currentYearMonth()
+        // Seed the current month's balance row with the starting balance.
+        let yearMonth = DateUtils.currentYearMonth()
         try await client
             .from("account_monthly_balances")
             .insert([
@@ -66,6 +70,7 @@ actor AccountRepository {
         return account
     }
 
+    /// Current balance = latest ledger row for the account.
     func getCurrentBalance(accountId: UUID) async throws -> Int64 {
         let row: AccountMonthlyBalance = try await client
             .from("account_monthly_balances")
@@ -79,22 +84,6 @@ actor AccountRepository {
         return row.balance
     }
 
-    func getMonthlyBalances(accountId: UUID) async throws -> [AccountMonthlyBalance] {
-        try await client
-            .from("account_monthly_balances")
-            .select()
-            .eq("account_id", value: accountId)
-            .order("year_month")
-            .execute()
-            .value
-    }
-
-    private static func currentYearMonth() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        return formatter.string(from: Date())
-    }
-
     func update(id: UUID, fields: [String: AnyJSON]) async throws {
         try await client
             .from("accounts")
@@ -103,6 +92,7 @@ actor AccountRepository {
             .execute()
     }
 
+    /// Archive = soft-delete: hide the account but preserve its transaction history.
     func archive(id: UUID) async throws {
         try await client
             .from("accounts")

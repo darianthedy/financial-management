@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct AccountDetailView: View {
-    @State private var viewModel: AccountDetailViewModel
+    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @State private var viewModel: AccountDetailViewModel
+    @State private var showingEditSheet = false
 
     init(accountId: UUID) {
         _viewModel = State(initialValue: AccountDetailViewModel(accountId: accountId))
@@ -13,24 +15,19 @@ struct AccountDetailView: View {
             if let account = viewModel.account {
                 Section("Account Info") {
                     LabeledContent("Name", value: account.name)
-                    LabeledContent("Type", value: account.type.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                    LabeledContent("Currency", value: account.currency)
-                    LabeledContent("Starting Balance", value: account.startingBalance.asCurrency(code: account.currency))
+                    LabeledContent("Type", value: account.type.displayName)
+                    LabeledContent("Starting Balance",
+                                   value: account.startingBalance.asCurrency(code: appState.defaultCurrency))
                     LabeledContent("Current Balance") {
-                        Text(viewModel.currentBalance.asCurrency(code: account.currency))
+                        Text(viewModel.currentBalance.asCurrency(code: appState.defaultCurrency))
                             .bold()
                     }
                 }
 
-                Section("Transactions") {
-                    if viewModel.transactions.isEmpty {
-                        Text("No transactions yet")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(viewModel.transactions) { txn in
-                            TransactionRow(transaction: txn)
-                        }
-                    }
+                Section {
+                    LabeledContent("Show on Dashboard", value: account.showOnDashboard ? "Yes" : "No")
+                    LabeledContent("Default Account",
+                                   value: appState.defaultAccountId == account.id ? "Yes" : "No")
                 }
 
                 Section {
@@ -44,6 +41,19 @@ struct AccountDetailView: View {
             }
         }
         .navigationTitle(viewModel.account?.name ?? "Account")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") { showingEditSheet = true }
+                    .disabled(viewModel.account == nil)
+            }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let account = viewModel.account {
+                AccountFormSheet(account: account) {
+                    await viewModel.load()
+                }
+            }
+        }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }

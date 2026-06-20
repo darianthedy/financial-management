@@ -9,7 +9,7 @@ struct AccountListView: View {
         List {
             Section {
                 HStack {
-                    Text("Total Balance")
+                    Text("Net Worth")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -20,7 +20,7 @@ struct AccountListView: View {
 
             ForEach(AccountType.allCases, id: \.self) { type in
                 if let accounts = viewModel.groupedByType[type], !accounts.isEmpty {
-                    Section(type.rawValue.replacingOccurrences(of: "_", with: " ").capitalized) {
+                    Section(type.displayName) {
                         ForEach(accounts) { account in
                             NavigationLink(value: account.id) {
                                 AccountCard(account: account, currentBalance: viewModel.balance(for: account.id))
