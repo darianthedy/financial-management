@@ -9,11 +9,7 @@ struct AccountCard: View {
 
     var body: some View {
         HStack {
-            // Type-based SF Symbol stands in for the avatar (real images land in P03).
-            Image(systemName: account.type.defaultIcon)
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .frame(width: 40)
+            AccountAvatar(imageUrl: account.imageUrl, accountType: account.type, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {

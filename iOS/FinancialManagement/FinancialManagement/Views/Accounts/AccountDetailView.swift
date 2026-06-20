@@ -13,6 +13,15 @@ struct AccountDetailView: View {
     var body: some View {
         List {
             if let account = viewModel.account {
+                Section {
+                    HStack {
+                        Spacer()
+                        AccountAvatar(imageUrl: account.imageUrl, accountType: account.type, size: 80)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
                 Section("Account Info") {
                     LabeledContent("Name", value: account.name)
                     LabeledContent("Type", value: account.type.displayName)
