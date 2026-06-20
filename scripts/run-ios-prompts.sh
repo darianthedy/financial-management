@@ -35,6 +35,51 @@ START_AT="${1:-P01}"   # optional: resume, e.g. `scripts/run-ios-prompts.sh P05`
 log() { printf '\n\033[1;36m[%s] %s\033[0m\n' "$(date +%H:%M:%S)" "$*"; }
 die() { printf '\n\033[1;31mABORT: %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Live-format Claude's stream-json events into readable lines, so a long session
+# isn't a silent black box: prints assistant text + each tool call as it happens.
+# No jq needed; falls back to raw passthrough if python3 is missing.
+read -r -d '' STREAM_FMT <<'PYEOF' || true
+import sys, json
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        ev = json.loads(line)
+    except Exception:
+        print(line); sys.stdout.flush(); continue
+    t = ev.get("type")
+    if t == "assistant":
+        for b in ev.get("message", {}).get("content", []):
+            if b.get("type") == "text" and b.get("text", "").strip():
+                print(b["text"].rstrip())
+            elif b.get("type") == "tool_use":
+                inp = b.get("input", {}) or {}
+                hint = (inp.get("command") or inp.get("file_path")
+                        or inp.get("pattern") or inp.get("description") or "")
+                hint = str(hint).replace("\n", " ")
+                if len(hint) > 100:
+                    hint = hint[:100] + "…"
+                print(f"  \U0001f527 {b.get('name','?')}: {hint}")
+    elif t == "result":
+        if ev.get("is_error"):
+            print(f"  ⚠️  result error: {ev.get('subtype','')}")
+    sys.stdout.flush()
+PYEOF
+
+# Run a fresh headless Claude session with live, readable progress output.
+# $1 = prompt. The pipeline's exit status is ignored on purpose — the real gate
+# is "did the session commit?", checked by the caller.
+run_claude() {
+  local prompt="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose \
+      | python3 -c "$STREAM_FMT" || true
+  else
+    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose || true
+  fi
+}
+
 # Implement a slice in a fresh session on a fresh branch off main, then merge.
 # $1 = branch name   $2 = full prompt text for claude
 implement_and_merge() {
@@ -43,7 +88,7 @@ implement_and_merge() {
   git pull --ff-only origin main >/dev/null
   git switch -c "$branch" >/dev/null
 
-  claude -p "$prompt" "${CLAUDE_FLAGS[@]}"
+  run_claude "$prompt"
 
   # Nothing committed => the session did no work; treat as failure.
   if git diff --quiet main HEAD; then
