@@ -40,31 +40,41 @@ die() { printf '\n\033[1;31mABORT: %s\033[0m\n' "$*" >&2; exit 1; }
 # No jq needed; falls back to raw passthrough if python3 is missing.
 read -r -d '' STREAM_FMT <<'PYEOF' || true
 import sys, json
-for line in sys.stdin:
+def out(s):
+    print(s); sys.stdout.flush()
+for line in iter(sys.stdin.readline, ""):   # readline (not "for line in stdin") => no read-ahead buffering
     line = line.strip()
     if not line:
         continue
     try:
         ev = json.loads(line)
     except Exception:
-        print(line); sys.stdout.flush(); continue
+        out(line); continue
     t = ev.get("type")
-    if t == "assistant":
+    if t == "system" and ev.get("subtype") == "init":
+        out("  ▶ session started (model %s, perms %s)"
+            % (ev.get("model", "?"), ev.get("permissionMode", "?")))
+    elif t == "assistant":
         for b in ev.get("message", {}).get("content", []):
-            if b.get("type") == "text" and b.get("text", "").strip():
-                print(b["text"].rstrip())
-            elif b.get("type") == "tool_use":
+            bt = b.get("type")
+            if bt == "text" and b.get("text", "").strip():
+                out(b["text"].rstrip())
+            elif bt == "thinking" and b.get("thinking", "").strip():
+                out("  \U0001f4ad " + b["thinking"].strip().replace("\n", " ")[:140])
+            elif bt == "tool_use":
                 inp = b.get("input", {}) or {}
                 hint = (inp.get("command") or inp.get("file_path")
                         or inp.get("pattern") or inp.get("description") or "")
                 hint = str(hint).replace("\n", " ")
                 if len(hint) > 100:
                     hint = hint[:100] + "…"
-                print(f"  \U0001f527 {b.get('name','?')}: {hint}")
+                out("  \U0001f527 %s: %s" % (b.get("name", "?"), hint))
     elif t == "result":
         if ev.get("is_error"):
-            print(f"  ⚠️  result error: {ev.get('subtype','')}")
-    sys.stdout.flush()
+            out("  ⚠️  result error: %s — %s"
+                % (ev.get("subtype", ""), str(ev.get("result", ""))[:200]))
+        else:
+            out("  ✓ session done")
 PYEOF
 
 # Run a fresh headless Claude session with live, readable progress output.
@@ -74,7 +84,7 @@ run_claude() {
   local prompt="$1"
   if command -v python3 >/dev/null 2>&1; then
     claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose \
-      | python3 -c "$STREAM_FMT" || true
+      | python3 -u -c "$STREAM_FMT" || true
   else
     claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose || true
   fi
