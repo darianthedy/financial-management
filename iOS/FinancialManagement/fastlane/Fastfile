@@ -48,6 +48,22 @@ platform :ios do
       readonly: !create_certs
     )
 
+    # Apply manual signing to the APP TARGET ONLY. Passing CODE_SIGN_IDENTITY /
+    # PROVISIONING_PROFILE_SPECIFIER globally via xcargs forces them onto every
+    # target — including Swift Package dependencies (e.g. swift-crypto) that
+    # don't support provisioning profiles, which fails the archive. Editing the
+    # project's signing settings scopes them to just our target. (Edits the CI
+    # checkout's pbxproj; not committed.)
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: XCODEPROJ,
+      targets: [SCHEME],
+      team_id: TEAM_ID,
+      bundle_identifier: APP_IDENTIFIER,
+      code_sign_identity: "Apple Distribution",
+      profile_name: PROFILE_NAME
+    )
+
     # Give every CI build a unique, increasing build number. The project uses
     # GENERATE_INFOPLIST_FILE, so CURRENT_PROJECT_VERSION drives the build
     # number; passing it via xcargs avoids editing tracked files.
@@ -64,13 +80,6 @@ platform :ios do
       },
       xcargs: [
         "-allowProvisioningUpdates",
-        "CODE_SIGN_STYLE=Manual",
-        "DEVELOPMENT_TEAM=#{TEAM_ID}",
-        # The project sets no CODE_SIGN_IDENTITY, so a manual archive would
-        # default to "iOS Development" and fail. match installs an App Store
-        # distribution cert, so pin the identity to it.
-        "CODE_SIGN_IDENTITY='Apple Distribution'",
-        "PROVISIONING_PROFILE_SPECIFIER='#{PROFILE_NAME}'",
         "CURRENT_PROJECT_VERSION=#{build_number}"
       ].join(" "),
       output_directory: "build",
