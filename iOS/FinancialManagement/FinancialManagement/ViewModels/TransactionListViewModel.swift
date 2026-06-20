@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Supabase
 import SwiftUI
 
 /// Account/month-scoped transaction list. Full filter/search/summary state
