@@ -1,12 +1,13 @@
 import SwiftUI
 import Supabase
 
+/// Single-select category picker. A transaction references at most one category
+/// directly via `transactions.category_id` — categories are not type-scoped
+/// (the table has `color`, not `type`); see iOS Tech Plan §5.5.
 struct CategoryPicker: View {
     @Binding var selectedId: UUID?
-    var transactionType: TransactionType
 
     @State private var categories: [Category] = []
-    @State private var isLoading = false
 
     var body: some View {
         Picker("Category", selection: $selectedId) {
@@ -21,24 +22,15 @@ struct CategoryPicker: View {
                 .tag(Optional(category.id))
             }
         }
-        .task {
-            await loadCategories()
-        }
-        .onChange(of: transactionType) {
-            Task { await loadCategories() }
-        }
+        .task { await loadCategories() }
     }
 
     private func loadCategories() async {
-        isLoading = true
-        defer { isLoading = false }
-
         do {
             let client = SupabaseService.shared.client
             categories = try await client
                 .from("categories")
                 .select()
-                .eq("type", value: transactionType.rawValue)
                 .order("name")
                 .execute()
                 .value

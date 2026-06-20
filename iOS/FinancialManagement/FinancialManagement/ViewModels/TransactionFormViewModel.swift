@@ -7,11 +7,10 @@ import Supabase
 final class TransactionFormViewModel {
     var type: TransactionType = .expense
     var amount: String = ""
-    var currency: String = "USD"
     var accountId: UUID?
-    var toAccountId: UUID?
+    var transferAccountId: UUID?
     var categoryId: UUID?
-    var budgetPeriodId: UUID?
+    var budgetId: UUID?
     var fixedExpenseId: UUID?
     var description: String = ""
     var transactionDate = Date()
@@ -21,62 +20,96 @@ final class TransactionFormViewModel {
     var errorMessage: String?
     var didSave = false
 
+    let editingTransaction: Transaction?
+    private let currency: String
+    private let decimalPlaces: Int
     private let repository = TransactionRepository()
 
-    var editingTransaction: Transaction?
+    init(
+        editing transaction: Transaction? = nil,
+        defaultAccountId: UUID? = nil,
+        currency: String = "USD",
+        decimalPlaces: Int = 2
+    ) {
+        self.currency = currency
+        self.decimalPlaces = decimalPlaces
+        self.editingTransaction = transaction
 
-    init(editing transaction: Transaction? = nil, defaultCurrency: String = "USD") {
-        self.currency = defaultCurrency
         if let transaction {
-            self.editingTransaction = transaction
             self.type = transaction.type
-            self.amount = String(CurrencyUtils.toDisplayAmount(transaction.amount, currency: transaction.currency))
-            self.currency = transaction.currency
+            self.amount = String(CurrencyUtils.toDisplayAmount(transaction.amount, decimalPlaces: decimalPlaces))
             self.accountId = transaction.accountId
-            self.toAccountId = transaction.toAccountId
-            self.budgetPeriodId = transaction.budgetPeriodId
+            self.transferAccountId = transaction.transferAccountId
+            self.categoryId = transaction.categoryId
+            self.budgetId = transaction.budgetId
             self.fixedExpenseId = transaction.fixedExpenseId
             self.description = transaction.description ?? ""
             self.transactionDate = transaction.transactionDate
+        } else {
+            // New transactions pre-select the user's default account (§5.3).
+            self.accountId = defaultAccountId
         }
     }
 
-    func loadCategories() async {
+    func loadTags() async {
         guard let transaction = editingTransaction else { return }
         do {
-            let ids = try await repository.getCategoryIds(transactionId: transaction.id)
-            categoryId = ids.first
+            selectedTags = try await repository.getTagIds(transactionId: transaction.id)
         } catch {}
     }
 
+    /// Raw signed minor units parsed from the field, or nil when not a number.
+    private var parsedMinorUnits: Int64? {
+        guard let value = Double(amount) else { return nil }
+        return CurrencyUtils.toMinorUnits(value, decimalPlaces: decimalPlaces)
+    }
+
     var isValid: Bool {
-        guard let _ = Double(amount), accountId != nil else { return false }
-        if type == .transfer && toAccountId == nil { return false }
+        guard let minorUnits = parsedMinorUnits else { return false }
+        // Zero is never allowed for any type.
+        if minorUnits == 0 { return false }
+        guard let accountId else { return false }
+        if type == .transfer {
+            // Transfers require a distinct destination account.
+            guard let transferAccountId, transferAccountId != accountId else { return false }
+        }
         return true
     }
 
     func save() async {
-        guard isValid, let parsedAmount = Double(amount), let accountId else { return }
+        guard isValid, var minorUnits = parsedMinorUnits, let accountId else { return }
+
+        // Sign rules (§5.3): income/expense may be negative; transfers forced
+        // positive (reverse one by swapping accounts).
+        if type == .transfer {
+            minorUnits = abs(minorUnits)
+        }
+
+        // Field visibility → persisted shape:
+        //   transfer  → no category/budget/fixed, requires transfer account
+        //   income    → category + budget, no fixed, no transfer account
+        //   expense   → category + budget + fixed, no transfer account
+        let effectiveTransferAccountId = type == .transfer ? transferAccountId : nil
+        let effectiveCategoryId = type == .transfer ? nil : categoryId
+        let effectiveBudgetId = type == .transfer ? nil : budgetId
+        let effectiveFixedExpenseId = type == .expense ? fixedExpenseId : nil
 
         isSaving = true
         defer { isSaving = false }
-
-        let minorUnits = CurrencyUtils.toMinorUnits(parsedAmount, currency: currency)
-        let effectiveBudgetPeriodId = type == .expense ? budgetPeriodId : nil
-        let effectiveFixedExpenseId = type == .expense ? fixedExpenseId : nil
 
         do {
             let transactionId: UUID
             if let existing = editingTransaction {
                 try await repository.update(id: existing.id, fields: [
-                    "type": AnyJSON.string(type.rawValue),
-                    "amount": AnyJSON.double(Double(minorUnits)),
-                    "account_id": AnyJSON.string(accountId.uuidString),
-                    "description": description.isEmpty ? AnyJSON.null : AnyJSON.string(description),
-                    "date": AnyJSON.string(ISO8601DateFormatter().string(from: transactionDate)),
-                    "transfer_account_id": toAccountId.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null,
-                    "budget_period_id": effectiveBudgetPeriodId.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null,
-                    "fixed_expense_id": effectiveFixedExpenseId.map { AnyJSON.string($0.uuidString) } ?? AnyJSON.null
+                    "type": .string(type.rawValue),
+                    "amount": .double(Double(minorUnits)),
+                    "account_id": .string(accountId.uuidString),
+                    "description": description.isEmpty ? .null : .string(description),
+                    "date": .string(DateUtils.yearMonthDay(from: transactionDate)),
+                    "transfer_account_id": effectiveTransferAccountId.map { .string($0.uuidString) } ?? .null,
+                    "category_id": effectiveCategoryId.map { .string($0.uuidString) } ?? .null,
+                    "budget_id": effectiveBudgetId.map { .string($0.uuidString) } ?? .null,
+                    "fixed_expense_id": effectiveFixedExpenseId.map { .string($0.uuidString) } ?? .null
                 ])
                 transactionId = existing.id
             } else {
@@ -84,18 +117,17 @@ final class TransactionFormViewModel {
                     accountId: accountId,
                     type: type,
                     amount: minorUnits,
-                    currency: currency,
                     description: description.isEmpty ? nil : description,
                     transactionDate: transactionDate,
-                    toAccountId: toAccountId,
-                    budgetPeriodId: effectiveBudgetPeriodId,
+                    transferAccountId: effectiveTransferAccountId,
+                    categoryId: effectiveCategoryId,
+                    budgetId: effectiveBudgetId,
                     fixedExpenseId: effectiveFixedExpenseId
                 )
                 transactionId = created.id
             }
 
-            let categoryIds = categoryId.map { [$0] } ?? []
-            try await repository.setCategories(transactionId: transactionId, categoryIds: categoryIds)
+            try await repository.setTags(transactionId: transactionId, tagIds: selectedTags)
             didSave = true
         } catch {
             errorMessage = error.localizedDescription

@@ -6,8 +6,19 @@ struct TransactionFormView: View {
     @State private var viewModel: TransactionFormViewModel
     var onSaved: (() async -> Void)?
 
-    init(editing transaction: Transaction? = nil, defaultCurrency: String = "USD", onSaved: (() async -> Void)? = nil) {
-        _viewModel = State(initialValue: TransactionFormViewModel(editing: transaction, defaultCurrency: defaultCurrency))
+    init(
+        editing transaction: Transaction? = nil,
+        defaultAccountId: UUID? = nil,
+        currency: String = "USD",
+        decimalPlaces: Int = 2,
+        onSaved: (() async -> Void)? = nil
+    ) {
+        _viewModel = State(initialValue: TransactionFormViewModel(
+            editing: transaction,
+            defaultAccountId: defaultAccountId,
+            currency: currency,
+            decimalPlaces: decimalPlaces
+        ))
         self.onSaved = onSaved
     }
 
@@ -25,8 +36,6 @@ struct TransactionFormView: View {
             Section("Details") {
                 CurrencyField(label: "Amount", value: $viewModel.amount)
 
-                CurrencyPicker(label: "Currency", selectedCode: $viewModel.currency)
-
                 AccountPicker(
                     label: "Account",
                     selectedId: $viewModel.accountId
@@ -35,21 +44,22 @@ struct TransactionFormView: View {
                 if viewModel.type == .transfer {
                     AccountPicker(
                         label: "To Account",
-                        selectedId: $viewModel.toAccountId
+                        selectedId: $viewModel.transferAccountId
                     )
                 }
 
-                CategoryPicker(
-                    selectedId: $viewModel.categoryId,
-                    transactionType: viewModel.type
-                )
+                // Category & budget apply to income/expense; transfers carry none.
+                if viewModel.type != .transfer {
+                    CategoryPicker(selectedId: $viewModel.categoryId)
 
-                if viewModel.type == .expense {
                     BudgetPicker(
-                        selectedBudgetPeriodId: $viewModel.budgetPeriodId,
+                        selectedBudgetId: $viewModel.budgetId,
                         transactionDate: viewModel.transactionDate
                     )
+                }
 
+                // Fixed-expense link marks the expense paid; expense only.
+                if viewModel.type == .expense {
                     FixedExpensePicker(
                         selectedExpenseId: $viewModel.fixedExpenseId,
                         transactionDate: viewModel.transactionDate
@@ -60,6 +70,8 @@ struct TransactionFormView: View {
 
                 DatePicker("Date", selection: $viewModel.transactionDate, displayedComponents: .date)
             }
+
+            TagPicker(selectedTags: $viewModel.selectedTags)
 
             if let error = viewModel.errorMessage {
                 Section {
@@ -87,5 +99,6 @@ struct TransactionFormView: View {
                 .disabled(!viewModel.isValid || viewModel.isSaving)
             }
         }
+        .task { await viewModel.loadTags() }
     }
 }

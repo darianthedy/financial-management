@@ -7,11 +7,11 @@ struct Transaction: Codable, Identifiable, Sendable {
     var type: TransactionType
     var status: TransactionStatus
     var amount: Int64
-    var currency: String
     var description: String?
     var transactionDate: Date
-    var toAccountId: UUID?
-    var budgetPeriodId: UUID?
+    var transferAccountId: UUID?
+    var budgetId: UUID?
+    var categoryId: UUID?
     var scheduledTxnId: UUID?
     var fixedExpenseId: UUID?
     let createdAt: Date
@@ -21,11 +21,12 @@ struct Transaction: Codable, Identifiable, Sendable {
         case id
         case userId = "user_id"
         case accountId = "account_id"
-        case type, status, amount, currency
+        case type, status, amount
         case description
         case transactionDate = "date"
-        case toAccountId = "transfer_account_id"
-        case budgetPeriodId = "budget_period_id"
+        case transferAccountId = "transfer_account_id"
+        case budgetId = "budget_id"
+        case categoryId = "category_id"
         case scheduledTxnId = "scheduled_txn_id"
         case fixedExpenseId = "fixed_expense_id"
         case createdAt = "created_at"
