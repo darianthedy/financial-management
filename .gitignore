@@ -6,3 +6,9 @@ supabase/.temp/
 # Local Claude Code / agent config
 .claude/
 web/.claude/
+
+# iOS build artifacts
+iOS/**/build/
+iOS/**/*.ipa
+iOS/**/*.xcarchive
+iOS/FinancialManagement/vendor/bundle/
