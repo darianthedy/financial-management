@@ -103,10 +103,10 @@ Budgets allow the user to set spending limits for a given period and track remai
 
 Fixed expenses are recurring costs the user expects to pay on a regular basis (e.g., rent, subscriptions).
 
-- Each fixed expense is a self-contained row representing one expense for one specific month, with a name, year_month, amount (can be approximate), and due day
+- Each fixed expense is a self-contained row representing one expense for one specific month, with a name, year_month, and amount (can be approximate)
 - For P0, fixed expense recurrence is fixed to **monthly**
-- **Copy from Previous Month**: the user can copy all fixed expenses from the previous month to the current month, preserving names, amounts, and due days. This is the primary way to carry forward recurring expenses into a new month.
-- User can **edit** the name, amount, or due day of any fixed expense
+- **Copy from Previous Month**: the user can copy all fixed expenses from the previous month to the current month, preserving names and amounts. This is the primary way to carry forward recurring expenses into a new month.
+- User can **edit** the name or amount of any fixed expense
 - User can **delete** individual fixed expense entries
 - Fixed expenses are **month-specific**: each row is tied to the exact month it applies to. The amount or existence can change between months without affecting historical records.
   - Example: Fixed expense "Gym" = $50/month starting May 2026, increased to $60 in August 2026, then cancelled in October 2026. Records for May–September remain intact.

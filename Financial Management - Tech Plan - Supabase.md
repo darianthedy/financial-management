@@ -367,7 +367,6 @@ CREATE TYPE recurrence_type AS ENUM ('monthly');
 | `year_month` | `TEXT` | Format: `'YYYY-MM'`, unique per user + name |
 | `amount` | `BIGINT` | Minor units |
 | `currency` | `TEXT` | Default `'USD'` |
-| `due_day` | `SMALLINT` | 1–31 |
 | `is_active` | `BOOLEAN` | Default `TRUE` |
 | `created_at` | `TIMESTAMPTZ` | |
 | `updated_at` | `TIMESTAMPTZ` | |

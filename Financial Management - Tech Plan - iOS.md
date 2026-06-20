@@ -553,7 +553,6 @@ struct FixedExpense: Codable, Identifiable, Sendable {
     var yearMonth: String
     var amount: Int64
     var currency: String
-    var dueDay: Int
     var isActive: Bool
     let createdAt: Date
     var updatedAt: Date
@@ -564,7 +563,6 @@ struct FixedExpense: Codable, Identifiable, Sendable {
         case name
         case yearMonth = "year_month"
         case amount, currency
-        case dueDay = "due_day"
         case isActive = "is_active"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -572,13 +570,13 @@ struct FixedExpense: Codable, Identifiable, Sendable {
 }
 ```
 
-> Each row represents one fixed expense for one specific month. There is no separate periods table. The `amount`, `currency`, and `due_day` fields allow values to differ between months. There is no `isPaid` column — paid status is derived from whether any transaction references this fixed expense via `fixed_expense_id`.
+> Each row represents one fixed expense for one specific month. There is no separate periods table. The `amount` and `currency` fields allow values to differ between months. There is no `isPaid` column — paid status is derived from whether any transaction references this fixed expense via `fixed_expense_id`.
 
 #### Fixed Expense Operations
 
 **Copy from Previous Month:** Queries `fixed_expenses` for `year_month = previousMonth` and `user_id = currentUser`, then inserts new rows with `year_month = currentMonth`. Skips entries that already exist (UNIQUE constraint on `user_id, name, year_month`). This is triggered from the `FixedExpenseListView` toolbar when the current month has no entries.
 
-**Edit Fixed Expense:** Opens `FixedExpenseEditSheet` to update `name`, `amount`, `currency`, or `due_day` on an existing `fixed_expenses` row. Only edits the specific month's entry — other months are unaffected.
+**Edit Fixed Expense:** Opens `FixedExpenseEditSheet` to update `name`, `amount`, or `currency` on an existing `fixed_expenses` row. Only edits the specific month's entry — other months are unaffected.
 
 **Delete Fixed Expense:** Deletes the `fixed_expenses` row for that month. Any transactions that referenced it will have their `fixed_expense_id` set to NULL (via the database's `ON DELETE SET NULL` foreign key constraint).
 

@@ -162,17 +162,15 @@ Detailed test cases for the Financial Management application, derived from the [
 
 | # | Case | Input | Expected Result |
 |---|------|-------|-----------------|
-| 4.1.1 | Create fixed expense with all fields | `name: "Gym Membership", year_month: '2026-05', amount: 5000 ($50), currency: 'USD', due_day: 15, is_active: true` | Row created. No linked transactions yet → unpaid. |
-| 4.1.2 | Create with different amount for different month | `name: "Gym Membership", year_month: '2026-08', amount: 6000 ($60), due_day: 15` | Created. Previous months unaffected. |
-| 4.1.3 | Reject invalid due_day (too high) | `name: "Gym Membership", year_month: '2026-05', due_day: 32` | Rejected — `CHECK (due_day BETWEEN 1 AND 31)` fails. |
-| 4.1.4 | Reject invalid due_day (zero) | `name: "Gym Membership", year_month: '2026-05', due_day: 0` | Rejected — CHECK constraint fails. |
-| 4.1.5 | Reject duplicate | Row for `(user-1, "Gym Membership", "2026-05")` already exists | Rejected — `UNIQUE(user_id, name, year_month)` fails. |
+| 4.1.1 | Create fixed expense with all fields | `name: "Gym Membership", year_month: '2026-05', amount: 5000 ($50), currency: 'USD', is_active: true` | Row created. No linked transactions yet → unpaid. |
+| 4.1.2 | Create with different amount for different month | `name: "Gym Membership", year_month: '2026-08', amount: 6000 ($60)` | Created. Previous months unaffected. |
+| 4.1.3 | Reject duplicate | Row for `(user-1, "Gym Membership", "2026-05")` already exists | Rejected — `UNIQUE(user_id, name, year_month)` fails. |
 
 ### 4.2 Copy from Previous Month
 
 | # | Case | Setup | Action | Expected Result |
 |---|------|-------|--------|-----------------|
-| 4.2.1 | Copy when previous month has entries | May has 3 active fixed expenses: "Gym" ($50, day 15), "Netflix" ($15.99, day 20), "Rent" ($1500, day 1) | Copy from May to June | All active entries copied to `year_month = '2026-06'` with same name, amount, currency, due_day. |
+| 4.2.1 | Copy when previous month has entries | May has 3 active fixed expenses: "Gym" ($50), "Netflix" ($15.99), "Rent" ($1500) | Copy from May to June | All active entries copied to `year_month = '2026-06'` with same name, amount, currency. |
 | 4.2.2 | Copy when previous month is empty | April has no fixed expenses | Copy from April to May | No entries created. Operation succeeds with zero copies. |
 | 4.2.3 | Copy does not overwrite existing entries | June already has "Gym" row | Copy from May to June | "Netflix" and "Rent" copied. "Gym" skipped — `UNIQUE(user_id, name, year_month)` prevents duplicate. |
 
@@ -182,7 +180,6 @@ Detailed test cases for the Financial Management application, derived from the [
 |---|------|-------|--------|-----------------|
 | 4.3.1 | Update amount | `fe-may-gym` with amount 5000 | Update amount to 5500 | Amount updated. `updated_at` auto-set by trigger. |
 | 4.3.2 | Update name | `fe-may-gym` with name "Gym Membership" | Update name to "Gym & Pool" | Name updated. Historical entries in other months keep old name. |
-| 4.3.3 | Update due_day | `fe-may-gym` with due_day 15 | Update due_day to 20 | Due day updated. Valid range (1–31) enforced by CHECK constraint. |
 
 ### 4.4 Fixed Expense Paid Status (via Linked Transactions)
 
@@ -381,9 +378,8 @@ Deleting a fixed expense row sets `fixed_expense_id` to `NULL` on any linked tra
 | 9.4.1 | Transaction amount must be positive | Insert with `amount = 0` | Rejected — `CHECK (amount > 0)`. |
 | 9.4.2 | Transfer requires destination account | Insert `type = 'transfer', transfer_account_id = NULL` | Rejected — `chk_transfer_account`. |
 | 9.4.3 | Non-transfer must not have destination | Insert `type = 'expense', transfer_account_id = acc-2` | Rejected — `chk_transfer_account`. |
-| 9.4.4 | Fixed expense due_day range | Insert `due_day = 0` or `due_day = 32` | Rejected — `CHECK (due_day BETWEEN 1 AND 31)`. |
-| 9.4.5 | Unique budget period per month | Insert duplicate `(budget_id, year_month)` | Rejected — unique constraint. |
-| 9.4.6 | Unique fixed expense per user per name per month | Insert duplicate `(user_id, name, year_month)` for fixed expenses | Rejected — `UNIQUE(user_id, name, year_month)` constraint. |
+| 9.4.4 | Unique budget period per month | Insert duplicate `(budget_id, year_month)` | Rejected — unique constraint. |
+| 9.4.5 | Unique fixed expense per user per name per month | Insert duplicate `(user_id, name, year_month)` for fixed expenses | Rejected — `UNIQUE(user_id, name, year_month)` constraint. |
 | 9.4.7 | Unique category name per user | Insert duplicate `(user_id, name)` for categories | Rejected — unique constraint. |
 | 9.4.8 | Unique tag name per user | Insert duplicate `(user_id, name)` for tags | Rejected — unique constraint. |
 
@@ -471,9 +467,9 @@ Tables with a `user_id` column: `accounts`, `categories`, `tags`, `budgets`, `fi
 
 | Step | Action | Expected Result |
 |------|--------|-----------------|
-| 1 | User creates fixed expense "Netflix" for May | `fixed_expenses` row: name="Netflix", year_month="2026-05", amount=1599, due_day=20, is_active=true. No linked transactions → unpaid. |
+| 1 | User creates fixed expense "Netflix" for May | `fixed_expenses` row: name="Netflix", year_month="2026-05", amount=1599, is_active=true. No linked transactions → unpaid. |
 | 2 | User pays Netflix on May 20 | Transaction: expense, 1599, `fixed_expense_id = fe-may-netflix`. Fixed expense is now considered paid (has linked transaction). |
-| 3 | User copies fixed expenses from May to June | New `fixed_expenses` row: name="Netflix", year_month="2026-06", amount=1599, due_day=20. No linked transactions → unpaid. May row unchanged (still paid). |
+| 3 | User copies fixed expenses from May to June | New `fixed_expenses` row: name="Netflix", year_month="2026-06", amount=1599. No linked transactions → unpaid. May row unchanged (still paid). |
 | 4 | User pays Netflix in June | Transaction linked to June's "Netflix" row. June is now paid. |
 | 5 | July: Netflix increases to $17.99 | User copies from June, then edits July "Netflix" row: amount → 1799. May/June rows still show 1599. |
 | 6 | September: User cancels Netflix | No row created for October. Rows for May–Sep remain intact with their original amounts. |
@@ -509,6 +505,5 @@ Tables with a `user_id` column: `accounts`, `categories`, `tags`, `budgets`, `fi
 | 12.7 | Deleting a category used by transactions | Category "Food" linked to 50 transactions | Category and `transaction_categories` rows deleted (`CASCADE`). Transactions remain but lose the category association. |
 | 12.8 | Deleting a tag used by transactions | Same as above for tags | Tag and `transaction_tags` rows deleted. Transactions remain. |
 | 12.9 | Scheduled transaction for inactive account | Account is archived, schedule still active | Cron may generate a pending txn. App should validate account status before confirming. |
-| 12.10 | due_day = 31 for months with fewer days | Fixed expense with `due_day = 31` in February | Application layer should handle this (treat as last day of month). DB stores 31 as-is. |
-| 12.11 | Rapid create-then-delete transaction | Insert confirmed txn, then immediately delete | Balance update trigger fires on insert (+amount), then reversal trigger fires on delete (-amount). Net effect: zero. |
-| 12.12 | Transfer to same account | `account_id = acc-1, transfer_account_id = acc-1` | No DB constraint prevents this. Application layer should validate source ≠ destination. |
+| 12.10 | Rapid create-then-delete transaction | Insert confirmed txn, then immediately delete | Balance update trigger fires on insert (+amount), then reversal trigger fires on delete (-amount). Net effect: zero. |
+| 12.11 | Transfer to same account | `account_id = acc-1, transfer_account_id = acc-1` | No DB constraint prevents this. Application layer should validate source ≠ destination. |
