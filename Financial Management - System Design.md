@@ -123,9 +123,9 @@ A custom backend would only be needed if future requirements exceed what Edge Fu
   │ name             │   │ year_month (PK)  │   │ account_id (FK)       │
   │ year_month       │   │ balance          │   │ type                  │
   │ amount           │   └──────────────────┘   │ amount                │
-  │ due_day          │                          │ recurrence            │
-  │ is_active        │                          │ next_due_date         │
-  └──────────────────┘                          │ is_active             │
+  │ is_active        │                          │ recurrence            │
+  └──────────────────┘                          │ next_due_date         │
+                                                │ is_active             │
                                                 └───────────────────────┘
   ┌────────────────────────────────┐   ┌──────────────────────────────┐
   │          transactions          │   │       transaction_tags       │
@@ -319,7 +319,6 @@ CREATE TABLE fixed_expenses (
   name       TEXT NOT NULL,
   year_month TEXT NOT NULL,  -- format: 'YYYY-MM'
   amount     BIGINT NOT NULL,
-  due_day    SMALLINT NOT NULL CHECK (due_day BETWEEN 1 AND 31),
   is_active  BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -768,7 +767,7 @@ $$;
 | 4 | `categories` | Expense/income categories (Food, Salary…) | `name`, `icon`, `color` |
 | 5 | `tags` | Free-form labels on transactions | `name` |
 | 6 | `budgets` | Self-contained monthly budget entries (identity = name) | `name`, `year_month`, `periodic_amount` (carry-over computed in `v_budget_progress`) |
-| 8 | `fixed_expenses` | Monthly fixed expense entries with period-specific amounts | `name`, `year_month`, `amount`, `due_day`, `is_active` (paid = has linked txn) |
+| 8 | `fixed_expenses` | Monthly fixed expense entries with period-specific amounts | `name`, `year_month`, `amount`, `is_active` (paid = has linked txn) |
 | 9 | `scheduled_transactions` | Templates for auto-recorded transactions | `account_id`, `type`, `amount`, `recurrence`, `next_due_date` |
 | 10 | `transactions` | All financial movements | `account_id`, `type`, `status`, `amount`, `date`, `category_id`, `budget_id`, `fixed_expense_id` |
 | 11 | `transaction_tags` | Many-to-many: transaction ↔ tag | `transaction_id`, `tag_id` |
@@ -785,9 +784,9 @@ The requirement states that budgets and fixed expenses are **period-specific** �
 
 When the user "removes" a budget in July, we simply stop creating new `budgets` rows from July onward. May and June rows remain untouched. There is no separate header or periods table. A budget row also carries an optional free-text `description` (note). Like fixed expenses, budgets provide a **"Copy from Previous Month"** action that duplicates month M-1's budget rows into month M (preserving `name`, `description`, and `periodic_amount`), skipping any name already present in month M.
 
-**Fixed expenses** use a **flat, self-contained** pattern: each row in `fixed_expenses` represents one fixed expense for one specific month. The table carries both the identity (`name`, `user_id`) and the period-specific details (`year_month`, `amount`, `due_day`). A UNIQUE constraint on `(user_id, name, year_month)` prevents duplicates. To set up a new month, the user copies entries from the previous month (amounts can be adjusted). Historical entries are preserved even if the user stops copying forward.
+**Fixed expenses** use a **flat, self-contained** pattern: each row in `fixed_expenses` represents one fixed expense for one specific month. The table carries both the identity (`name`, `user_id`) and the period-specific details (`year_month`, `amount`). A UNIQUE constraint on `(user_id, name, year_month)` prevents duplicates. To set up a new month, the user copies entries from the previous month (amounts can be adjusted). Historical entries are preserved even if the user stops copying forward.
 
-The app provides a **"Copy from Previous Month"** action: it duplicates all active fixed expense rows from month M-1 into month M, preserving each entry's name, amount, and due day. The user can then edit individual entries as needed.
+The app provides a **"Copy from Previous Month"** action: it duplicates all active fixed expense rows from month M-1 into month M, preserving each entry's name and amount. The user can then edit individual entries as needed.
 
 ### 4.2 Budget Carry-Over
 

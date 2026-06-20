@@ -512,7 +512,6 @@ const { data } = await supabase
 | `year_month` | `TEXT` | `'YYYY-MM'` format |
 | `amount` | `BIGINT` | Minor units |
 | `currency` | `TEXT` | ISO 4217 code |
-| `due_day` | `SMALLINT` | 1–31 |
 | `is_active` | `BOOLEAN` | Default `true` |
 
 > Each row is one fixed expense for one specific month. Paid status is derived from linked transactions — a fixed expense is considered paid when at least one `transactions` row references it via `fixed_expense_id`.
@@ -643,8 +642,8 @@ The filter panel needs the lists of accounts (`useAccounts`), categories & tags 
 - Current month's fixed expenses with paid/unpaid status. Paid status is derived: a fixed expense is considered paid when at least one transaction references it via `fixed_expense_id`.
 - Month navigator. On mobile/touch viewports, support swipe left/right to navigate months.
 - To mark a fixed expense as paid, the user creates (or edits) a transaction and links it to the fixed expense. There is no standalone "mark as paid" toggle.
-- **Copy from Previous Month:** Button that copies all fixed expenses from the previous month into the current month (same `name`, `amount`, `currency`, `due_day`, `is_active`). Skips expenses that already exist for the current month.
-- **Edit:** Edit individual fixed expenses — update `name`, `amount`, or `due_day` for the selected month only.
+- **Copy from Previous Month:** Button that copies all fixed expenses from the previous month into the current month (same `name`, `amount`, `currency`, `is_active`). Skips expenses that already exist for the current month.
+- **Edit:** Edit individual fixed expenses — update `name` or `amount` for the selected month only.
 - **Delete:** Remove an individual fixed expense for the selected month. Does not affect other months.
 - Add new fixed expenses for the current month.
 

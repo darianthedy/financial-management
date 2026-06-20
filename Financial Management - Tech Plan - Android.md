@@ -573,7 +573,6 @@ data class FixedExpense(
     @SerialName("year_month") val yearMonth: String,
     val amount: Long,
     val currency: String,
-    @SerialName("due_day") val dueDay: Int,
     @SerialName("is_active") val isActive: Boolean,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
@@ -584,8 +583,8 @@ data class FixedExpense(
 
 #### Fixed Expense Operations
 
-- **Copy from Previous Month:** Queries all `fixed_expenses` where `year_month` equals the previous month, then inserts new rows for the current month with the same `name`, `amount`, `currency`, `due_day`, and `is_active` values. Skips expenses that already exist for the current month (matched by `name` + `year_month`).
-- **Edit:** Opens `FixedExpenseEditDialog.kt` to update `name`, `amount`, or `due_day` on an existing fixed expense row. Only the selected month's row is modified.
+- **Copy from Previous Month:** Queries all `fixed_expenses` where `year_month` equals the previous month, then inserts new rows for the current month with the same `name`, `amount`, `currency`, and `is_active` values. Skips expenses that already exist for the current month (matched by `name` + `year_month`).
+- **Edit:** Opens `FixedExpenseEditDialog.kt` to update `name` or `amount` on an existing fixed expense row. Only the selected month's row is modified.
 - **Delete:** Removes an individual fixed expense row for the selected month. Does not affect other months' rows or linked transactions (the `fixed_expense_id` FK on transactions should be set to `NULL` on delete).
 
 ### 5.6 Repository Example (`data/repository/AccountRepository.kt`)
