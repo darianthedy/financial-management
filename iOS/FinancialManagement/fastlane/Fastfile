@@ -66,6 +66,10 @@ platform :ios do
         "-allowProvisioningUpdates",
         "CODE_SIGN_STYLE=Manual",
         "DEVELOPMENT_TEAM=#{TEAM_ID}",
+        # The project sets no CODE_SIGN_IDENTITY, so a manual archive would
+        # default to "iOS Development" and fail. match installs an App Store
+        # distribution cert, so pin the identity to it.
+        "CODE_SIGN_IDENTITY='Apple Distribution'",
         "PROVISIONING_PROFILE_SPECIFIER='#{PROFILE_NAME}'",
         "CURRENT_PROJECT_VERSION=#{build_number}"
       ].join(" "),
