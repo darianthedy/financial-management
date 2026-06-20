@@ -40,7 +40,8 @@ These are done in App Store Connect / GitHub, not in code.
 4. **Create an App Store Connect API key** (Users and Access → Integrations →
    Team Keys → +). Use **Admin** for the first build (match needs it to create
    the signing cert), can downgrade to App Manager later. Download the `.p8`
-   ONCE. Capture Key ID, Issuer ID, and `base64` of the `.p8`.
+   ONCE. Capture Key ID, Issuer ID, and `base64 -w0` of the `.p8`
+   (use `-w0` so the value stays on one line — see gotcha below).
 
 5. **Create a private repo for match certs** (e.g. `darianthedy/ios-certificates`)
    + a PAT with read/write to it. Choose a `MATCH_PASSWORD` passphrase.
@@ -50,8 +51,10 @@ These are done in App Store Connect / GitHub, not in code.
    `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`.
    (Exact commands for each are in `iOS/README-TestFlight.md`.)
 
-7. **Run it:** Actions tab → iOS TestFlight → Run workflow. After the first
-   success, set repo Variable `MATCH_READONLY = true`.
+7. **Run it:** add repo Variable `MATCH_CREATE_CERTS = true` (first run only —
+   lets match create the cert despite setup_ci forcing read-only on CI), then
+   Actions tab → iOS TestFlight → Run workflow. **Delete the variable after the
+   first success** so later runs stay read-only.
 
 8. **Install on iPhone:** add yourself as an Internal Tester in TestFlight, then
    install via the TestFlight app.
@@ -64,6 +67,20 @@ git pull
 ```
 Then open the repo in Claude Code (or your editor) and continue from the "To do"
 list above. The detailed reference is `iOS/README-TestFlight.md`.
+
+## Gotcha hit during setup
+- **`A libcurl function was given a bad argument` when `match` clones the certs
+  repo** = `MATCH_GIT_BASIC_AUTHORIZATION` is multi-line. GNU `base64` (Linux/WSL)
+  wraps at 76 cols by default, so a long PAT's base64 spans two lines and the
+  newline corrupts the git `Authorization` header. Regenerate single-line with
+  `echo -n "user:PAT" | base64 -w0` and update the secret. Same applies to
+  `ASC_KEY_CONTENT` (the `.p8` base64).
+- **`No code signing identity found and cannot create a new one because you
+  enabled readonly`** on the first run, even with `MATCH_READONLY` unset.
+  Cause: `setup_ci` (called in `before_all`) unconditionally sets
+  `ENV["MATCH_READONLY"]=true` on macOS CI. Fix: the Fastfile gates creation on
+  our own `MATCH_CREATE_CERTS` var — set repo Variable `MATCH_CREATE_CERTS=true`
+  for the first run, then delete it. (Not an API-key-role issue.)
 
 ## Open question (was being decided when the session paused)
 - Whether to add a lightweight **PR build-check workflow** (compiles on

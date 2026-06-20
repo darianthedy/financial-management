@@ -37,9 +37,11 @@ afterwards). Download the `.p8` file — **you only get one chance**.
 
 Note the **Issuer ID** (top of the page) and the **Key ID**.
 
-Base64-encode the key for the secret:
+Base64-encode the key for the secret. `-w0` keeps it on a **single line** —
+GNU `base64` (Linux/WSL) wraps at 76 columns by default, and a wrapped
+multi-line secret breaks the build:
 ```bash
-base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n'
+base64 -w0 AuthKey_XXXXXXXXXX.p8   # macOS: base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n'
 ```
 
 ### 3. Create a private repo to hold signing assets
@@ -50,9 +52,12 @@ separate **private** git repo. Create an empty one, e.g.
 Create a **Personal Access Token** (classic, `repo` scope, or a fine-grained
 token with read/write to just that repo) so CI can read/write it. Then:
 ```bash
-echo -n "darianthedy:ghp_YOUR_PAT" | base64
+echo -n "darianthedy:ghp_YOUR_PAT" | base64 -w0
 ```
-That value is `MATCH_GIT_BASIC_AUTHORIZATION`.
+That value is `MATCH_GIT_BASIC_AUTHORIZATION`. The `-w0` (no line wrapping) and
+`echo -n` (no trailing newline) matter: a multi-line value puts a newline in the
+git `Authorization` header and `match` fails to clone with *"A libcurl function
+was given a bad argument."* On macOS use `… | base64 | tr -d '\n'` instead.
 
 Pick any strong passphrase for `MATCH_PASSWORD` — it encrypts the contents of
 that repo. Save it somewhere safe; you'll need the same value forever.
@@ -76,10 +81,14 @@ In **this** repo → Settings → Secrets and variables → **Actions** → New 
 **Actions** tab → **iOS TestFlight** → **Run workflow**. (It also runs
 automatically on pushes to `main` that touch `iOS/**`.)
 
-- First run: `match` creates and stores the distribution certificate + App
-  Store provisioning profile. After that succeeds, add a repo **Variable**
-  `MATCH_READONLY = true` (Settings → Secrets and variables → Actions →
-  Variables) so later runs reuse them instead of regenerating.
+- **First run only:** before running, add a repo **Variable**
+  `MATCH_CREATE_CERTS = true` (Settings → Secrets and variables → Actions →
+  **Variables**). On CI, fastlane's `setup_ci` forces match into read-only mode
+  so builds never mint duplicate signing assets — this variable opts the first
+  run out so `match` can create and store the distribution certificate + App
+  Store provisioning profile in the certs repo.
+- **After it succeeds, delete the `MATCH_CREATE_CERTS` variable.** Every later
+  run then stays read-only and just reuses the stored cert/profile.
 - When the job finishes, the build appears in **App Store Connect → TestFlight**
   after a few minutes of Apple-side processing.
 

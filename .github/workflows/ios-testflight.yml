@@ -56,9 +56,11 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           BUILD_NUMBER: ${{ github.run_number }}
-          # Set to "true" after the first successful run to stop match from
-          # regenerating certificates/profiles.
-          MATCH_READONLY: ${{ vars.MATCH_READONLY }}
+          # Set repo Variable MATCH_CREATE_CERTS=true for the FIRST run only, so
+          # match creates + stores the signing cert/profile (setup_ci otherwise
+          # forces read-only on CI). Delete the variable after it succeeds; every
+          # later run then stays read-only and reuses the stored assets.
+          MATCH_CREATE_CERTS: ${{ vars.MATCH_CREATE_CERTS }}
 
       - name: Upload IPA artifact
         if: always()
