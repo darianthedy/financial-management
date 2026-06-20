@@ -1,7 +1,18 @@
 # iOS TestFlight setup — progress & handoff
 
 > Notes from the Claude session that set up the no-Mac iOS build pipeline.
-> Pull the `claude/ios-compile-no-mac-q7nloj` branch on your PC to continue.
+
+## ✅ STATUS: WORKING (2026-06-20)
+The pipeline is fully green — a build was built, signed, and uploaded to
+TestFlight from CI with no Mac (App ID 6782294982, App Store Connect run
+succeeded with *"Successfully uploaded package to App Store Connect"*).
+All the manual setup (bundle ID, app record, API key, certs repo, secrets)
+is done. The cert + profile are stored in the match repo; `MATCH_CREATE_CERTS`
+has been removed, so runs are now read-only steady state.
+
+**Only remaining step:** in App Store Connect → TestFlight, add yourself as an
+**Internal Tester**, then install via the TestFlight app on your iPhone. Future
+pushes to `main` that touch `iOS/**` (excluding `*.md`) auto-upload new builds.
 
 ## Goal
 Build, sign, and install the iOS app **without owning a Mac**, as cheaply as
@@ -81,6 +92,17 @@ list above. The detailed reference is `iOS/README-TestFlight.md`.
   `ENV["MATCH_READONLY"]=true` on macOS CI. Fix: the Fastfile gates creation on
   our own `MATCH_CREATE_CERTS` var — set repo Variable `MATCH_CREATE_CERTS=true`
   for the first run, then delete it. (Not an API-key-role issue.)
+- **`No signing certificate "iOS Development" found`** during archive: manual
+  signing needs an explicit identity. Fixed by setting `CODE_SIGN_IDENTITY` to
+  `Apple Distribution` for the app target.
+- **`swift-crypto_Crypto does not support provisioning profiles`**: signing
+  settings passed globally via `xcargs` also hit SwiftPM dependency targets.
+  Fixed by using `update_code_signing_settings` to scope manual signing to the
+  app target only (not via global xcargs).
+- **`Missing required icon file ... 120x120 (90022)`** on upload: the AppIcon
+  asset catalog had no image. Fixed by adding a 1024×1024 opaque PNG and
+  referencing it in `AppIcon.appiconset/Contents.json`. (Replace the placeholder
+  with a real design anytime — just overwrite `AppIcon-1024.png`.)
 
 ## Open question (was being decided when the session paused)
 - Whether to add a lightweight **PR build-check workflow** (compiles on
