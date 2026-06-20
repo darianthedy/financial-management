@@ -97,6 +97,9 @@ run_claude() {
 
 # Implement a slice in a fresh session on a fresh branch off main, then merge.
 # $1 = branch name   $2 = full prompt text for claude
+# Returns the merge SHA in the global MERGE_SHA — NOT on stdout. (Using
+# command substitution here would capture stdout and swallow all of the live
+# session output, so the run would look silent.)
 implement_and_merge() {
   local branch="$1" prompt="$2"
   git switch main >/dev/null
@@ -115,7 +118,7 @@ implement_and_merge() {
   gh pr merge "$branch" --merge --delete-branch >/dev/null
   git switch main >/dev/null
   git pull --ff-only origin main >/dev/null
-  git rev-parse HEAD   # echo the merge SHA for the caller
+  MERGE_SHA=$(git rev-parse HEAD)   # hand back via global so stdout stays free to stream
 }
 
 # Block until the TestFlight run for a given commit SHA finishes.
@@ -147,7 +150,7 @@ for P in "${PROMPTS[@]}"; do
 no more, no less. Verify table/column/view/RPC names against supabase/migrations/. \
 When finished, commit all changes with a clear message. Do not push or open a PR."
 
-  sha=$(implement_and_merge "ios/$P" "$base_prompt")
+  implement_and_merge "ios/$P" "$base_prompt"; sha="$MERGE_SHA"
 
   attempt=0
   until wait_for_testflight "$sha"; do
@@ -165,7 +168,7 @@ FinancialManagement) compile and sign. Commit; do not push.
 
 --- failing build log (tail) ---
 $fail_log"
-    sha=$(implement_and_merge "ios/$P-fix$attempt" "$fix_prompt")
+    implement_and_merge "ios/$P-fix$attempt" "$fix_prompt"; sha="$MERGE_SHA"
   done
 
   log "=== $P : TestFlight GREEN ✅ ==="
