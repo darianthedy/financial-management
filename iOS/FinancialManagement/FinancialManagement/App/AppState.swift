@@ -65,6 +65,14 @@ final class AppState {
         }
     }
 
+    /// Sets (or clears, with `nil`) the default account on
+    /// `user_settings.default_account_id` — one at a time. Mirrors the new value
+    /// back into `defaultAccountId` so the UI updates immediately.
+    func setDefaultAccount(_ accountId: UUID?) async throws {
+        let settings = try await currencyRepo.updateDefaultAccountId(accountId)
+        defaultAccountId = settings.defaultAccountId
+    }
+
     func currency(for code: String) -> Currency? {
         currencies.first { $0.code == code }
     }

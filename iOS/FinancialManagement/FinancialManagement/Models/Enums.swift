@@ -6,6 +6,28 @@ enum AccountType: String, Codable, CaseIterable {
     case digitalWallet = "digital_wallet"
     case cash
     case other
+
+    /// SF Symbol used when the account has no custom image (avatars land in P03).
+    var defaultIcon: String {
+        switch self {
+        case .bankAccount:   return "building.columns"
+        case .creditCard:    return "creditcard"
+        case .digitalWallet: return "wallet.pass"
+        case .cash:          return "banknote"
+        case .other:         return "circle.grid.2x2"
+        }
+    }
+
+    /// Human-readable label for pickers and rows.
+    var displayName: String {
+        switch self {
+        case .bankAccount:   return "Bank Account"
+        case .creditCard:    return "Credit Card"
+        case .digitalWallet: return "Digital Wallet"
+        case .cash:          return "Cash"
+        case .other:         return "Other"
+        }
+    }
 }
 
 enum TransactionType: String, Codable, CaseIterable {
