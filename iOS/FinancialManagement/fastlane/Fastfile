@@ -31,12 +31,21 @@ platform :ios do
 
     # Fetch (or, on first run, create) the distribution cert + App Store
     # provisioning profile, decrypt them, and install into the CI keychain.
-    # Set readonly: true once the cert/profile exist to avoid regenerating them.
+    #
+    # `setup_ci` (before_all) force-sets MATCH_READONLY=true on macOS CI so
+    # builds never accidentally mint duplicate signing assets. That also blocks
+    # the FIRST run, which legitimately must CREATE the cert + profile and store
+    # them in the match repo. So we gate creation on our own variable that
+    # setup_ci doesn't touch: set repo Variable MATCH_CREATE_CERTS=true for the
+    # first successful run, then delete it so every later run stays read-only
+    # and just reuses the stored assets.
+    create_certs = ENV["MATCH_CREATE_CERTS"] == "true"
+
     match(
       type: "appstore",
       app_identifier: APP_IDENTIFIER,
       api_key: api_key,
-      readonly: ENV["MATCH_READONLY"] == "true"
+      readonly: !create_certs
     )
 
     # Give every CI build a unique, increasing build number. The project uses
