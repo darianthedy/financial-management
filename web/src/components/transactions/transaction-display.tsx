@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Receipt, Tag as TagIcon } from "lucide-react";
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils/cn";
 import type { Category, Tag, TransactionType } from "@/lib/types/database";
 
@@ -137,8 +138,16 @@ export function AccountAvatar({
       className={cn(
         "relative flex shrink-0 items-center justify-center rounded-full font-bold text-white",
         dims,
+        // The palette is tuned for light mode; on the dark background the solid
+        // fills read too vivid, so blend each toward the card color to calm them.
+        !imageUrl &&
+          "bg-[var(--avatar)] dark:bg-[color-mix(in_srgb,var(--avatar)_72%,var(--color-card))]",
       )}
-      style={imageUrl ? undefined : { backgroundColor: colorForAccount(name) }}
+      style={
+        imageUrl
+          ? undefined
+          : ({ "--avatar": colorForAccount(name) } as CSSProperties)
+      }
     >
       {imageUrl ? (
         // rounded-full on the img itself clips the logo to the circle while
