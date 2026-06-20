@@ -80,13 +80,18 @@ PYEOF
 # Run a fresh headless Claude session with live, readable progress output.
 # $1 = prompt. The pipeline's exit status is ignored on purpose — the real gate
 # is "did the session commit?", checked by the caller.
+#
+# `< /dev/null` is REQUIRED: when claude -p's stdout is a pipe it assumes an
+# `echo data | claude` pipeline and waits for stdin. Run interactively (TTY
+# stdin) that wait never ends and the session hangs silently. /dev/null gives an
+# immediate EOF so it proceeds.
 run_claude() {
   local prompt="$1"
   if command -v python3 >/dev/null 2>&1; then
-    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose \
+    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null \
       | python3 -u -c "$STREAM_FMT" || true
   else
-    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose || true
+    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null || true
   fi
 }
 
