@@ -12,12 +12,16 @@ import SwiftUI
 @MainActor
 final class BudgetListViewModel {
     var progress: [BudgetProgress] = []
+    /// Installments reserving allowance in the displayed month (P1), shown below
+    /// the budgets in the "Active installments" list.
+    var activeInstallments: [ActiveInstallment] = []
     var yearMonth = DateUtils.currentYearMonth()
     var isLoading = false
     var errorMessage: String?
     var navigationDirection: Edge = .trailing
 
     private let repository = BudgetRepository()
+    private let installmentRepository = InstallmentRepository()
     private let supabase = SupabaseService.shared.client
     private var realtimeChannel: RealtimeChannelV2?
     private var progressCache: [String: [BudgetProgress]] = [:]
@@ -39,6 +43,11 @@ final class BudgetListViewModel {
             errorMessage = error.localizedDescription
         }
 
+        if let installments = try? await installmentRepository.activeInstallments(reservingIn: month),
+           yearMonth == month {
+            activeInstallments = installments
+        }
+
         await prefetchAdjacentMonths()
     }
 
@@ -52,6 +61,7 @@ final class BudgetListViewModel {
         withAnimation(.easeInOut(duration: 0.3)) {
             yearMonth = newMonth
             progress = cached ?? []
+            activeInstallments = []
             isLoading = !hasCache
         }
 
@@ -91,6 +101,17 @@ final class BudgetListViewModel {
         }
     }
 
+    /// Cancel an installment: delete its header (cascades to allocations) so the
+    /// future budgets recover their allowance, then re-flow the visible month.
+    func cancelInstallment(_ item: ActiveInstallment) async {
+        do {
+            try await installmentRepository.cancel(id: item.id)
+            invalidateAndReload()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func copyFromPreviousMonth() async {
         do {
             try await repository.copyFromPreviousMonth(into: yearMonth)
@@ -111,6 +132,10 @@ final class BudgetListViewModel {
         let transactionChanges = channel.postgresChange(
             AnyAction.self, schema: "public", table: "transactions"
         )
+        // Installment reservations (P1) feed `reserved` into the view.
+        let allocationChanges = channel.postgresChange(
+            AnyAction.self, schema: "public", table: "budget_installment_allocations"
+        )
 
         await channel.subscribe()
 
@@ -119,6 +144,9 @@ final class BudgetListViewModel {
         }
         Task {
             for await _ in transactionChanges { invalidateAndReload() }
+        }
+        Task {
+            for await _ in allocationChanges { invalidateAndReload() }
         }
 
         realtimeChannel = channel
