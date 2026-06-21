@@ -8,7 +8,7 @@ import Supabase
 final class DashboardViewModel {
     var yearMonth = DateUtils.currentYearMonth()
     var summary: DashboardSummary?
-    var budgetPeriods: [BudgetPeriod] = []
+    var budgetProgress: [BudgetProgress] = []
     var isLoading = false
     var errorMessage: String?
     var navigationDirection: Edge = .trailing
@@ -17,7 +17,7 @@ final class DashboardViewModel {
     private let budgetRepo = BudgetRepository()
 
     private var summaryCache: [String: DashboardSummary] = [:]
-    private var periodsCache: [String: [BudgetPeriod]] = [:]
+    private var progressCache: [String: [BudgetProgress]] = [:]
 
     func load() async {
         let month = yearMonth
@@ -29,17 +29,17 @@ final class DashboardViewModel {
 
         do {
             async let summaryResult = dashboardRepo.getSummary(yearMonth: month)
-            async let periodsResult = budgetRepo.getAllPeriodsForMonth(yearMonth: month)
+            async let progressResult = budgetRepo.progress(yearMonth: month)
 
             let fetchedSummary = try await summaryResult
-            let fetchedPeriods = try await periodsResult
+            let fetchedProgress = try await progressResult
 
             summaryCache[month] = fetchedSummary
-            periodsCache[month] = fetchedPeriods
+            progressCache[month] = fetchedProgress
 
             guard yearMonth == month else { return }
             summary = fetchedSummary
-            budgetPeriods = fetchedPeriods
+            budgetProgress = fetchedProgress
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -52,13 +52,13 @@ final class DashboardViewModel {
         let newMonth = DateUtils.navigate(yearMonth, by: offset)
 
         let cachedSummary = summaryCache[newMonth]
-        let cachedPeriods = periodsCache[newMonth] ?? []
+        let cachedProgress = progressCache[newMonth] ?? []
         let hasCache = cachedSummary != nil
 
         withAnimation(.easeInOut(duration: 0.3)) {
             yearMonth = newMonth
             summary = cachedSummary
-            budgetPeriods = cachedPeriods
+            budgetProgress = cachedProgress
             isLoading = !hasCache
         }
 
@@ -71,9 +71,9 @@ final class DashboardViewModel {
         for month in months where summaryCache[month] == nil {
             do {
                 async let s = dashboardRepo.getSummary(yearMonth: month)
-                async let p = budgetRepo.getAllPeriodsForMonth(yearMonth: month)
+                async let p = budgetRepo.progress(yearMonth: month)
                 summaryCache[month] = try await s
-                periodsCache[month] = try await p
+                progressCache[month] = try await p
             } catch {
                 // Non-fatal: prefetch failure is silent
             }
