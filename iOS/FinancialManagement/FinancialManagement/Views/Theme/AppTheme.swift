@@ -19,6 +19,23 @@ enum AppTheme {
     static let cornerRadius: CGFloat = 10
 }
 
+extension View {
+    /// Mirrors web's `Card` surface (`web/src/components/ui/card.tsx`): the card
+    /// fill, a 1pt hairline border, `--radius` corners and a subtle drop shadow
+    /// (`shadow-sm`). Use on dashboard widgets so they read as bordered cards on
+    /// the app background instead of translucent material.
+    func appCardSurface() -> some View {
+        self
+            .background(Color.appCard)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                    .strokeBorder(Color.appBorder, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
+    }
+}
+
 extension Color {
     /// Brand / interactive accent. web `--color-primary`.
     static let appPrimary = Color("AppPrimary")

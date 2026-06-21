@@ -2,8 +2,11 @@ import SwiftUI
 
 /// Unplanned Expenses widget (iOS Tech Plan §8.1): confirmed expenses for the
 /// month with no budget and no fixed-expense link, aggregated by category
-/// (null → "Uncategorized") and sorted by amount. Money rows are vertical-
-/// stacked (§9.2).
+/// (null → "Uncategorized") and sorted by amount.
+///
+/// Mirrors web's `unplanned-expenses.tsx`: a "Total unplanned" row on top, then
+/// the per-category list with a leading emoji (category icon, `📊` fallback, or
+/// `❓` for the italic, muted "Uncategorized" row).
 struct UnplannedExpensesCard: View {
     let groups: [UnplannedGroup]
     let currencyCode: String
@@ -11,42 +14,57 @@ struct UnplannedExpensesCard: View {
     private var total: Int64 { groups.reduce(Int64(0)) { $0 + $1.total } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Unplanned Expenses")
-                .font(.headline)
-
+        DashboardCard(title: "Unplanned Expenses") {
             if groups.isEmpty {
-                Text("No unplanned spending this month.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                DashboardCardEmptyState(
+                    title: "Nothing unplanned",
+                    message: "Every expense this month is covered by a budget or fixed expense."
+                )
             } else {
-                ForEach(groups) { group in
-                    HStack {
-                        Text(group.categoryName)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Total unplanned")
                             .font(.subheadline)
+                            .foregroundStyle(Color.appMutedForeground)
                         Spacer()
-                        Text(group.total.asCurrency(code: currencyCode))
-                            .font(.subheadline.bold())
+                        Text(total.asCurrency(code: currencyCode))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.appCardForeground)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
-                }
 
-                Divider()
-
-                HStack {
-                    Text("Total")
-                        .font(.subheadline.bold())
-                    Spacer()
-                    Text(total.asCurrency(code: currencyCode))
-                        .font(.headline)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    VStack(spacing: 8) {
+                        ForEach(groups) { group in
+                            row(group)
+                        }
+                    }
                 }
             }
         }
-        .padding()
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func row(_ group: UnplannedGroup) -> some View {
+        let uncategorized = group.categoryId == nil
+        HStack(spacing: 8) {
+            Text(group.icon ?? (uncategorized ? "❓" : "📊"))
+
+            Text(group.categoryName)
+                .font(.subheadline.weight(uncategorized ? .regular : .medium))
+                .italic(uncategorized)
+                .foregroundStyle(uncategorized ? Color.appMutedForeground : Color.appCardForeground)
+                .lineLimit(1)
+
+            Spacer()
+
+            Text(group.total.asCurrency(code: currencyCode))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(Color.appCardForeground)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
     }
 }
