@@ -1,22 +1,30 @@
 import SwiftUI
 import Supabase
 
-/// Add a new fixed expense for the selected month (§8.5). Name + amount only —
-/// there is no per-row currency and no day-of-month. Editing an existing row
-/// goes through `FixedExpenseEditSheet`.
-struct FixedExpenseFormSheet: View {
+/// Edit an existing fixed expense's name/amount. Scoped to the selected month
+/// only — other months' rows for the same name are unaffected (§5.6, §8.5).
+struct FixedExpenseEditSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
 
-    let yearMonth: String
+    let expense: FixedExpense
+    let decimalPlaces: Int
     var onSaved: (() async -> Void)?
 
-    @State private var name = ""
-    @State private var amount = ""
+    @State private var name: String
+    @State private var amount: String
     @State private var isSaving = false
     @State private var errorMessage: String?
 
     private let repository = FixedExpenseRepository()
+
+    init(expense: FixedExpense, decimalPlaces: Int, onSaved: (() async -> Void)? = nil) {
+        self.expense = expense
+        self.decimalPlaces = decimalPlaces
+        self.onSaved = onSaved
+        _name = State(initialValue: expense.name)
+        let display = CurrencyUtils.toDisplayAmount(expense.amount, decimalPlaces: decimalPlaces)
+        _amount = State(initialValue: String(format: "%.\(decimalPlaces)f", display))
+    }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
@@ -38,7 +46,7 @@ struct FixedExpenseFormSheet: View {
                     }
                 }
             }
-            .navigationTitle("New Fixed Expense")
+            .navigationTitle("Edit Fixed Expense")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -58,11 +66,10 @@ struct FixedExpenseFormSheet: View {
         defer { isSaving = false }
 
         do {
-            _ = try await repository.create(
-                name: trimmedName,
-                yearMonth: yearMonth,
-                amount: CurrencyUtils.toMinorUnits(value, decimalPlaces: appState.decimalPlaces)
-            )
+            try await repository.update(id: expense.id, fields: [
+                "name": .string(trimmedName),
+                "amount": .integer(Int(CurrencyUtils.toMinorUnits(value, decimalPlaces: decimalPlaces)))
+            ])
             await onSaved?()
             dismiss()
         } catch {
