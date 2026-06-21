@@ -9,7 +9,9 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            // Web's dashboard: `space-y-6` (24pt) between the month navigator and
+            // the card grid, which itself uses `gap-4` (16pt) between cards.
+            VStack(spacing: 24) {
                 MonthNavigator(
                     yearMonth: viewModel.yearMonth,
                     onPrevious: { viewModel.navigateMonth(by: -1) },

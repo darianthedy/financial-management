@@ -25,6 +25,7 @@ struct DashboardAccount: Identifiable, Sendable {
 struct UnplannedGroup: Identifiable, Sendable {
     let categoryId: UUID?
     let categoryName: String
+    let icon: String?
     let total: Int64
     var id: String { categoryId?.uuidString ?? "uncategorized" }
 }
@@ -160,7 +161,7 @@ actor DashboardRepository {
 
         // Resolve category names client-side; null category → "Uncategorized".
         let categoryIds = Set(rows.compactMap(\.categoryId))
-        var nameById: [UUID: String] = [:]
+        var categoryById: [UUID: Category] = [:]
         if !categoryIds.isEmpty {
             let categories: [Category] = try await client
                 .from("categories")
@@ -168,14 +169,16 @@ actor DashboardRepository {
                 .in("id", values: categoryIds.map(\.uuidString))
                 .execute()
                 .value
-            nameById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0.name) })
+            categoryById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
         }
 
         return Dictionary(grouping: rows, by: \.categoryId)
             .map { categoryId, txns in
-                UnplannedGroup(
+                let category = categoryId.flatMap { categoryById[$0] }
+                return UnplannedGroup(
                     categoryId: categoryId,
-                    categoryName: categoryId.flatMap { nameById[$0] } ?? "Uncategorized",
+                    categoryName: category?.name ?? "Uncategorized",
+                    icon: category?.icon,
                     total: txns.reduce(Int64(0)) { $0 + $1.amount }
                 )
             }
