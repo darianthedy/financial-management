@@ -38,12 +38,11 @@ struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.subheadline)
+                .font(.subheadline.weight(.medium))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color(.systemGray5))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
+                .background(isSelected ? Color.appPrimary : Color.appMuted, in: Capsule())
+                .foregroundStyle(isSelected ? Color.appPrimaryForeground : Color.appForeground)
         }
     }
 }

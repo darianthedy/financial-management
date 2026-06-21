@@ -27,6 +27,11 @@ final class TransactionListViewModel {
     var accountsById: [UUID: Account] = [:]
     var categoriesById: [UUID: Category] = [:]
     var tagsById: [UUID: Tag] = [:]
+    /// Budget / fixed-expense names keyed by id, so a row can title itself with
+    /// (or chip) the linked budget / fixed expense — mirroring the web row, which
+    /// hydrates the same names from `budgets` / `fixed_expenses` per page.
+    var budgetNamesById: [UUID: String] = [:]
+    var fixedNamesById: [UUID: String] = [:]
     /// Source-expense ids that are already spread across budgets (P1) — drives the
     /// row's grid indicator and gates the "Create virtual installment" action.
     var spreadTransactionIds: Set<UUID> = []
@@ -199,6 +204,33 @@ final class TransactionListViewModel {
         accountsById[transaction.accountId]
     }
 
+    // MARK: - Row display hydration (mirrors web's per-row name lookups)
+
+    /// The transfer destination account (for the "→ name" chip on transfers).
+    func transferAccount(for transaction: Transaction) -> Account? {
+        transaction.transferAccountId.flatMap { accountsById[$0] }
+    }
+
+    /// The single linked category (column, not junction), if loaded.
+    func category(for transaction: Transaction) -> Category? {
+        transaction.categoryId.flatMap { categoriesById[$0] }
+    }
+
+    /// The linked budget's name, used as the row title (web title precedence).
+    func budgetName(for transaction: Transaction) -> String? {
+        transaction.budgetId.flatMap { budgetNamesById[$0] }
+    }
+
+    /// The linked fixed-expense's name (row title fallback / "Fixed" chip).
+    func fixedExpenseName(for transaction: Transaction) -> String? {
+        transaction.fixedExpenseId.flatMap { fixedNamesById[$0] }
+    }
+
+    /// Tags attached to the row, resolved from the view's `tag_ids` array.
+    func tags(for transaction: Transaction) -> [Tag] {
+        (transaction.tagIds ?? []).compactMap { tagsById[$0] }
+    }
+
     // MARK: - Virtual installments (P1)
 
     func isSpread(_ transaction: Transaction) -> Bool {
@@ -224,13 +256,21 @@ final class TransactionListViewModel {
     private func loadLookups() async {
         guard accountsById.isEmpty, categoriesById.isEmpty, tagsById.isEmpty else { return }
         let client = SupabaseService.shared.client
+
+        /// id → name rows for budgets / fixed expenses (web reads the same).
+        struct NameRow: Decodable { let id: UUID; let name: String }
+
         do {
             async let accounts: [Account] = client.from("accounts").select().execute().value
             async let categories: [Category] = client.from("categories").select().execute().value
             async let tags: [Tag] = client.from("tags").select().execute().value
+            async let budgets: [NameRow] = client.from("budgets").select("id,name").execute().value
+            async let fixed: [NameRow] = client.from("fixed_expenses").select("id,name").execute().value
             accountsById = Dictionary(uniqueKeysWithValues: try await accounts.map { ($0.id, $0) })
             categoriesById = Dictionary(uniqueKeysWithValues: try await categories.map { ($0.id, $0) })
             tagsById = Dictionary(uniqueKeysWithValues: try await tags.map { ($0.id, $0) })
+            budgetNamesById = Dictionary(try await budgets.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            fixedNamesById = Dictionary(try await fixed.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         } catch {
             // Non-fatal: chips/rows fall back to ids/placeholders.
         }

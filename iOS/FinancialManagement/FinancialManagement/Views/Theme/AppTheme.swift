@@ -78,4 +78,35 @@ extension Color {
     static let appInput = Color("AppInput")
     /// Focus ring. web `--color-ring`.
     static let appRing = Color("AppRing")
+
+    /// Parses a web-style hex string (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`) into a
+    /// Color. Used for user-defined category colors, which web stores as hex and
+    /// renders as a tinted chip (`{color}1a` fill, `color` text). Returns nil for
+    /// malformed input so callers can fall back to the neutral chip styling.
+    init?(hex: String) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard let value = UInt64(s, radix: 16) else { return nil }
+        let r, g, b, a: Double
+        switch s.count {
+        case 3: // RGB
+            r = Double((value >> 8) & 0xF) / 15
+            g = Double((value >> 4) & 0xF) / 15
+            b = Double(value & 0xF) / 15
+            a = 1
+        case 6: // RRGGBB
+            r = Double((value >> 16) & 0xFF) / 255
+            g = Double((value >> 8) & 0xFF) / 255
+            b = Double(value & 0xFF) / 255
+            a = 1
+        case 8: // RRGGBBAA
+            r = Double((value >> 24) & 0xFF) / 255
+            g = Double((value >> 16) & 0xFF) / 255
+            b = Double((value >> 8) & 0xFF) / 255
+            a = Double(value & 0xFF) / 255
+        default:
+            return nil
+        }
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: a)
+    }
 }

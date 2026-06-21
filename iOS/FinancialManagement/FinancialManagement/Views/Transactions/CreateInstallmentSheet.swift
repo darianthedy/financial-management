@@ -70,7 +70,7 @@ struct CreateInstallmentSheet: View {
                     }
                 }
                 if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.red) }
+                    Section { Text(errorMessage).foregroundStyle(Color.appDanger) }
                 }
             }
             .navigationTitle("Virtual Installment")
@@ -99,7 +99,7 @@ struct CreateInstallmentSheet: View {
             LabeledContent("Reserved", value: reserved.asCurrency(code: currencyCode))
             LabeledContent("Remaining to allocate") {
                 Text(remaining.asCurrency(code: currencyCode))
-                    .foregroundStyle(isBalanced ? Color.secondary : (remaining < 0 ? .red : .orange))
+                    .foregroundStyle(isBalanced ? Color.appMutedForeground : (remaining < 0 ? Color.appDanger : Color.appWarning))
             }
             if !selectedNames.isEmpty {
                 Button("Split evenly") { applyEvenSplit() }
@@ -129,17 +129,17 @@ struct CreateInstallmentSheet: View {
         Section("Budgets") {
             if availableNames.isEmpty {
                 Text("No budgets found. Create a budget first.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.appMutedForeground)
             } else {
                 ForEach(availableNames, id: \.self) { name in
                     Button {
                         toggle(name)
                     } label: {
                         HStack {
-                            Text(name).foregroundStyle(.primary)
+                            Text(name).foregroundStyle(Color.appForeground)
                             Spacer()
                             if selectedNames.contains(name) {
-                                Image(systemName: "checkmark").foregroundStyle(.tint)
+                                Image(systemName: "checkmark").foregroundStyle(Color.appPrimary)
                             }
                         }
                         .contentShape(Rectangle())
