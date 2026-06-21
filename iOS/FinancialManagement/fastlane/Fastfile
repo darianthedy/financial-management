@@ -69,6 +69,14 @@ platform :ios do
     # number; passing it via xcargs avoids editing tracked files.
     build_number = ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
 
+    # Supabase config. Config/Prod.xcconfig (which normally defines these) is
+    # git-ignored and absent on CI, so without this the Info.plist `$(SUPABASE_URL)`
+    # placeholders expand to empty strings and the app crashes on launch unwrapping
+    # them (AppConfig.swift). Pass them as build settings so Info.plist substitution
+    # gets the real values. ENV.fetch fails the build early if a secret is missing.
+    supabase_url = ENV.fetch("SUPABASE_URL")
+    supabase_anon_key = ENV.fetch("SUPABASE_ANON_KEY")
+
     build_app(
       project: XCODEPROJ,
       scheme: SCHEME,
@@ -80,7 +88,9 @@ platform :ios do
       },
       xcargs: [
         "-allowProvisioningUpdates",
-        "CURRENT_PROJECT_VERSION=#{build_number}"
+        "CURRENT_PROJECT_VERSION=#{build_number}",
+        "SUPABASE_URL=#{supabase_url.shellescape}",
+        "SUPABASE_ANON_KEY=#{supabase_anon_key.shellescape}"
       ].join(" "),
       output_directory: "build",
       output_name: "FinancialManagement.ipa"

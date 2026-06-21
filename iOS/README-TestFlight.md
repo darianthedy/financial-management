@@ -73,6 +73,12 @@ In **this** repo → Settings → Secrets and variables → **Actions** → New 
 | `MATCH_GIT_URL` | `https://github.com/darianthedy/ios-certificates.git` |
 | `MATCH_PASSWORD` | the passphrase you chose (step 3) |
 | `MATCH_GIT_BASIC_AUTHORIZATION` | base64 of `user:PAT` (step 3) |
+| `SUPABASE_URL` | your Supabase project URL, e.g. `https://xxxx.supabase.co` |
+| `SUPABASE_ANON_KEY` | your Supabase anon/public key |
+
+`SUPABASE_URL` / `SUPABASE_ANON_KEY` are baked into the build (the local
+`Config/Prod.xcconfig` that defines them is git-ignored, so CI must supply them).
+Without them the app builds but **crashes on launch** unwrapping an empty URL.
 
 ---
 

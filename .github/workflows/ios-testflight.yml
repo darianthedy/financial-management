@@ -11,6 +11,8 @@ name: iOS TestFlight
 #   MATCH_GIT_URL                 https URL of the PRIVATE certs repo for match
 #   MATCH_PASSWORD                passphrase used to encrypt the match repo
 #   MATCH_GIT_BASIC_AUTHORIZATION base64 of "user:GITHUB_PAT" (read/write to certs repo)
+#   SUPABASE_URL                  Supabase project URL (baked into the build)
+#   SUPABASE_ANON_KEY             Supabase anon/public key (baked into the build)
 # See iOS/README-TestFlight.md for how to create each one.
 
 on:
@@ -56,6 +58,8 @@ jobs:
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           BUILD_NUMBER: ${{ github.run_number }}
           # Set repo Variable MATCH_CREATE_CERTS=true for the FIRST run only, so
           # match creates + stores the signing cert/profile (setup_ci otherwise
