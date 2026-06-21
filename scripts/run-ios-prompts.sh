@@ -18,6 +18,13 @@
 #
 # Requires: claude CLI, gh (authed), git. macOS is NOT needed locally — the
 # build happens on the GitHub macOS runner.
+#
+# Unattended-friendly: each slice auto-cleans a stale branch first, and if a
+# session is aborted by the Claude usage limit the driver sleeps until the
+# 5-hour window resets, then retries that same prompt — so it survives a limit
+# mid-run without intervention. Keep the terminal alive (e.g. tmux/nohup) since
+# the wait can be hours. To resume manually after stopping, pass the prompt to
+# restart at: `scripts/run-ios-prompts.sh P05`.
 
 set -euo pipefail
 
@@ -34,18 +41,24 @@ START_AT="${1:-P01}"   # optional: resume, e.g. `scripts/run-ios-prompts.sh P05`
 # --- helpers ----------------------------------------------------------------
 log() { printf '\n\033[1;36m[%s] %s\033[0m\n' "$(date +%H:%M:%S)" "$*"; }
 die() { printf '\n\033[1;31mABORT: %s\033[0m\n' "$*" >&2; exit 1; }
+trap '[ -n "${RAW_LOG:-}" ] && rm -f "$RAW_LOG" 2>/dev/null' EXIT
 
 # Live-format Claude's stream-json events into readable lines, so a long session
 # isn't a silent black box: prints assistant text + each tool call as it happens.
 # No jq needed; falls back to raw passthrough if python3 is missing.
 read -r -d '' STREAM_FMT <<'PYEOF' || true
-import sys, json
+import sys, json, os
 def out(s):
     print(s); sys.stdout.flush()
+# Keep a raw copy of the stream so the driver can tell a usage-limit abort
+# (wait + retry) from a genuine failure (stop).
+_raw = open(os.environ["RAW_LOG"], "a", encoding="utf-8") if os.environ.get("RAW_LOG") else None
 for line in iter(sys.stdin.readline, ""):   # readline (not "for line in stdin") => no read-ahead buffering
     line = line.strip()
     if not line:
         continue
+    if _raw:
+        _raw.write(line + "\n"); _raw.flush()
     try:
         ev = json.loads(line)
     except Exception:
@@ -87,12 +100,64 @@ PYEOF
 # immediate EOF so it proceeds.
 run_claude() {
   local prompt="$1"
+  [ -n "${RAW_LOG:-}" ] && rm -f "$RAW_LOG"
+  RAW_LOG=$(mktemp)   # raw stream for usage-limit detection (see rate_limit_wake)
   if command -v python3 >/dev/null 2>&1; then
     claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null \
-      | python3 -u -c "$STREAM_FMT" || true
+      | RAW_LOG="$RAW_LOG" python3 -u -c "$STREAM_FMT" || true
   else
-    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null || true
+    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null \
+      | tee "$RAW_LOG" || true
   fi
+}
+
+# If the most recent session aborted because of the Claude usage limit, echo the
+# epoch second to wake at (the rate_limit_event's resetsAt + 60s buffer; falls
+# back to now + 5h). Echoes nothing if the abort wasn't a usage limit — so the
+# caller can tell "wait and retry" from "genuine failure, stop".
+rate_limit_wake() {
+  [ -f "${RAW_LOG:-}" ] || return 0
+  python3 - "$RAW_LOG" <<'PY'
+import sys, json, re, time
+limited = False; reset = 0
+pat = re.compile(r'usage limit|rate.?limit|limit reached|five.?hour|5-?hour|\b429\b', re.I)
+try:
+    for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            if pat.search(line):
+                limited = True
+            continue
+        t = ev.get("type")
+        if t == "rate_limit_event":
+            info = ev.get("rate_limit_info", {}) or {}
+            if str(info.get("status", "")).lower() not in ("", "allowed"):
+                limited = True
+            if info.get("resetsAt"):
+                reset = max(reset, int(info["resetsAt"]))
+        elif t == "result" and ev.get("is_error") and pat.search(json.dumps(ev)):
+            limited = True
+except FileNotFoundError:
+    pass
+if limited:
+    print(reset + 60 if reset else int(time.time()) + 5 * 3600 + 60)
+PY
+}
+
+# Delete a leftover branch (local + remote) and close any open PR for it, so a
+# resumed or retried slice can recreate it cleanly. No-op if nothing exists.
+cleanup_branch() {
+  local branch="$1" pr
+  git switch main >/dev/null 2>&1 || true
+  git branch -D "$branch" >/dev/null 2>&1 || true
+  git push origin --delete "$branch" >/dev/null 2>&1 || true
+  pr=$(gh pr list --head "$branch" --state open --json number -q '.[0].number' 2>/dev/null || true)
+  [ -n "$pr" ] && gh pr close "$pr" >/dev/null 2>&1 || true
+  return 0
 }
 
 # Implement a slice in a fresh session on a fresh branch off main, then merge.
@@ -102,23 +167,49 @@ run_claude() {
 # session output, so the run would look silent.)
 implement_and_merge() {
   local branch="$1" prompt="$2"
-  git switch main >/dev/null
-  git pull --ff-only origin main >/dev/null
-  git switch -c "$branch" >/dev/null
+  cleanup_branch "$branch"                                   # clear any stale branch/PR (resume/retry)
+  git switch main >/dev/null            || die "switch main failed"
+  git pull --ff-only origin main >/dev/null || die "pull main failed"
+  git switch -c "$branch" >/dev/null    || die "create $branch failed"
 
   run_claude "$prompt"
 
-  # Nothing committed => the session did no work; treat as failure.
+  # Nothing committed => session did no work. Distinguish a usage-limit abort
+  # (signal 75 so the caller waits + retries) from a genuine failure (stop).
   if git diff --quiet main HEAD; then
+    local wake; wake=$(rate_limit_wake)
+    if [ -n "$wake" ]; then
+      RESET_AT="$wake"
+      return 75
+    fi
     die "$branch produced no commits"
   fi
 
-  git push -u origin "$branch" >/dev/null
-  gh pr create --base main --head "$branch" --fill >/dev/null
-  gh pr merge "$branch" --merge --delete-branch >/dev/null
-  git switch main >/dev/null
-  git pull --ff-only origin main >/dev/null
+  git push -u origin "$branch" >/dev/null   || die "push $branch failed"
+  gh pr create --base main --head "$branch" --fill >/dev/null || die "pr create failed"
+  gh pr merge "$branch" --merge --delete-branch >/dev/null    || die "pr merge failed"
+  git switch main >/dev/null            || die "switch main failed"
+  git pull --ff-only origin main >/dev/null || die "pull main failed"
   MERGE_SHA=$(git rev-parse HEAD)   # hand back via global so stdout stays free to stream
+  return 0
+}
+
+# Run one slice, automatically waiting out usage limits. On a limit it sleeps
+# until the window resets, then retries the SAME prompt (branch is auto-cleaned).
+# Sets MERGE_SHA on success. Capped so a misdetected limit can't loop forever.
+slice() {
+  local branch="$1" prompt="$2" waits=0 rc now secs
+  while true; do
+    rc=0
+    implement_and_merge "$branch" "$prompt" || rc=$?
+    [ "$rc" = 0 ] && return 0
+    [ "$rc" = 75 ] || die "$branch failed (rc=$rc)"
+    waits=$((waits+1))
+    [ "$waits" -gt 6 ] && die "$branch: still usage-limited after 6 waits; stopping"
+    now=$(date +%s); secs=$(( RESET_AT - now )); [ "$secs" -lt 60 ] && secs=60
+    log "Usage limit reached. Sleeping ~$((secs/60)) min until $(date -d "@$RESET_AT" '+%a %H:%M'), then resuming $branch…"
+    sleep "$secs"
+  done
 }
 
 # Block until the TestFlight run for a given commit SHA finishes.
@@ -150,7 +241,7 @@ for P in "${PROMPTS[@]}"; do
 no more, no less. Verify table/column/view/RPC names against supabase/migrations/. \
 When finished, commit all changes with a clear message. Do not push or open a PR."
 
-  implement_and_merge "ios/$P" "$base_prompt"; sha="$MERGE_SHA"
+  slice "ios/$P" "$base_prompt"; sha="$MERGE_SHA"
 
   attempt=0
   until wait_for_testflight "$sha"; do
@@ -168,7 +259,7 @@ FinancialManagement) compile and sign. Commit; do not push.
 
 --- failing build log (tail) ---
 $fail_log"
-    implement_and_merge "ios/$P-fix$attempt" "$fix_prompt"; sha="$MERGE_SHA"
+    slice "ios/$P-fix$attempt" "$fix_prompt"; sha="$MERGE_SHA"
   done
 
   log "=== $P : TestFlight GREEN ✅ ==="
