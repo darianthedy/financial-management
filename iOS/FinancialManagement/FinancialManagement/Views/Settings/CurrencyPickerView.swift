@@ -1,6 +1,10 @@
 import SwiftUI
 
-struct CurrencyPicker: View {
+/// Searchable currency picker, backed by the `currencies` table (via
+/// `AppState.currencies`). The app is single-currency, so this picker lives
+/// **only** in Settings — there is no currency picker on any transaction,
+/// account, or budget form (iOS Tech Plan §3 note, §8.6).
+struct CurrencyPickerView: View {
     let label: String
     @Binding var selectedCode: String
     @Environment(AppState.self) private var appState
