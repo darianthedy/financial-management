@@ -7,25 +7,28 @@ struct AccountListView: View {
 
     var body: some View {
         List {
-            Section {
-                HStack {
-                    Text("Net Worth")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(viewModel.totalBalance.asCurrency(code: appState.defaultCurrency))
-                        .font(.title2.bold())
+            // web shows a small muted "Total: <amount>" subtitle under the
+            // "Accounts" heading, only when there are accounts.
+            if !viewModel.accounts.isEmpty {
+                Section {
+                    HStack {
+                        Text("Total")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.appMutedForeground)
+                        Spacer()
+                        Text(viewModel.totalBalance.asCurrency(code: appState.defaultCurrency))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.appForeground)
+                    }
                 }
             }
 
-            ForEach(AccountType.allCases, id: \.self) { type in
-                if let accounts = viewModel.groupedByType[type], !accounts.isEmpty {
-                    Section(type.displayName) {
-                        ForEach(accounts) { account in
-                            NavigationLink(value: account.id) {
-                                AccountCard(account: account, currentBalance: viewModel.balance(for: account.id))
-                            }
-                        }
+            // web renders a single flat list ordered by creation date — no
+            // per-type grouping. `accounts` already arrives in created_at order.
+            Section {
+                ForEach(viewModel.accounts) { account in
+                    NavigationLink(value: account.id) {
+                        AccountCard(account: account, currentBalance: viewModel.balance(for: account.id))
                     }
                 }
             }
@@ -51,10 +54,12 @@ struct AccountListView: View {
         .overlay {
             if viewModel.accounts.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
-                    title: "No Accounts",
-                    message: "Add your first account to start tracking.",
+                    title: "No accounts yet",
+                    message: "Add your first account to start tracking your finances.",
                     systemImage: "creditcard"
-                )
+                ) {
+                    Button("Add account") { showingAddSheet = true }
+                }
             }
         }
         .task {

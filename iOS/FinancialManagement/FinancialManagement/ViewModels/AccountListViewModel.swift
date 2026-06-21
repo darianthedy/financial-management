@@ -78,10 +78,6 @@ final class AccountListViewModel {
     var totalBalance: Int64 {
         accounts.reduce(0) { $0 + balance(for: $1.id) }
     }
-
-    var groupedByType: [AccountType: [Account]] {
-        Dictionary(grouping: accounts, by: \.type)
-    }
 }
 
 private struct CurrentBalanceRow: Codable {

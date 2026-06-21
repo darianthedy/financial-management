@@ -11,13 +11,19 @@ struct AccountAvatar: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(Color.secondary.opacity(0.12))
+            // web fills the circle with `--color-muted`.
+            Circle().fill(Color.appMuted)
 
             if let imageUrl, let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image.resizable().scaledToFill()
+                        // web uses `object-contain p-1`: fit the logo inside the
+                        // circle with a little padding (never crop).
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .padding(size * 0.1)
                     case .empty:
                         ProgressView()
                     case .failure:
@@ -37,6 +43,7 @@ struct AccountAvatar: View {
     private var fallbackIcon: some View {
         Image(systemName: accountType.defaultIcon)
             .font(.system(size: size * 0.5))
-            .foregroundStyle(.tint)
+            // web renders the fallback type icon in `--color-muted-foreground`.
+            .foregroundStyle(Color.appMutedForeground)
     }
 }
