@@ -1,6 +1,11 @@
 import Foundation
 import Supabase
 
+/// Reads the active recurring templates and the server-generated pending
+/// transactions, and confirms / dismisses pending rows. There is no
+/// `pending_transactions` table — pending = rows in `transactions` with
+/// `status = 'pending'`, generated server-side by the cron + Edge Function
+/// (System Design §4.5). The app only displays + acts on them. See §8.7.
 actor ScheduledTransactionRepository {
     private let client: SupabaseClient
 
@@ -8,6 +13,7 @@ actor ScheduledTransactionRepository {
         self.client = client
     }
 
+    /// Active scheduled transactions, soonest due first.
     func getAll() async throws -> [ScheduledTransaction] {
         try await client
             .from("scheduled_transactions")
@@ -18,6 +24,7 @@ actor ScheduledTransactionRepository {
             .value
     }
 
+    /// Pending transactions awaiting confirmation (`status = 'pending'`).
     func getPendingTransactions() async throws -> [Transaction] {
         try await client
             .from("transactions")
@@ -28,46 +35,8 @@ actor ScheduledTransactionRepository {
             .value
     }
 
-    func create(
-        accountId: UUID,
-        type: TransactionType,
-        amount: Int64,
-        currency: String,
-        description: String?,
-        recurrence: RecurrenceType,
-        nextDueDate: Date
-    ) async throws -> ScheduledTransaction {
-        let userId = try await client.auth.session.user.id
-
-        struct Insert: Encodable {
-            let user_id: UUID
-            let account_id: UUID
-            let type: TransactionType
-            let amount: Int64
-            let currency: String
-            let description: String?
-            let recurrence: RecurrenceType
-            let next_due_date: Date
-        }
-
-        return try await client
-            .from("scheduled_transactions")
-            .insert(Insert(
-                user_id: userId,
-                account_id: accountId,
-                type: type,
-                amount: amount,
-                currency: currency,
-                description: description,
-                recurrence: recurrence,
-                next_due_date: nextDueDate
-            ))
-            .select()
-            .single()
-            .execute()
-            .value
-    }
-
+    /// Promote a pending transaction to confirmed; the balance trigger then
+    /// applies it to the account (System Design §4.5).
     func confirmPending(id: UUID) async throws {
         try await client
             .from("transactions")
@@ -76,6 +45,7 @@ actor ScheduledTransactionRepository {
             .execute()
     }
 
+    /// Dismiss a pending transaction; it never affects the balance.
     func dismissPending(id: UUID) async throws {
         try await client
             .from("transactions")
