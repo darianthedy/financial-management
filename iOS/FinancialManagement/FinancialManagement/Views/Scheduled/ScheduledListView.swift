@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct ScheduledListView: View {
+    @Environment(AppState.self) private var appState
     @State private var viewModel = ScheduledTransactionViewModel()
+    @State private var editingPending: Transaction?
 
     var body: some View {
         List {
@@ -10,12 +12,9 @@ struct ScheduledListView: View {
                     ForEach(viewModel.pendingTransactions) { pending in
                         PendingTransactionRow(
                             pending: pending,
-                            onConfirm: {
-                                await viewModel.confirmPending(pending)
-                            },
-                            onDismiss: {
-                                await viewModel.dismissPending(pending)
-                            }
+                            onConfirm: { await viewModel.confirmPending(pending) },
+                            onEdit: { editingPending = pending },
+                            onDismiss: { await viewModel.dismissPending(pending) }
                         )
                     }
                 }
@@ -28,8 +27,10 @@ struct ScheduledListView: View {
                             Text(scheduled.description ?? scheduled.type.rawValue.capitalized)
                                 .font(.body)
                             Spacer()
-                            Text(scheduled.amount.asCurrency(code: scheduled.currency))
+                            Text(scheduled.amount.asCurrency(code: appState.defaultCurrency))
                                 .font(.body.monospacedDigit().bold())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
 
                         HStack {
@@ -54,7 +55,26 @@ struct ScheduledListView: View {
                 )
             }
         }
-        .task { await viewModel.load() }
+        .sheet(item: $editingPending) { txn in
+            NavigationStack {
+                TransactionFormView(
+                    editing: txn,
+                    currency: appState.defaultCurrency,
+                    decimalPlaces: appState.decimalPlaces
+                ) {
+                    await viewModel.load()
+                }
+            }
+        }
+        .task {
+            viewModel.currencyCode = appState.defaultCurrency
+            _ = await NotificationService.shared.requestPermission()
+            await viewModel.load()
+            await viewModel.subscribeToChanges()
+        }
+        .onDisappear {
+            Task { await viewModel.unsubscribe() }
+        }
         .refreshable { await viewModel.load() }
     }
 }

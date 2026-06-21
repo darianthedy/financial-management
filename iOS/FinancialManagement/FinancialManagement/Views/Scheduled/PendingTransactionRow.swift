@@ -4,6 +4,7 @@ struct PendingTransactionRow: View {
     @Environment(AppState.self) private var appState
     let pending: Transaction
     var onConfirm: () async -> Void
+    var onEdit: () -> Void
     var onDismiss: () async -> Void
 
     @State private var isProcessing = false
@@ -26,9 +27,11 @@ struct PendingTransactionRow: View {
 
                 Text(pending.amount.asCurrency(code: appState.defaultCurrency))
                     .font(.body.monospacedDigit().bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Button {
                     isProcessing = true
                     Task {
@@ -38,9 +41,20 @@ struct PendingTransactionRow: View {
                 } label: {
                     Label("Confirm", systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
+                        .lineLimit(1)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
+                .controlSize(.small)
+
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.bordered)
                 .controlSize(.small)
 
                 Button {
@@ -52,8 +66,10 @@ struct PendingTransactionRow: View {
                 } label: {
                     Label("Dismiss", systemImage: "xmark")
                         .frame(maxWidth: .infinity)
+                        .lineLimit(1)
                 }
                 .buttonStyle(.bordered)
+                .tint(.red)
                 .controlSize(.small)
             }
             .disabled(isProcessing)
