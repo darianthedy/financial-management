@@ -38,6 +38,60 @@ actor TransactionRepository {
             .value
     }
 
+    // MARK: - Filtered search over v_transactions (P05)
+
+    /// One windowed page of the filtered list, read from `v_transactions` so the
+    /// tag facet is an ordinary SQL predicate (System Design §4.9). Returns the
+    /// rows for `[offset, offset+limit)` plus the **exact total** matching the
+    /// filters (for the match-count label and pagination). A short-circuited
+    /// filter set (matches nothing) returns `([], 0)` without a round-trip.
+    func search(
+        filters: TransactionFilters,
+        offset: Int,
+        limit: Int
+    ) async throws -> (rows: [Transaction], total: Int) {
+        let base = client
+            .from("v_transactions")
+            .select("*", count: .exact)
+
+        guard let filtered = try await applyFilters(filters, to: base, client: client) else {
+            return ([], 0)
+        }
+
+        let response: PostgrestResponse<[Transaction]> = try await filtered
+            .order("date", ascending: false)
+            .order("created_at", ascending: false)
+            .range(from: offset, to: offset + limit - 1)
+            .execute()
+
+        return (response.value, response.count ?? response.value.count)
+    }
+
+    /// Every row matching `filters` (all pages), selecting only the money /
+    /// grouping columns the Summary needs. Used by `TransactionSummarySheet`.
+    func fetchAll(filters: TransactionFilters) async throws -> [VTransactionRow] {
+        let columns = "id,type,status,amount,account_id,transfer_account_id,category_id,budget_id,fixed_expense_id,tag_ids"
+        let pageSize = 1000
+        var all: [VTransactionRow] = []
+        var offset = 0
+
+        while true {
+            let base = client.from("v_transactions").select(columns)
+            guard let filtered = try await applyFilters(filters, to: base, client: client) else {
+                return []
+            }
+            let page: [VTransactionRow] = try await filtered
+                .order("date", ascending: false)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute()
+                .value
+            all.append(contentsOf: page)
+            if page.count < pageSize { break }
+            offset += pageSize
+        }
+        return all
+    }
+
     func create(
         accountId: UUID,
         type: TransactionType,

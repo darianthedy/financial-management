@@ -43,4 +43,15 @@ enum DateUtils {
         guard let date = yearMonthFormatter.date(from: yearMonth) else { return yearMonth }
         return displayFormatter.string(from: date)
     }
+
+    /// Inclusive first/last calendar day of a `YYYY-MM` month — used to turn the
+    /// MonthNavigator's month into a default date window for the filter pipeline.
+    static func monthDateRange(_ yearMonth: String) -> (start: Date, end: Date)? {
+        guard let start = yearMonthFormatter.date(from: yearMonth) else { return nil }
+        let calendar = Calendar.current
+        guard let next = calendar.date(byAdding: .month, value: 1, to: start),
+              let end = calendar.date(byAdding: .day, value: -1, to: next)
+        else { return nil }
+        return (start, end)
+    }
 }
