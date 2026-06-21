@@ -39,7 +39,7 @@ struct AccountFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Avatar") {
+                Section {
                     HStack(spacing: 16) {
                         avatarPreview
                         VStack(alignment: .leading, spacing: 8) {
@@ -58,10 +58,13 @@ struct AccountFormSheet: View {
                             }
                         }
                     }
+                } footer: {
+                    // Matches web's avatar helper copy.
+                    Text("PNG, JPG, or WebP. Resized to 256px.")
                 }
 
-                Section("Account Details") {
-                    TextField("Account Name", text: $name)
+                Section {
+                    TextField("Name", text: $name)
 
                     Picker("Type", selection: $type) {
                         ForEach(AccountType.allCases, id: \.self) { accountType in
@@ -72,11 +75,17 @@ struct AccountFormSheet: View {
                     CurrencyField(label: "Starting Balance", value: $startingBalance)
                 }
 
+                // web gives each checkbox its own helper text.
                 Section {
                     Toggle("Show on dashboard", isOn: $showOnDashboard)
+                } footer: {
+                    Text("When off, this account and its balance are hidden from the dashboard's Accounts card.")
+                }
+
+                Section {
                     Toggle("Set as default account", isOn: $setAsDefault)
                 } footer: {
-                    Text("The default account is pre-selected when adding a new transaction. Only one account can be the default.")
+                    Text("Pre-selected when you add a new transaction. Only one account can be the default.")
                 }
 
                 if let error = errorMessage {
