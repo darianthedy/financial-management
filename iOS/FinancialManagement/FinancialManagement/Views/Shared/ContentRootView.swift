@@ -3,24 +3,31 @@ import SwiftUI
 struct ContentRootView: View {
     var body: some View {
         TabView {
+            // Tab set / order / labels mirror web's nav-config.ts primary items
+            // (Dashboard, Accounts, Transactions, Budgets); SF Symbols are chosen
+            // to match each Lucide icon there.
             NavigationStack {
                 DashboardView()
             }
-            .tabItem { Label("Dashboard", systemImage: "chart.pie") }
+            // web LayoutDashboard (grid)
+            .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
 
             NavigationStack {
                 AccountListView()
             }
-            .tabItem { Label("Accounts", systemImage: "creditcard") }
+            // web Wallet
+            .tabItem { Label("Accounts", systemImage: "wallet.bifold") }
 
             NavigationStack {
                 TransactionListView()
             }
-            .tabItem { Label("Transactions", systemImage: "list.bullet") }
+            // web ArrowLeftRight
+            .tabItem { Label("Transactions", systemImage: "arrow.left.arrow.right") }
 
             NavigationStack {
                 BudgetListView()
             }
+            // web PiggyBank (no SF piggy-bank symbol; target reads as a budget goal)
             .tabItem { Label("Budgets", systemImage: "target") }
 
             NavigationStack {
