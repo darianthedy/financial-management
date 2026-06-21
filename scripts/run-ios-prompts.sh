@@ -21,10 +21,11 @@
 #
 # Unattended-friendly: each slice auto-cleans a stale branch first, and if a
 # session is aborted by the Claude usage limit the driver sleeps until the
-# 5-hour window resets, then retries that same prompt — so it survives a limit
-# mid-run without intervention. Keep the terminal alive (e.g. tmux/nohup) since
-# the wait can be hours. To resume manually after stopping, pass the prompt to
-# restart at: `scripts/run-ios-prompts.sh P05`.
+# 5-hour window resets, then RESUMES that same Claude session (--resume) so it
+# continues where it left off — its context and the files already written on the
+# branch are preserved, not redone. Keep the terminal alive (e.g. tmux/nohup)
+# since the wait can be hours. To resume manually after fully stopping, pass the
+# prompt to restart at: `scripts/run-ios-prompts.sh P05`.
 
 set -euo pipefail
 
@@ -105,15 +106,21 @@ PYEOF
 # stdin) that wait never ends and the session hangs silently. /dev/null gives an
 # immediate EOF so it proceeds.
 run_claude() {
-  local prompt="$1"
+  local prompt="$1" mode="${2:-fresh}"
   [ -n "${RAW_LOG:-}" ] && rm -f "$RAW_LOG"
   RAW_LOG=$(mktemp)   # raw stream for usage-limit detection (see rate_limit_wake)
-  if command -v python3 >/dev/null 2>&1; then
-    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null \
-      | RAW_LOG="$RAW_LOG" python3 -u -c "$STREAM_FMT" || true
+  local -a cmd=(claude)
+  if [ "$mode" = resume ]; then
+    cmd+=(--resume "$SESSION_ID")     # continue the interrupted session WITH its context + work so far
   else
-    claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null \
-      | tee "$RAW_LOG" || true
+    SESSION_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid;print(uuid.uuid4())')
+    cmd+=(--session-id "$SESSION_ID") # assign a known id up front so we can resume it after a limit
+  fi
+  cmd+=(-p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose)
+  if command -v python3 >/dev/null 2>&1; then
+    "${cmd[@]}" < /dev/null | RAW_LOG="$RAW_LOG" python3 -u -c "$STREAM_FMT" || true
+  else
+    "${cmd[@]}" < /dev/null | tee "$RAW_LOG" || true
   fi
   read_usage "$RAW_LOG"   # keep the freshest usage signal for the next pre-flight
 }
@@ -127,27 +134,27 @@ rate_limit_wake() {
   python3 - "$RAW_LOG" <<'PY'
 import sys, json, re, time
 limited = False; reset = 0
-pat = re.compile(r'usage limit|rate.?limit|limit reached|five.?hour|5-?hour|\b429\b', re.I)
+# Anchored to the CLI's actual limit phrasing ("you've hit your session/usage
+# limit", "… limit · resets …", "usage limit reached", a 429) so app code that
+# merely mentions "limit" won't false-trigger.
+pat = re.compile(r"hit your (?:session|usage) limit|(?:session|usage) limit\b.{0,40}reset|usage limit reached|rate.?limit reached|\b429\b", re.I)
 try:
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         line = line.strip()
         if not line:
             continue
+        if pat.search(line):           # matches the limit message wherever it appears (assistant text/result)
+            limited = True
         try:
             ev = json.loads(line)
         except Exception:
-            if pat.search(line):
-                limited = True
             continue
-        t = ev.get("type")
-        if t == "rate_limit_event":
+        if ev.get("type") == "rate_limit_event":
             info = ev.get("rate_limit_info", {}) or {}
             if str(info.get("status", "")).lower() not in ("", "allowed"):
                 limited = True
             if info.get("resetsAt"):
                 reset = max(reset, int(info["resetsAt"]))
-        elif t == "result" and ev.get("is_error") and pat.search(json.dumps(ev)):
-            limited = True
 except FileNotFoundError:
     pass
 if limited:
@@ -175,13 +182,16 @@ read_usage() {
   USAGE_STATUS="none"; USAGE_RESET=0
   [ -f "$f" ] || return 0
   read -r USAGE_STATUS USAGE_RESET < <(python3 - "$f" <<'PY'
-import sys, json
-status = ""; reset = 0
+import sys, json, re
+status = ""; reset = 0; limited = False
+pat = re.compile(r"hit your (?:session|usage) limit|(?:session|usage) limit\b.{0,40}reset|usage limit reached|rate.?limit reached|\b429\b", re.I)
 try:
     for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         line = line.strip()
         if not line:
             continue
+        if pat.search(line):
+            limited = True
         try:
             ev = json.loads(line)
         except Exception:
@@ -194,6 +204,9 @@ try:
                 reset = int(info["resetsAt"])
 except FileNotFoundError:
     pass
+# A limit message anywhere => treat as a limit tier so pre-flight waits.
+if limited and status in ("", "none", "allowed"):
+    status = "rejected"
 print(status or "none", reset)
 PY
 )
@@ -229,24 +242,27 @@ preflight_wait() {
 # command substitution here would capture stdout and swallow all of the live
 # session output, so the run would look silent.)
 implement_and_merge() {
-  local branch="$1" prompt="$2"
+  local branch="$1" prompt="$2" waits=0 wake now secs
   cleanup_branch "$branch"                                   # clear any stale branch/PR (resume/retry)
   git switch main >/dev/null            || die "switch main failed"
   git pull --ff-only origin main >/dev/null || die "pull main failed"
   git switch -c "$branch" >/dev/null    || die "create $branch failed"
 
-  run_claude "$prompt"
+  run_claude "$prompt" fresh
 
-  # Nothing committed => session did no work. Distinguish a usage-limit abort
-  # (signal 75 so the caller waits + retries) from a genuine failure (stop).
-  if git diff --quiet main HEAD; then
-    local wake; wake=$(rate_limit_wake)
-    if [ -n "$wake" ]; then
-      RESET_AT="$wake"
-      return 75
-    fi
-    die "$branch produced no commits"
-  fi
+  # No commit => the session didn't finish. If it was a usage-limit abort, wait
+  # for the reset and RESUME the same session — its context and the files it
+  # already wrote on this branch are preserved, so it continues instead of
+  # starting over. Anything else is a genuine failure.
+  while git diff --quiet main HEAD; do
+    wake=$(rate_limit_wake)
+    [ -n "$wake" ] || die "$branch produced no commits"
+    waits=$((waits+1)); [ "$waits" -gt 6 ] && die "$branch: still usage-limited after 6 resumes"
+    now=$(date +%s); secs=$(( wake - now )); [ "$secs" -lt 60 ] && secs=60
+    log "Usage limit mid-session. Sleeping ~$((secs/60)) min until $(date -d "@$wake" '+%a %H:%M'), then RESUMING session ${SESSION_ID:0:8} (keeping work so far)…"
+    sleep "$secs"
+    run_claude "You were interrupted by a usage limit partway through this task. Continue exactly where you left off — do NOT start over — finish implementing the slice, then commit all changes." resume
+  done
 
   git push -u origin "$branch" >/dev/null   || die "push $branch failed"
   gh pr create --base main --head "$branch" --fill >/dev/null || die "pr create failed"
@@ -257,23 +273,12 @@ implement_and_merge() {
   return 0
 }
 
-# Run one slice, automatically waiting out usage limits. On a limit it sleeps
-# until the window resets, then retries the SAME prompt (branch is auto-cleaned).
-# Sets MERGE_SHA on success. Capped so a misdetected limit can't loop forever.
+# Run one slice. Pre-flight-gates on usage, then implements + merges. A
+# usage-limit hit mid-session is waited out and the session is RESUMED inside
+# implement_and_merge (work preserved). Sets MERGE_SHA on success.
 slice() {
-  local branch="$1" prompt="$2" waits=0 rc now secs
   preflight_wait                 # don't even start if usage is already at the limit tier
-  while true; do
-    rc=0
-    implement_and_merge "$branch" "$prompt" || rc=$?
-    [ "$rc" = 0 ] && return 0
-    [ "$rc" = 75 ] || die "$branch failed (rc=$rc)"
-    waits=$((waits+1))
-    [ "$waits" -gt 6 ] && die "$branch: still usage-limited after 6 waits; stopping"
-    now=$(date +%s); secs=$(( RESET_AT - now )); [ "$secs" -lt 60 ] && secs=60
-    log "Usage limit reached. Sleeping ~$((secs/60)) min until $(date -d "@$RESET_AT" '+%a %H:%M'), then resuming $branch…"
-    sleep "$secs"
-  done
+  implement_and_merge "$1" "$2"  # handles mid-session usage-limit waits + resume internally
 }
 
 # Block until the TestFlight run for a given commit SHA finishes.
