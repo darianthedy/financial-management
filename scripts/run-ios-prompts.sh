@@ -37,6 +37,12 @@ MAX_FIX_ATTEMPTS=3
 # is the practical choice. Drop to --permission-mode acceptEdits to babysit.
 CLAUDE_FLAGS=(--dangerously-skip-permissions)
 START_AT="${1:-P01}"   # optional: resume, e.g. `scripts/run-ios-prompts.sh P05`
+# Before each slice, probe the Claude usage tier; if it isn't "allowed" (i.e.
+# already at/near the limit) wait for the 5-hour reset instead of starting — so
+# we don't burn a slice that would abort partway. Set 0 to disable.
+# NOTE: the headless CLI exposes only a status tier + resetsAt, not a numeric %,
+# so this fires on Claude's own near/at-limit signal, not a settable 90% line.
+PREFLIGHT_USAGE_GATE="${PREFLIGHT_USAGE_GATE:-1}"
 
 # --- helpers ----------------------------------------------------------------
 log() { printf '\n\033[1;36m[%s] %s\033[0m\n' "$(date +%H:%M:%S)" "$*"; }
@@ -109,6 +115,7 @@ run_claude() {
     claude -p "$prompt" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null \
       | tee "$RAW_LOG" || true
   fi
+  read_usage "$RAW_LOG"   # keep the freshest usage signal for the next pre-flight
 }
 
 # If the most recent session aborted because of the Claude usage limit, echo the
@@ -160,6 +167,62 @@ cleanup_branch() {
   return 0
 }
 
+# Parse a raw stream log into the usage globals: USAGE_STATUS (the last
+# rate_limit_event's status, or "none" if absent) and USAGE_RESET (its resetsAt
+# epoch, or 0). Lets the driver gate on the freshest signal it has.
+read_usage() {
+  local f="$1"
+  USAGE_STATUS="none"; USAGE_RESET=0
+  [ -f "$f" ] || return 0
+  read -r USAGE_STATUS USAGE_RESET < <(python3 - "$f" <<'PY'
+import sys, json
+status = ""; reset = 0
+try:
+    for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        if ev.get("type") == "rate_limit_event":
+            info = ev.get("rate_limit_info", {}) or {}
+            if info.get("status"):
+                status = str(info["status"])
+            if info.get("resetsAt"):
+                reset = int(info["resetsAt"])
+except FileNotFoundError:
+    pass
+print(status or "none", reset)
+PY
+)
+  : "${USAGE_STATUS:=none}" "${USAGE_RESET:=0}"
+}
+
+# Probe current usage with a minimal session, into the usage globals.
+probe_usage() {
+  local f; f=$(mktemp)
+  claude -p "ok" "${CLAUDE_FLAGS[@]}" --output-format stream-json --verbose < /dev/null >"$f" 2>/dev/null || true
+  read_usage "$f"; rm -f "$f"
+}
+
+# Before starting a slice: if usage is already at a limit tier (status not
+# "allowed"/"none"), sleep until the reset rather than starting work. Re-probes
+# after each wait. Capped so an odd status can't loop forever.
+preflight_wait() {
+  [ "$PREFLIGHT_USAGE_GATE" = 1 ] || return 0
+  local waits=0 now secs
+  [ -n "${USAGE_STATUS:-}" ] || probe_usage      # first slice: no prior signal yet
+  while [ "${USAGE_STATUS:-none}" != "allowed" ] && [ "${USAGE_STATUS:-none}" != "none" ]; do
+    waits=$((waits+1)); [ "$waits" -gt 6 ] && die "usage still limited ('$USAGE_STATUS') after 6 pre-flight waits"
+    now=$(date +%s); secs=$(( USAGE_RESET - now )); [ "$secs" -lt 60 ] && secs=60
+    log "Pre-flight: usage tier '$USAGE_STATUS' (at/near limit) — not starting; sleeping ~$((secs/60)) min until $(date -d "@$USAGE_RESET" '+%a %H:%M') reset…"
+    sleep "$secs"
+    probe_usage
+  done
+}
+
 # Implement a slice in a fresh session on a fresh branch off main, then merge.
 # $1 = branch name   $2 = full prompt text for claude
 # Returns the merge SHA in the global MERGE_SHA — NOT on stdout. (Using
@@ -199,6 +262,7 @@ implement_and_merge() {
 # Sets MERGE_SHA on success. Capped so a misdetected limit can't loop forever.
 slice() {
   local branch="$1" prompt="$2" waits=0 rc now secs
+  preflight_wait                 # don't even start if usage is already at the limit tier
   while true; do
     rc=0
     implement_and_merge "$branch" "$prompt" || rc=$?
