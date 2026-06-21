@@ -94,7 +94,8 @@ private struct CreateBudgetSheet: View {
                     CurrencyField(label: "Monthly amount", value: $amount)
                 }
                 if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.red) }
+                    // Error text uses the danger token, matching web's FieldError.
+                    Section { Text(errorMessage).foregroundStyle(Color.appDanger) }
                 }
             }
             .navigationTitle("New Budget")

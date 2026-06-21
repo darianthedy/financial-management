@@ -63,7 +63,7 @@ struct CurrencyPickerList: View {
 
                     if currency.code == selectedCode {
                         Image(systemName: "checkmark")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Color.appPrimary)
                     }
                 }
             }

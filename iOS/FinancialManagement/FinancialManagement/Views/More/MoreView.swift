@@ -2,18 +2,24 @@ import SwiftUI
 
 struct MoreView: View {
     var body: some View {
+        // Secondary destinations mirror web's nav-config.ts non-primary items.
+        // Categories and Tags also live there, but their management screens are
+        // not yet implemented on iOS (only the form pickers exist), so they are
+        // intentionally omitted here until those screens land.
         List {
             Section("Management") {
                 NavigationLink {
                     FixedExpenseListView()
                 } label: {
-                    Label("Fixed Expenses", systemImage: "calendar.badge.clock")
+                    // web Receipt
+                    Label("Fixed Expenses", systemImage: "receipt")
                 }
 
                 NavigationLink {
                     ScheduledListView()
                 } label: {
-                    Label("Scheduled Transactions", systemImage: "clock.arrow.2.circlepath")
+                    // web CalendarClock; label matches nav-config ("Scheduled")
+                    Label("Scheduled", systemImage: "calendar.badge.clock")
                 }
             }
 
