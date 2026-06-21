@@ -45,8 +45,9 @@ final class TransactionListViewModel {
     /// Bumped on every state change so in-flight loads from a stale state bail.
     private var loadGeneration = 0
 
-    init(scopedAccountId: UUID? = nil) {
+    init(scopedAccountId: UUID? = nil, initialFilters: TransactionFilters? = nil) {
         self.scopedAccountId = scopedAccountId
+        if let initialFilters { self.filters = initialFilters }
     }
 
     var canLoadMore: Bool { transactions.count < totalCount }

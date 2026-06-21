@@ -1,40 +1,50 @@
 import SwiftUI
 
+/// Dashboard summary of the month's budgets, read from `v_budget_progress`:
+/// each row shows net spent vs. effective amount (periodic + carry-in) with a
+/// carry-over note when present.
 struct BudgetProgressCard: View {
-    let periods: [BudgetPeriod]
+    let progress: [BudgetProgress]
+    let currencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Budget Progress")
                 .font(.headline)
 
-            ForEach(periods) { period in
+            ForEach(progress) { item in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Budget")
+                        Text(item.budgetName)
                             .font(.subheadline)
                         Spacer()
-                        Text(period.effectiveAmount.asCurrency(code: period.currency))
+                        Text("\(item.spent.asCurrency(code: currencyCode)) / \(item.effectiveAmount.asCurrency(code: currencyCode))")
                             .font(.subheadline.bold())
                     }
 
-                    if period.carryOverAmount != 0 {
-                        Text("Includes \(period.carryOverAmount.asCurrency(code: period.currency)) carry-over")
+                    if item.carryOverAmount != 0 {
+                        let positive = item.carryOverAmount > 0
+                        Text("\(positive ? "+" : "")\(item.carryOverAmount.asCurrency(code: currencyCode)) \(positive ? "carried over" : "overspent")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
-                            .background(.blue.opacity(0.1))
+                            .background((positive ? Color.green : Color.red).opacity(0.1))
                             .clipShape(Capsule())
                     }
 
-                    ProgressView(value: 0.5)
-                        .tint(.blue)
+                    ProgressView(value: fraction(item))
+                        .tint(item.remaining < 0 ? .red : .blue)
                 }
             }
         }
         .padding()
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func fraction(_ item: BudgetProgress) -> Double {
+        guard item.effectiveAmount > 0 else { return item.spent > 0 ? 1 : 0 }
+        return min(max(Double(item.spent) / Double(item.effectiveAmount), 0), 1)
     }
 }

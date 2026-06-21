@@ -9,8 +9,11 @@ struct TransactionListView: View {
     @State private var showingSummary = false
     @State private var searchText = ""
 
-    init(scopedAccountId: UUID? = nil) {
-        _viewModel = State(initialValue: TransactionListViewModel(scopedAccountId: scopedAccountId))
+    init(scopedAccountId: UUID? = nil, initialFilters: TransactionFilters? = nil) {
+        _viewModel = State(initialValue: TransactionListViewModel(
+            scopedAccountId: scopedAccountId, initialFilters: initialFilters
+        ))
+        _searchText = State(initialValue: initialFilters?.search ?? "")
     }
 
     private var isScoped: Bool { viewModel.scopedAccountId != nil }

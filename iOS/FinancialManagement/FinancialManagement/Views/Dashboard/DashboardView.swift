@@ -25,8 +25,11 @@ struct DashboardView: View {
                             currencyCode: appState.defaultCurrency
                         )
 
-                        if !viewModel.budgetPeriods.isEmpty {
-                            BudgetProgressCard(periods: viewModel.budgetPeriods)
+                        if !viewModel.budgetProgress.isEmpty {
+                            BudgetProgressCard(
+                                progress: viewModel.budgetProgress,
+                                currencyCode: appState.defaultCurrency
+                            )
                         }
 
                         if !summary.spendingByCategory.isEmpty {
