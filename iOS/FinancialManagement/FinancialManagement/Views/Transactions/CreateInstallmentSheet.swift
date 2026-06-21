@@ -182,12 +182,9 @@ struct CreateInstallmentSheet: View {
     private func applyEvenSplit() {
         let cells = cells
         guard !cells.isEmpty else { grid = [:]; return }
-        let count = Int64(cells.count)
-        let per = total / count
-        let remainder = total - per * count
+        let amounts = EvenSplit.distribute(total: total, count: cells.count)
         var next: [Cell: String] = [:]
-        for (index, cell) in cells.enumerated() {
-            let amount = per + (index == 0 ? remainder : 0)
+        for (cell, amount) in zip(cells, amounts) {
             next[cell] = displayString(amount)
         }
         grid = next
