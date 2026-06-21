@@ -1,45 +1,40 @@
 import Foundation
 import Observation
-import SwiftUI
 import Supabase
+import SwiftUI
 
+/// Drives the month-scoped dashboard. Loads all four widgets in parallel per
+/// `year_month` and refreshes live on changes to `transactions`, `budgets`,
+/// `fixed_expenses`, `accounts`, and `account_monthly_balances` — any of which
+/// can re-flow the displayed numbers (carry-over and balances are computed in
+/// SQL). See iOS Tech Plan §8.1 and System Design §4.6.
 @Observable
 @MainActor
 final class DashboardViewModel {
     var yearMonth = DateUtils.currentYearMonth()
-    var summary: DashboardSummary?
-    var budgetProgress: [BudgetProgress] = []
+    var data: DashboardData?
     var isLoading = false
     var errorMessage: String?
     var navigationDirection: Edge = .trailing
 
-    private let dashboardRepo = DashboardRepository()
-    private let budgetRepo = BudgetRepository()
-
-    private var summaryCache: [String: DashboardSummary] = [:]
-    private var progressCache: [String: [BudgetProgress]] = [:]
+    private let repository = DashboardRepository()
+    private let supabase = SupabaseService.shared.client
+    private var realtimeChannel: RealtimeChannelV2?
+    private var cache: [String: DashboardData] = [:]
 
     func load() async {
         let month = yearMonth
 
-        if summaryCache[month] == nil {
+        if cache[month] == nil {
             isLoading = true
         }
         defer { if yearMonth == month { isLoading = false } }
 
         do {
-            async let summaryResult = dashboardRepo.getSummary(yearMonth: month)
-            async let progressResult = budgetRepo.progress(yearMonth: month)
-
-            let fetchedSummary = try await summaryResult
-            let fetchedProgress = try await progressResult
-
-            summaryCache[month] = fetchedSummary
-            progressCache[month] = fetchedProgress
-
+            let fetched = try await repository.load(yearMonth: month)
+            cache[month] = fetched
             guard yearMonth == month else { return }
-            summary = fetchedSummary
-            budgetProgress = fetchedProgress
+            data = fetched
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -51,31 +46,56 @@ final class DashboardViewModel {
         navigationDirection = offset > 0 ? .trailing : .leading
         let newMonth = DateUtils.navigate(yearMonth, by: offset)
 
-        let cachedSummary = summaryCache[newMonth]
-        let cachedProgress = progressCache[newMonth] ?? []
-        let hasCache = cachedSummary != nil
-
+        let cached = cache[newMonth]
         withAnimation(.easeInOut(duration: 0.3)) {
             yearMonth = newMonth
-            summary = cachedSummary
-            budgetProgress = cachedProgress
-            isLoading = !hasCache
+            data = cached
+            isLoading = cached == nil
         }
 
         Task { await load() }
     }
 
+    func subscribeToChanges() async {
+        let channel = supabase.realtimeV2.channel("dashboard-realtime")
+
+        // Any of these can change a widget: transactions feed spend/balances,
+        // budgets/fixed_expenses define the plan, accounts/balances drive the
+        // Accounts card.
+        let tables = ["transactions", "budgets", "fixed_expenses", "accounts", "account_monthly_balances"]
+        let streams = tables.map {
+            channel.postgresChange(AnyAction.self, schema: "public", table: $0)
+        }
+
+        await channel.subscribe()
+
+        for stream in streams {
+            Task {
+                for await _ in stream { invalidateAndReload() }
+            }
+        }
+
+        realtimeChannel = channel
+    }
+
+    func unsubscribe() async {
+        if let channel = realtimeChannel {
+            await supabase.realtimeV2.removeChannel(channel)
+        }
+    }
+
+    /// Carry-over and balances are live, so any write can re-flow every month —
+    /// drop the whole cache and reload the visible month.
+    private func invalidateAndReload() {
+        cache.removeAll()
+        Task { await load() }
+    }
+
     private func prefetchAdjacentMonths() async {
         let months = [-1, 1].map { DateUtils.navigate(yearMonth, by: $0) }
-
-        for month in months where summaryCache[month] == nil {
-            do {
-                async let s = dashboardRepo.getSummary(yearMonth: month)
-                async let p = budgetRepo.progress(yearMonth: month)
-                summaryCache[month] = try await s
-                progressCache[month] = try await p
-            } catch {
-                // Non-fatal: prefetch failure is silent
+        for month in months where cache[month] == nil {
+            if let fetched = try? await repository.load(yearMonth: month) {
+                cache[month] = fetched
             }
         }
     }
