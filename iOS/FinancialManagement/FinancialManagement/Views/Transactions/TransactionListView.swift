@@ -5,6 +5,7 @@ struct TransactionListView: View {
     @State private var viewModel: TransactionListViewModel
     @State private var showingForm = false
     @State private var editingTransaction: Transaction?
+    @State private var installmentSource: Transaction?
     @State private var showingFilters = false
     @State private var showingSummary = false
     @State private var searchText = ""
@@ -69,6 +70,11 @@ struct TransactionListView: View {
                 ) {
                     await viewModel.load()
                 }
+            }
+        }
+        .sheet(item: $installmentSource) { source in
+            CreateInstallmentSheet(source: source) {
+                await viewModel.load()
             }
         }
         .sheet(isPresented: $showingFilters) {
@@ -197,7 +203,12 @@ struct TransactionListView: View {
     private var transactionList: some View {
         List {
             ForEach(viewModel.transactions) { txn in
-                TransactionRow(transaction: txn, account: viewModel.account(for: txn))
+                TransactionRow(
+                    transaction: txn,
+                    account: viewModel.account(for: txn),
+                    isSpread: viewModel.isSpread(txn),
+                    onCreateInstallment: { installmentSource = txn }
+                )
                     .contentShape(Rectangle())
                     .onTapGesture { editingTransaction = txn }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {

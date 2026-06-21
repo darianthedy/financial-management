@@ -27,6 +27,9 @@ final class TransactionListViewModel {
     var accountsById: [UUID: Account] = [:]
     var categoriesById: [UUID: Category] = [:]
     var tagsById: [UUID: Tag] = [:]
+    /// Source-expense ids that are already spread across budgets (P1) — drives the
+    /// row's grid indicator and gates the "Create virtual installment" action.
+    var spreadTransactionIds: Set<UUID> = []
 
     var yearMonth = DateUtils.currentYearMonth()
     var filters = TransactionFilters()
@@ -42,6 +45,7 @@ final class TransactionListViewModel {
     let scopedAccountId: UUID?
 
     private let repository = TransactionRepository()
+    private let installmentRepository = InstallmentRepository()
     /// Bumped on every state change so in-flight loads from a stale state bail.
     private var loadGeneration = 0
 
@@ -87,6 +91,7 @@ final class TransactionListViewModel {
             guard gen == loadGeneration else { return }
             transactions = result.rows
             totalCount = result.total
+            await refreshSpreadFlags(generation: gen)
         } catch {
             guard gen == loadGeneration else { return }
             errorMessage = error.localizedDescription
@@ -106,6 +111,7 @@ final class TransactionListViewModel {
             guard gen == loadGeneration else { return }
             transactions.append(contentsOf: result.rows)
             totalCount = result.total
+            await refreshSpreadFlags(generation: gen)
         } catch {
             guard gen == loadGeneration else { return }
             errorMessage = error.localizedDescription
@@ -191,6 +197,26 @@ final class TransactionListViewModel {
 
     func account(for transaction: Transaction) -> Account? {
         accountsById[transaction.accountId]
+    }
+
+    // MARK: - Virtual installments (P1)
+
+    func isSpread(_ transaction: Transaction) -> Bool {
+        spreadTransactionIds.contains(transaction.id)
+    }
+
+    /// One batched lookup over the currently loaded expense rows to flag those
+    /// already spread across budgets.
+    private func refreshSpreadFlags(generation gen: Int) async {
+        let ids = transactions.filter { $0.type == .expense }.map(\.id)
+        guard !ids.isEmpty else {
+            if gen == loadGeneration { spreadTransactionIds = [] }
+            return
+        }
+        if let flagged = try? await installmentRepository.spreadTransactionIds(among: ids),
+           gen == loadGeneration {
+            spreadTransactionIds = flagged
+        }
     }
 
     // MARK: - Lookups (hydrate chips / summary / rows)

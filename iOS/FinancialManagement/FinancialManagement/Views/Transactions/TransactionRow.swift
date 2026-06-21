@@ -6,6 +6,18 @@ struct TransactionRow: View {
     /// The transaction's source account, used for the avatar (§ row reuses the
     /// linked account image). Falls back to a type glyph when unavailable.
     var account: Account?
+    /// True when this expense has been spread across budgets (P1 installments) —
+    /// flagged by the list's batched `source_transaction_id` lookup. Drives the
+    /// grid indicator and hides the "Create virtual installment" action.
+    var isSpread = false
+    /// Starts the spread flow. Offered only for un-spread expenses (income /
+    /// transfer never show it; a second spread is rejected by the RPC).
+    var onCreateInstallment: (() -> Void)?
+
+    /// Eligible only for an expense that is not already spread.
+    private var canCreateInstallment: Bool {
+        transaction.type == .expense && !isSpread && onCreateInstallment != nil
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -20,9 +32,17 @@ struct TransactionRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(transaction.description ?? transaction.type.rawValue.capitalized)
-                    .font(.body)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(transaction.description ?? transaction.type.rawValue.capitalized)
+                        .font(.body)
+                        .lineLimit(1)
+                    if isSpread {
+                        Image(systemName: "square.grid.3x3.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Spread across budgets")
+                    }
+                }
                 HStack(spacing: 6) {
                     Text(transaction.transactionDate, style: .date)
                     if transaction.status == .pending {
@@ -47,6 +67,15 @@ struct TransactionRow: View {
                 .opacity(transaction.status == .dismissed ? 0.4 : 1)
         }
         .padding(.vertical, 2)
+        .contextMenu {
+            if canCreateInstallment {
+                Button {
+                    onCreateInstallment?()
+                } label: {
+                    Label("Create virtual installment", systemImage: "square.grid.3x3")
+                }
+            }
+        }
     }
 
     private var typeBadge: some View {

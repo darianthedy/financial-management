@@ -5,6 +5,7 @@ struct BudgetListView: View {
     @State private var viewModel = BudgetListViewModel()
     @State private var formMode: BudgetFormSheet.Mode?
     @State private var drilldown: BudgetDrilldown?
+    @State private var installmentSource: Transaction?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,6 +39,13 @@ struct BudgetListView: View {
                             .tint(.blue)
                         }
                 }
+
+                ActiveInstallmentsSection(
+                    installments: viewModel.activeInstallments,
+                    currencyCode: appState.defaultCurrency,
+                    onSelect: { installmentSource = $0 },
+                    onCancel: { item in Task { await viewModel.cancelInstallment(item) } }
+                )
             }
             .listStyle(.plain)
             .overlay {
@@ -75,6 +83,17 @@ struct BudgetListView: View {
         }
         .sheet(item: $formMode) { mode in
             BudgetFormSheet(mode: mode, viewModel: viewModel)
+        }
+        .sheet(item: $installmentSource) { source in
+            NavigationStack {
+                TransactionFormView(
+                    editing: source,
+                    currency: appState.defaultCurrency,
+                    decimalPlaces: appState.decimalPlaces
+                ) {
+                    await viewModel.load()
+                }
+            }
         }
         .navigationDestination(item: $drilldown) { link in
             TransactionListView(initialFilters: link.filters)

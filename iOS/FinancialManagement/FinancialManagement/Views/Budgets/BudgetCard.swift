@@ -3,7 +3,7 @@ import SwiftUI
 /// One budget for the selected month, read entirely from `v_budget_progress`:
 /// net spent vs. effective amount (periodic + carry-in), a carry-in badge, an
 /// info popover for the carry-in detail and note, and danger styling when
-/// overspent. The "Reserved" line is a placeholder for installments (P11).
+/// overspent. A "Reserved $X" line shows virtual-installment reservations (P1).
 struct BudgetCard: View {
     let progress: BudgetProgress
     let currencyCode: String
@@ -51,8 +51,23 @@ struct BudgetCard: View {
                 }
             }
 
-            // P11 placeholder: installment "Reserved" line lands here once
-            // budget_installment_allocations feed `reserved` into the card.
+            // Virtual-installment reservations (P1): budget-side only, already
+            // netted into `remaining` by v_budget_progress. A negative remaining
+            // here is the intended "spend nothing more" signal (handled above).
+            if progress.reserved > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                    Text("Reserved")
+                        .font(.caption)
+                    Spacer()
+                    Text(progress.reserved.asCurrency(code: currencyCode))
+                        .font(.caption)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }
