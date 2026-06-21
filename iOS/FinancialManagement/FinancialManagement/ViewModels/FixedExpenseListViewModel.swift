@@ -58,13 +58,27 @@ final class FixedExpenseListViewModel {
         Task { await load() }
     }
 
-    var paidCount: Int {
-        fixedExpenses.filter { paidIds.contains($0.id) }.count
-    }
-
     func isPaid(_ expense: FixedExpense) -> Bool {
         paidIds.contains(expense.id)
     }
+
+    var unpaidExpenses: [FixedExpense] {
+        fixedExpenses.filter { !paidIds.contains($0.id) }
+    }
+
+    var paidExpenses: [FixedExpense] {
+        fixedExpenses.filter { paidIds.contains($0.id) }
+    }
+
+    var unpaidSubtotal: Int64 {
+        unpaidExpenses.reduce(0) { $0 + $1.amount }
+    }
+
+    var paidSubtotal: Int64 {
+        paidExpenses.reduce(0) { $0 + $1.amount }
+    }
+
+    var paidCount: Int { paidExpenses.count }
 
     var totalAmount: Int64 {
         fixedExpenses.reduce(0) { $0 + $1.amount }
