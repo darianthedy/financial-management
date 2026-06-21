@@ -14,6 +14,12 @@ struct Transaction: Codable, Identifiable, Sendable {
     var categoryId: UUID?
     var scheduledTxnId: UUID?
     var fixedExpenseId: UUID?
+    /// Tag ids attached to this transaction, aggregated by the `v_transactions`
+    /// view (`tag_ids`). Optional because rows decoded straight from the base
+    /// `transactions` table (e.g. a create/update response) don't carry it — the
+    /// synthesized decoder treats a missing key as nil, and the list's tag chips
+    /// simply don't render until the row is reloaded from the view.
+    var tagIds: [UUID]?
     let createdAt: Date
     var updatedAt: Date
 
@@ -29,6 +35,7 @@ struct Transaction: Codable, Identifiable, Sendable {
         case categoryId = "category_id"
         case scheduledTxnId = "scheduled_txn_id"
         case fixedExpenseId = "fixed_expense_id"
+        case tagIds = "tag_ids"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

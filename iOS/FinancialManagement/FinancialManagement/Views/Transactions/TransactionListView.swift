@@ -104,20 +104,20 @@ struct TransactionListView: View {
 
     private var searchBar: some View {
         HStack {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            Image(systemName: "magnifyingglass").foregroundStyle(Color.appMutedForeground)
             TextField("Search description", text: $searchText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color.appMutedForeground)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(8)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .background(Color.appMuted)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
         .padding(.horizontal)
         .padding(.top, 8)
         // Debounce: re-fires only after typing pauses ~300ms.
@@ -141,7 +141,7 @@ struct TransactionListView: View {
 
             Text("\(viewModel.totalCount) match\(viewModel.totalCount == 1 ? "" : "es")")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.appMutedForeground)
 
             Spacer()
 
@@ -181,6 +181,7 @@ struct TransactionListView: View {
                 searchText = ""
             }
             .font(.caption)
+            .tint(Color.appPrimary)
             .padding(.horizontal)
         }
         .padding(.top, 8)
@@ -188,16 +189,17 @@ struct TransactionListView: View {
 
     private func removableChip(label: String, onRemove: @escaping () -> Void) -> some View {
         HStack(spacing: 4) {
-            Text(label).font(.caption)
+            Text(label).font(.caption.weight(.medium))
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
             }
             .buttonStyle(.plain)
         }
+        .foregroundStyle(Color.appPrimary)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.accentColor.opacity(0.15))
-        .clipShape(Capsule())
+        .background(Color.appPrimary.opacity(0.12), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.appPrimary.opacity(0.3), lineWidth: 1))
     }
 
     private var transactionList: some View {
@@ -206,9 +208,15 @@ struct TransactionListView: View {
                 TransactionRow(
                     transaction: txn,
                     account: viewModel.account(for: txn),
+                    category: viewModel.category(for: txn),
+                    transferAccountName: viewModel.transferAccount(for: txn)?.name,
+                    tags: viewModel.tags(for: txn),
+                    budgetName: viewModel.budgetName(for: txn),
+                    fixedExpenseName: viewModel.fixedExpenseName(for: txn),
                     isSpread: viewModel.isSpread(txn),
                     onCreateInstallment: { installmentSource = txn }
                 )
+                    .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
                     .contentShape(Rectangle())
                     .onTapGesture { editingTransaction = txn }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -218,7 +226,7 @@ struct TransactionListView: View {
                             } label: {
                                 Label("Confirm", systemImage: "checkmark")
                             }
-                            .tint(.green)
+                            .tint(Color.appSuccess)
                         }
                     }
                     .swipeActions(edge: .trailing) {
@@ -233,7 +241,7 @@ struct TransactionListView: View {
                             } label: {
                                 Label("Dismiss", systemImage: "xmark")
                             }
-                            .tint(.orange)
+                            .tint(Color.appWarning)
                         }
                     }
                     .onAppear {

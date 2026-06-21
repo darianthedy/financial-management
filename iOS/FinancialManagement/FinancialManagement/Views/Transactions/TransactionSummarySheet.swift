@@ -76,15 +76,15 @@ struct TransactionSummarySheet: View {
     private func summaryContent(_ r: SummaryResult) -> some View {
         List {
             Section("Totals") {
-                moneyRow("Income", systemImage: "arrow.down.circle.fill", amount: r.income, color: .green)
-                moneyRow("Expense", systemImage: "arrow.up.circle.fill", amount: r.expense, color: .red)
-                moneyRow("Net", systemImage: "equal.circle.fill", amount: r.net, color: r.net >= 0 ? .green : .red, labelColor: .primary)
-                moneyRow("Transfers in", systemImage: "arrow.down.left.circle", amount: r.transfersIn, color: .secondary, labelColor: .primary)
-                moneyRow("Transfers out", systemImage: "arrow.up.right.circle", amount: r.transfersOut, color: .secondary, labelColor: .primary)
-                moneyRow("Largest expense", systemImage: "flame.fill", amount: r.largestExpense, color: .red, labelColor: .primary)
+                moneyRow("Income", systemImage: "arrow.down.circle.fill", amount: r.income, color: .appSuccess)
+                moneyRow("Expense", systemImage: "arrow.up.circle.fill", amount: r.expense, color: .appDanger)
+                moneyRow("Net", systemImage: "equal.circle.fill", amount: r.net, color: r.net >= 0 ? .appSuccess : .appDanger, labelColor: .appForeground)
+                moneyRow("Transfers in", systemImage: "arrow.down.left.circle", amount: r.transfersIn, color: .appMutedForeground, labelColor: .appForeground)
+                moneyRow("Transfers out", systemImage: "arrow.up.right.circle", amount: r.transfersOut, color: .appMutedForeground, labelColor: .appForeground)
+                moneyRow("Largest expense", systemImage: "flame.fill", amount: r.largestExpense, color: .appDanger, labelColor: .appForeground)
                 HStack {
                     Label("Count", systemImage: "number.circle.fill")
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Color.appForeground)
                     Spacer()
                     Text("\(r.count)").font(.title3.bold())
                 }
@@ -92,9 +92,9 @@ struct TransactionSummarySheet: View {
 
             if r.hasPending {
                 Section("Pending (projection)") {
-                    moneyRow("Income", systemImage: "arrow.down.circle", amount: r.pendingIncome, color: .green)
-                    moneyRow("Expense", systemImage: "arrow.up.circle", amount: r.pendingExpense, color: .red)
-                    moneyRow("Net", systemImage: "equal.circle", amount: r.pendingNet, color: r.pendingNet >= 0 ? .green : .red, labelColor: .primary)
+                    moneyRow("Income", systemImage: "arrow.down.circle", amount: r.pendingIncome, color: .appSuccess)
+                    moneyRow("Expense", systemImage: "arrow.up.circle", amount: r.pendingExpense, color: .appDanger)
+                    moneyRow("Net", systemImage: "equal.circle", amount: r.pendingNet, color: r.pendingNet >= 0 ? .appSuccess : .appDanger, labelColor: .appForeground)
                 }
             }
 
@@ -114,7 +114,7 @@ struct TransactionSummarySheet: View {
                 DisclosureGroup(title) {
                     ForEach(groups) { group in
                         moneyRow(group.name, systemImage: nil, amount: group.amount,
-                                 color: group.amount >= 0 ? .green : .red, labelColor: .primary)
+                                 color: group.amount >= 0 ? .appSuccess : .appDanger, labelColor: .appForeground)
                     }
                 }
             }

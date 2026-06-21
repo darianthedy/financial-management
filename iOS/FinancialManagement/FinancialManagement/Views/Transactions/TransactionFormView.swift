@@ -76,7 +76,7 @@ struct TransactionFormView: View {
             if let error = viewModel.errorMessage {
                 Section {
                     Text(error)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.appDanger)
                 }
             }
         }
