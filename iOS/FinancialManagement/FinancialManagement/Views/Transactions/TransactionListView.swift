@@ -19,10 +19,12 @@ struct TransactionListView: View {
 
     private var isScoped: Bool { viewModel.scopedAccountId != nil }
 
-    /// The MonthNavigator shows for the scoped account-detail list, and on the
-    /// main list until an explicit Date-range filter takes over the period.
+    /// The MonthNavigator is only used by the scoped account-detail embedding.
+    /// The main Transactions list mirrors web (web/src/pages/transactions.tsx):
+    /// no month navigator — filters drive the period and the list defaults to all
+    /// transactions.
     private var showsMonthNavigator: Bool {
-        isScoped || !viewModel.hasExplicitDateRange
+        isScoped
     }
 
     var body: some View {
@@ -38,7 +40,6 @@ struct TransactionListView: View {
 
             if !isScoped {
                 searchBar
-                controlBar
                 if !viewModel.filters.isEmpty { chipsBar }
             }
 
@@ -46,8 +47,28 @@ struct TransactionListView: View {
         }
         .navigationTitle("Transactions")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showingForm = true } label: { Image(systemName: "plus") }
+            // Web header actions (web/src/pages/transactions.tsx): an outline
+            // "Summary" button and a filled primary "Add" button.
+            ToolbarItemGroup(placement: .primaryAction) {
+                // Explicit icon+text content: a bare `Label` renders icon-only in
+                // the toolbar, so spell out the row to keep web's labeled pills.
+                Button { showingSummary = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chart.bar.xaxis")
+                        Text("Summary")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .tint(Color.appForeground)
+
+                Button { showingForm = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                        Text("Add")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.appPrimary)
             }
         }
         .sheet(isPresented: $showingForm) {
@@ -102,22 +123,29 @@ struct TransactionListView: View {
 
     // MARK: - Bars
 
+    /// Web's filter bar (web/src/components/transactions/transaction-filters.tsx):
+    /// the search field with a compact filter trigger on its right. The trigger
+    /// shows the active panel-filter count (green) or a sliders icon.
     private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass").foregroundStyle(Color.appMutedForeground)
-            TextField("Search description", text: $searchText)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color.appMutedForeground)
+        HStack(spacing: 8) {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundStyle(Color.appMutedForeground)
+                TextField("Search description", text: $searchText)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                if !searchText.isEmpty {
+                    Button { searchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Color.appMutedForeground)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(8)
+            .background(Color.appMuted)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+
+            filterButton
         }
-        .padding(8)
-        .background(Color.appMuted)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
         .padding(.horizontal)
         .padding(.top, 8)
         // Debounce: re-fires only after typing pauses ~300ms.
@@ -128,42 +156,39 @@ struct TransactionListView: View {
         }
     }
 
-    private var controlBar: some View {
-        HStack {
-            Button { showingFilters = true } label: {
-                Label(
-                    viewModel.filters.activeCount > 0 ? "Filters (\(viewModel.filters.activeCount))" : "Filters",
-                    systemImage: "line.3.horizontal.decrease.circle"
-                )
-            }
-
-            Spacer()
-
-            Text("\(viewModel.totalCount) match\(viewModel.totalCount == 1 ? "" : "es")")
-                .font(.caption)
-                .foregroundStyle(Color.appMutedForeground)
-
-            Spacer()
-
-            Menu {
-                Picker("Page size", selection: Binding(
-                    get: { viewModel.pageSize },
-                    set: { viewModel.setPageSize($0) }
-                )) {
-                    ForEach(transactionPageSizes, id: \.self) { size in
-                        Text("\(size) / page").tag(size)
-                    }
-                }
-            } label: {
-                Image(systemName: "square.stack.3d.up")
-            }
-
-            Button { showingSummary = true } label: {
-                Image(systemName: "chart.pie")
-            }
+    /// Active filters configured in the panel, i.e. everything except the
+    /// always-visible search — mirrors web's `countPanelFilters`, which the
+    /// filter button badges.
+    private var panelFilterCount: Int {
+        var n = viewModel.filters.activeCount
+        if let s = viewModel.filters.search,
+           !s.trimmingCharacters(in: .whitespaces).isEmpty {
+            n -= 1
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
+        return n
+    }
+
+    private var filterButton: some View {
+        Button { showingFilters = true } label: {
+            Group {
+                if panelFilterCount > 0 {
+                    Text("\(panelFilterCount)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.appSuccess)
+                } else {
+                    Image(systemName: "slider.horizontal.3")
+                        .foregroundStyle(Color.appForeground)
+                }
+            }
+            .frame(width: 38, height: 38)
+            .background(Color.appMuted, in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                    .strokeBorder(Color.appBorder, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(panelFilterCount > 0 ? "Filters (\(panelFilterCount) active)" : "Filters")
     }
 
     private var chipsBar: some View {
@@ -254,7 +279,9 @@ struct TransactionListView: View {
             isSpread: viewModel.isSpread(txn),
             showDate: false,
             widestNumber: widestAmountBody,
-            onCreateInstallment: { installmentSource = txn }
+            onCreateInstallment: { installmentSource = txn },
+            onEdit: { editingTransaction = txn },
+            onDelete: { Task { await viewModel.deleteTransaction(txn) } }
         )
             .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
             .contentShape(Rectangle())
@@ -307,15 +334,20 @@ struct TransactionListView: View {
                 .foregroundStyle(Color.appMutedForeground)
             // Same component + shared width as the rows, so symbol and digits
             // align into one column through the header. The net carries an
-            // explicit +/− sign; a day that nets to zero shows neither.
-            AmountColumnView(
-                minorUnits: group.net,
-                sign: netSign(group.net),
-                currencyCode: appState.defaultCurrency,
-                widestNumber: widestAmountBody
-            )
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(netColor(group.net))
+            // explicit +/− sign; a day that nets to zero shows neither. The
+            // trailing spacer mirrors the row's ⋮ actions button (28pt) and its
+            // 12pt gap, so the net lines up with the amount column above the menu.
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                AmountColumnView(
+                    minorUnits: group.net,
+                    sign: netSign(group.net),
+                    currencyCode: appState.defaultCurrency,
+                    widestNumber: widestAmountBody
+                )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(netColor(group.net))
+                Color.clear.frame(width: 28, height: 0)
+            }
         }
         .textCase(nil)
     }

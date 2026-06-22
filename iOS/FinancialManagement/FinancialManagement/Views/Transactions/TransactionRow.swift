@@ -9,6 +9,7 @@ import SwiftUI
 /// amount (success/danger/foreground per type) over the date.
 struct TransactionRow: View {
     @Environment(AppState.self) private var appState
+    @State private var showDeleteConfirm = false
     let transaction: Transaction
     /// The transaction's source account, used for the avatar. Falls back to a
     /// type glyph when unavailable.
@@ -36,6 +37,10 @@ struct TransactionRow: View {
     var widestNumber: String?
     /// Starts the spread flow. Offered only for un-spread expenses.
     var onCreateInstallment: (() -> Void)?
+    /// Opens the edit form (web: the row's "Edit" menu item; the row tap also edits).
+    var onEdit: (() -> Void)?
+    /// Deletes the transaction after a confirmation (web: the "Delete" menu item).
+    var onDelete: (() -> Void)?
 
     /// Eligible only for an expense that is not already spread.
     private var canCreateInstallment: Bool {
@@ -56,7 +61,7 @@ struct TransactionRow: View {
                         .lineLimit(1)
                     if isPending { pendingBadge }
                     if isSpread {
-                        Image(systemName: "square.grid.3x3.fill")
+                        Image(systemName: "square.grid.2x2.fill")
                             .font(.caption2)
                             .foregroundStyle(Color.appPrimary)
                             .accessibilityLabel("Spread across budgets")
@@ -91,17 +96,51 @@ struct TransactionRow: View {
                         .foregroundStyle(Color.appMutedForeground)
                 }
             }
+
+            actionsMenu
         }
         .padding(.vertical, 4)
-        .contextMenu {
+        .alert("Delete transaction?", isPresented: $showDeleteConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { onDelete?() }
+        } message: {
+            Text("This permanently removes the transaction and updates the affected account balances. This can't be undone.")
+        }
+    }
+
+    // MARK: - Actions menu (web: the row's trailing MoreVertical dropdown —
+    // Edit / Create virtual installment / Delete)
+
+    @ViewBuilder
+    private var actionsMenu: some View {
+        Menu {
+            if let onEdit {
+                Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
+            }
             if canCreateInstallment {
                 Button {
                     onCreateInstallment?()
                 } label: {
-                    Label("Create virtual installment", systemImage: "square.grid.3x3")
+                    Label("Create virtual installment", systemImage: "square.grid.2x2")
                 }
             }
+            if onDelete != nil {
+                Button(role: .destructive) {
+                    showDeleteConfirm = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        } label: {
+            // Vertical dots to match web's MoreVertical (no vertical SF symbol).
+            Image(systemName: "ellipsis")
+                .font(.subheadline)
+                .rotationEffect(.degrees(90))
+                .foregroundStyle(Color.appMutedForeground)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Avatar
