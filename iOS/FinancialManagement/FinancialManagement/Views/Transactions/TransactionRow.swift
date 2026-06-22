@@ -26,6 +26,14 @@ struct TransactionRow: View {
     /// True when this expense has been spread across budgets (P1 installments) —
     /// drives the grid indicator and hides the "Create virtual installment" action.
     var isSpread = false
+    /// Show the date beneath the amount. Off when the row sits under a date group
+    /// header (the transactions list) that already carries the date; on for
+    /// ungrouped lists. Mirrors the web row's `showDate` prop.
+    var showDate = true
+    /// The widest number body across the surrounding list, so this row's amount
+    /// aligns its symbol/digits with the others (see `AmountColumnView`). Omit for
+    /// a standalone row.
+    var widestNumber: String?
     /// Starts the spread flow. Offered only for un-spread expenses.
     var onCreateInstallment: (() -> Void)?
 
@@ -68,14 +76,20 @@ struct TransactionRow: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(formattedAmount)
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                AmountColumnView(
+                    minorUnits: transaction.amount,
+                    sign: amountSign,
+                    currencyCode: appState.defaultCurrency,
+                    widestNumber: widestNumber
+                )
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(amountColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(Self.dateFormatter.string(from: transaction.transactionDate))
-                    .font(.caption)
-                    .foregroundStyle(Color.appMutedForeground)
+                if showDate {
+                    Text(Self.dateFormatter.string(from: transaction.transactionDate))
+                        .font(.caption)
+                        .foregroundStyle(Color.appMutedForeground)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -254,17 +268,18 @@ struct TransactionRow: View {
         }
     }
 
-    private var formattedAmount: String {
-        let formatted = abs(transaction.amount).asCurrency(code: appState.defaultCurrency)
+    /// The leading sign for the amount (the magnitude is rendered by
+    /// `AmountColumnView`). Transfers are unsigned; income is `+` (a negative
+    /// income reduces cash, so `-`); an expense is `-` (a negative expense — a
+    /// refund — adds cash back, so `+`).
+    private var amountSign: String {
         switch transaction.type {
         case .transfer:
-            return formatted
+            return ""
         case .income:
-            // Signed amounts allowed: a negative income reduces cash.
-            return transaction.amount < 0 ? "-\(formatted)" : "+\(formatted)"
+            return transaction.amount < 0 ? "-" : "+"
         case .expense:
-            // Expenses reduce cash; a negative expense (refund) adds it back.
-            return transaction.amount < 0 ? "+\(formatted)" : "-\(formatted)"
+            return transaction.amount < 0 ? "+" : "-"
         }
     }
 

@@ -204,51 +204,14 @@ struct TransactionListView: View {
 
     private var transactionList: some View {
         List {
-            ForEach(viewModel.transactions) { txn in
-                TransactionRow(
-                    transaction: txn,
-                    account: viewModel.account(for: txn),
-                    category: viewModel.category(for: txn),
-                    transferAccountName: viewModel.transferAccount(for: txn)?.name,
-                    tags: viewModel.tags(for: txn),
-                    budgetName: viewModel.budgetName(for: txn),
-                    fixedExpenseName: viewModel.fixedExpenseName(for: txn),
-                    isSpread: viewModel.isSpread(txn),
-                    onCreateInstallment: { installmentSource = txn }
-                )
-                    .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
-                    .contentShape(Rectangle())
-                    .onTapGesture { editingTransaction = txn }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        if txn.status == .pending {
-                            Button {
-                                Task { await viewModel.setStatus(txn, to: .confirmed) }
-                            } label: {
-                                Label("Confirm", systemImage: "checkmark")
-                            }
-                            .tint(Color.appSuccess)
-                        }
+            ForEach(viewModel.dateGroups) { group in
+                Section {
+                    ForEach(group.transactions) { txn in
+                        row(for: txn)
                     }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            Task { await viewModel.deleteTransaction(txn) }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        if txn.status == .pending {
-                            Button {
-                                Task { await viewModel.setStatus(txn, to: .dismissed) }
-                            } label: {
-                                Label("Dismiss", systemImage: "xmark")
-                            }
-                            .tint(Color.appWarning)
-                        }
-                    }
-                    .onAppear {
-                        if txn.id == viewModel.transactions.last?.id {
-                            Task { await viewModel.loadMore() }
-                        }
-                    }
+                } header: {
+                    dateGroupHeader(group)
+                }
             }
 
             if viewModel.isLoadingMore {
@@ -275,6 +238,107 @@ struct TransactionListView: View {
             yearMonth: showsMonthNavigator ? viewModel.yearMonth : "filtered",
             direction: viewModel.navigationDirection
         )
+    }
+
+    /// A single row with its tap/swipe actions and the infinite-scroll trigger.
+    /// The date lives in the section header now, so the row hides its own.
+    private func row(for txn: Transaction) -> some View {
+        TransactionRow(
+            transaction: txn,
+            account: viewModel.account(for: txn),
+            category: viewModel.category(for: txn),
+            transferAccountName: viewModel.transferAccount(for: txn)?.name,
+            tags: viewModel.tags(for: txn),
+            budgetName: viewModel.budgetName(for: txn),
+            fixedExpenseName: viewModel.fixedExpenseName(for: txn),
+            isSpread: viewModel.isSpread(txn),
+            showDate: false,
+            widestNumber: widestAmountBody,
+            onCreateInstallment: { installmentSource = txn }
+        )
+            .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
+            .contentShape(Rectangle())
+            .onTapGesture { editingTransaction = txn }
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                if txn.status == .pending {
+                    Button {
+                        Task { await viewModel.setStatus(txn, to: .confirmed) }
+                    } label: {
+                        Label("Confirm", systemImage: "checkmark")
+                    }
+                    .tint(Color.appSuccess)
+                }
+            }
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    Task { await viewModel.deleteTransaction(txn) }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                if txn.status == .pending {
+                    Button {
+                        Task { await viewModel.setStatus(txn, to: .dismissed) }
+                    } label: {
+                        Label("Dismiss", systemImage: "xmark")
+                    }
+                    .tint(Color.appWarning)
+                }
+            }
+            .onAppear {
+                if txn.id == viewModel.transactions.last?.id {
+                    Task { await viewModel.loadMore() }
+                }
+            }
+    }
+
+    // MARK: - Date group header (web: DateGroupHeader)
+
+    /// Sticky per-day heading: the absolute date on the left, the item count and
+    /// the day's net (green/red, muted when it nets to zero) on the right.
+    private func dateGroupHeader(_ group: TransactionDateGroup) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(group.dateLabel)
+                .font(.caption.weight(.bold))
+                .textCase(.uppercase)
+                .foregroundStyle(Color.appMutedForeground)
+            Spacer()
+            Text("\(group.count) \(group.count == 1 ? "item" : "items")")
+                .font(.caption)
+                .foregroundStyle(Color.appMutedForeground)
+            // Same component + shared width as the rows, so symbol and digits
+            // align into one column through the header. The net carries an
+            // explicit +/− sign; a day that nets to zero shows neither.
+            AmountColumnView(
+                minorUnits: group.net,
+                sign: netSign(group.net),
+                currencyCode: appState.defaultCurrency,
+                widestNumber: widestAmountBody
+            )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(netColor(group.net))
+        }
+        .textCase(nil)
+    }
+
+    /// The widest number body across the loaded rows and the per-day nets, so the
+    /// whole list (rows and headers) shares one digit column (see `AmountColumnView`).
+    private var widestAmountBody: String {
+        var maxAbs: Int64 = 0
+        for txn in viewModel.transactions { maxAbs = max(maxAbs, abs(txn.amount)) }
+        for group in viewModel.dateGroups { maxAbs = max(maxAbs, abs(group.net)) }
+        return CurrencyUtils.numberBody(maxAbs, currency: appState.defaultCurrency)
+    }
+
+    private func netSign(_ net: Int64) -> String {
+        if net > 0 { return "+" }
+        if net < 0 { return "-" }
+        return ""
+    }
+
+    private func netColor(_ net: Int64) -> Color {
+        if net > 0 { return .appSuccess }
+        if net < 0 { return .appDanger }
+        return .appMutedForeground
     }
 
     // MARK: - Chips

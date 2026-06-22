@@ -40,10 +40,21 @@ interface Props {
   txn: TransactionWithRelations;
   /** Widest amount's numeric body so amounts align across the list. */
   widestAmount?: string;
+  /**
+   * Show the transaction's date beneath the amount. Off when the row sits under a
+   * date group header (the transactions list) that already carries the date; on
+   * for ungrouped lists like the scheduled page.
+   */
+  showDate?: boolean;
   onMutated?: () => void;
 }
 
-export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
+export function TransactionRow({
+  txn,
+  widestAmount,
+  showDate = true,
+  onMutated,
+}: Props) {
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -161,9 +172,11 @@ export function TransactionRow({ txn, widestAmount, onMutated }: Props) {
           widestNumber={widestAmount}
           className={cn("text-nowrap text-sm font-semibold", amountColor)}
         />
-        <span className="text-xs text-[var(--color-muted-foreground)]">
-          {formatDate(txn.date)}
-        </span>
+        {showDate && (
+          <span className="text-xs text-[var(--color-muted-foreground)]">
+            {formatDate(txn.date)}
+          </span>
+        )}
         {isPending && (
           <div className="flex gap-1.5 pt-0.5">
             <button

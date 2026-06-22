@@ -35,6 +35,37 @@ enum CurrencyUtils {
         return formatter.string(from: NSNumber(value: toDisplayAmount(minorUnits, decimalPlaces: decimalPlaces))) ?? "$0.00"
     }
 
+    // MARK: - Parts (for amount-column alignment)
+
+    /// The grouped number body of `|minorUnits|` with no sign or symbol, e.g.
+    /// "16,634,915". Used both as the digit run and — for the largest amount in a
+    /// list — as the invisible spacer that sizes the digit slot so a column of
+    /// amounts aligns. Mirrors web `widestCurrencyNumber` / `formatCurrencyParts`.
+    static func numberBody(_ minorUnits: Int64, currency: String) -> String {
+        let dp = fractionDigits(for: currency)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = dp
+        formatter.maximumFractionDigits = dp
+        return formatter.string(from: NSNumber(value: toDisplayAmount(abs(minorUnits), decimalPlaces: dp))) ?? "0"
+    }
+
+    /// Splits the formatted amount into its currency symbol (with any adjoining
+    /// spacing) and its number body, so a list can pin the symbol in a fixed
+    /// column and right-align the digits. Mirrors web `formatCurrencyParts`.
+    /// Locales that place the symbol after the number collapse to a leading
+    /// symbol here (the same simplification the web column makes).
+    static func currencyParts(_ minorUnits: Int64, currency: String) -> (symbol: String, number: String) {
+        let dp = fractionDigits(for: currency)
+        let number = numberBody(minorUnits, currency: currency)
+        let full = format(abs(minorUnits), currency: currency, decimalPlaces: dp)
+        if let range = full.range(of: number) {
+            let symbol = String(full[..<range.lowerBound]) + String(full[range.upperBound...])
+            return (symbol, number)
+        }
+        return ("", full)
+    }
+
     // MARK: - Currency-code convenience (resolves decimal places from the cache)
     // Transitional overloads for screens still keyed by a currency code; the
     // single-currency forms (P02+) pass `decimalPlaces` from `AppState`.
