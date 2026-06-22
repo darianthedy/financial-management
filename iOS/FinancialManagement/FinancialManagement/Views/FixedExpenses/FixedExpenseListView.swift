@@ -130,7 +130,7 @@ struct FixedExpenseListView: View {
                     } label: {
                         Label("Edit", systemImage: "pencil")
                     }
-                    .tint(.orange)
+                    .tint(Color.appPrimary)
                 }
             }
         } header: {
