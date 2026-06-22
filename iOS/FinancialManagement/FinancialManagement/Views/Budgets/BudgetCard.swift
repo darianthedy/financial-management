@@ -1,128 +1,134 @@
 import SwiftUI
 
 /// One budget for the selected month, read entirely from `v_budget_progress`:
-/// net spent vs. effective amount (periodic + carry-in), a carry-in badge, an
-/// info popover for the carry-in detail and note, and danger styling when
-/// overspent. A "Reserved $X" line shows virtual-installment reservations (P1).
+/// net spent vs. effective amount (periodic + carry-in), an info popover for the
+/// carry-in detail and note, and danger styling when overspent. A "reserved"
+/// line shows virtual-installment reservations (P1).
+///
+/// Mirrors web's `BudgetCard` (`web/src/components/budgets/budget-card.tsx`): a
+/// bordered card with the name + info popover, a rounded progress bar
+/// (primary fill, danger when overspent), a "spent of X" / remaining row, and an
+/// optional reserved line.
 struct BudgetCard: View {
     let progress: BudgetProgress
     let currencyCode: String
 
     @State private var showingInfo = false
 
-    /// Net spent against the effective amount, clamped to a drawable 0…1 range.
+    /// Effective budget is periodic + carry-in minus installment reservations —
+    /// what is actually available to spend this month. Both the bar and the
+    /// "spent of X" label use this figure (web: `effective_amount - reserved`).
+    private var effectiveBudget: Int64 { progress.effectiveAmount - progress.reserved }
+
+    /// Net spent against the effective budget, clamped to a drawable 0…1 range.
     private var fraction: Double {
-        guard progress.effectiveAmount > 0 else { return progress.spent > 0 ? 1 : 0 }
-        let value = Double(progress.spent) / Double(progress.effectiveAmount)
+        guard effectiveBudget > 0 else { return progress.spent > 0 ? 1 : 0 }
+        let value = Double(progress.spent) / Double(effectiveBudget)
         return min(max(value, 0), 1)
     }
 
     private var isOverspent: Bool { progress.remaining < 0 }
 
-    private var barColor: Color {
-        if isOverspent { return .red }
-        if fraction < 0.75 { return .green }
-        if fraction < 0.9 { return .yellow }
-        return .red
-    }
+    /// web uses two states only: primary under budget, danger when overspent.
+    private var barColor: Color { isOverspent ? .appDanger : .appPrimary }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             header
 
-            ProgressView(value: fraction)
-                .tint(barColor)
+            progressBar
 
             HStack {
-                Text("\(progress.spent.asCurrency(code: currencyCode)) of \(progress.effectiveAmount.asCurrency(code: currencyCode))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text("\(progress.spent.asCurrency(code: currencyCode)) of \(effectiveBudget.asCurrency(code: currencyCode))")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.appMutedForeground)
 
                 Spacer()
 
                 if isOverspent {
                     Text("\((-progress.remaining).asCurrency(code: currencyCode)) over")
-                        .font(.caption.bold())
-                        .foregroundStyle(.red)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.appDanger)
                 } else {
                     Text("\(progress.remaining.asCurrency(code: currencyCode)) left")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.appForeground)
                 }
             }
 
-            // Virtual-installment reservations (P1): budget-side only, already
-            // netted into `remaining` by v_budget_progress. A negative remaining
-            // here is the intended "spend nothing more" signal (handled above).
+            // Virtual-installment reservations (P1): a distinct, muted line
+            // separate from the carry-over label (which lives in the info
+            // popover). Already netted into `remaining` by v_budget_progress.
             if progress.reserved > 0 {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Image(systemName: "lock.fill")
                         .font(.caption2)
-                    Text("Reserved")
-                        .font(.caption)
-                    Spacer()
-                    Text(progress.reserved.asCurrency(code: currencyCode))
+                    Text("−\(progress.reserved.asCurrency(code: currencyCode)) reserved for installments")
                         .font(.caption)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.appMutedForeground)
             }
         }
-        .padding(.vertical, 4)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCardSurface()
+    }
+
+    /// 8pt rounded track (muted) with a rounded fill, matching web's
+    /// `h-2 rounded-full bg-muted` track and `rounded-full` fill.
+    private var progressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.appMuted)
+                Capsule()
+                    .fill(barColor)
+                    .frame(width: max(0, geo.size.width * fraction))
+            }
+        }
+        .frame(height: 8)
     }
 
     private var header: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Text(progress.budgetName)
-                .font(.headline)
-
-            if progress.carryOverAmount != 0 {
-                carryInBadge
-            }
+                .font(.body.weight(.medium))
+                .foregroundStyle(Color.appForeground)
+                .lineLimit(1)
+                .truncationMode(.tail)
 
             if progress.carryOverAmount != 0 || (progress.description?.isEmpty == false) {
                 Button {
                     showingInfo = true
                 } label: {
                     Image(systemName: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.appMutedForeground)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showingInfo) { infoPopover }
             }
 
             Spacer()
-
-            Text(progress.effectiveAmount.asCurrency(code: currencyCode))
-                .font(.subheadline.bold())
         }
     }
 
-    private var carryInBadge: some View {
-        let positive = progress.carryOverAmount > 0
-        let text = "\(positive ? "+" : "")\(progress.carryOverAmount.asCurrency(code: currencyCode))"
-        return Text(text)
-            .font(.caption2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background((positive ? Color.green : Color.red).opacity(0.15))
-            .foregroundStyle(positive ? Color.green : Color.red)
-            .clipShape(Capsule())
-    }
-
     private var infoPopover: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             if progress.carryOverAmount != 0 {
                 let positive = progress.carryOverAmount > 0
-                Text("\(positive ? "+" : "")\(progress.carryOverAmount.asCurrency(code: currencyCode)) \(positive ? "carried over" : "overspent")")
-                    .font(.subheadline)
+                Text(positive
+                    ? "+\(progress.carryOverAmount.asCurrency(code: currencyCode)) carried over"
+                    : "\(progress.carryOverAmount.asCurrency(code: currencyCode)) overspent")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(positive ? Color.appSuccess : Color.appDanger)
             }
             if let note = progress.description, !note.isEmpty {
                 Text(note)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.appMutedForeground)
             }
         }
         .padding()
