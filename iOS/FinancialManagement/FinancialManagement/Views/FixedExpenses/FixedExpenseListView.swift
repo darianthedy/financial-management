@@ -100,10 +100,11 @@ struct FixedExpenseListView: View {
         HStack {
             Label("\(viewModel.paidCount)/\(viewModel.fixedExpenses.count) Paid", systemImage: "checkmark.circle")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.appMutedForeground)
             Spacer()
             Text("Total: \(viewModel.totalAmount.asCurrency(code: currencyCode))")
                 .font(.subheadline.bold())
+                .foregroundStyle(Color.appForeground)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }

@@ -34,7 +34,7 @@ struct FixedExpenseFormSheet: View {
 
                 if let errorMessage {
                     Section {
-                        Text(errorMessage).foregroundStyle(.red)
+                        Text(errorMessage).foregroundStyle(Color.appDanger)
                     }
                 }
             }
