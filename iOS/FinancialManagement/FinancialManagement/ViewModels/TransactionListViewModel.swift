@@ -12,6 +12,19 @@ enum FilterFacetKey: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// One calendar day's rows plus the day's net (income − expense; transfers move
+/// money between the user's own accounts, so they're net-zero and excluded).
+/// Mirrors the web transaction list's date grouping. `id` is the displayed
+/// date label ("MMM d, yyyy"), so the grouping key and the header label can never
+/// disagree regardless of how the `date` column was decoded.
+struct TransactionDateGroup: Identifiable {
+    let id: String
+    let transactions: [Transaction]
+    let net: Int64
+    var count: Int { transactions.count }
+    var dateLabel: String { id }
+}
+
 /// Drives the Transactions list: the full filter/search/summary state over
 /// `v_transactions` (P05). Holds a `TransactionFilters` value, queries the view
 /// windowed with `.range()` + exact count for pagination, and exposes the
@@ -61,6 +74,44 @@ final class TransactionListViewModel {
     }
 
     var canLoadMore: Bool { transactions.count < totalCount }
+
+    /// Web's "MMM d, yyyy" label — also the grouping key (see `TransactionDateGroup`).
+    private static let dayLabelFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
+
+    /// The loaded rows partitioned into per-date groups, preserving the
+    /// date-descending order. Recomputed from `transactions`, so it stays correct
+    /// as pages are appended (a day split across a page boundary merges naturally).
+    var dateGroups: [TransactionDateGroup] {
+        var groups: [TransactionDateGroup] = []
+        var label: String?
+        var rows: [Transaction] = []
+        var net: Int64 = 0
+        func flush() {
+            if let label { groups.append(TransactionDateGroup(id: label, transactions: rows, net: net)) }
+        }
+        for txn in transactions {
+            let key = Self.dayLabelFormatter.string(from: txn.transactionDate)
+            if key != label {
+                flush()
+                label = key
+                rows = []
+                net = 0
+            }
+            rows.append(txn)
+            switch txn.type {
+            case .income: net += txn.amount
+            case .expense: net -= txn.amount
+            case .transfer: break
+            }
+        }
+        flush()
+        return groups
+    }
 
     /// True once the user pins an explicit date range, at which point the
     /// MonthNavigator is hidden (the range governs the period instead).
