@@ -118,8 +118,10 @@ struct TransactionRow: View {
                 }
             }
         } label: {
+            // Vertical dots to match web's MoreVertical (no vertical SF symbol).
             Image(systemName: "ellipsis")
                 .font(.subheadline)
+                .rotationEffect(.degrees(90))
                 .foregroundStyle(Color.appMutedForeground)
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
