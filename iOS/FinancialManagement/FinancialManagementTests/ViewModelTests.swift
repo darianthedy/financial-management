@@ -10,13 +10,23 @@ import SwiftUI
 final class ViewModelTests: XCTestCase {
     // MARK: - TransactionListViewModel: filter state
 
-    func testEffectiveFiltersFoldInDefaultMonthWindow() {
+    func testMainListAppliesNoDefaultDateWindow() {
+        // The main Transactions list mirrors web: no implicit date window, so it
+        // defaults to all transactions and the filters alone govern the period.
         let vm = TransactionListViewModel()
         let f = vm.effectiveFilters
-        // No explicit date range → the visible month becomes the default window.
+        XCTAssertNil(f.dateFrom)
+        XCTAssertNil(f.dateTo)
+        XCTAssertFalse(vm.hasExplicitDateRange)
+    }
+
+    func testScopedListFoldsInDefaultMonthWindow() {
+        // The scoped account-detail list browses month-by-month, so it folds the
+        // visible month in as a default window.
+        let vm = TransactionListViewModel(scopedAccountId: UUID())
+        let f = vm.effectiveFilters
         XCTAssertNotNil(f.dateFrom)
         XCTAssertNotNil(f.dateTo)
-        XCTAssertFalse(vm.hasExplicitDateRange)
     }
 
     func testExplicitDateRangeSuppressesDefaultWindow() {

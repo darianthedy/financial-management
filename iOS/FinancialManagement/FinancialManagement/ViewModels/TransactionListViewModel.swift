@@ -18,8 +18,9 @@ enum FilterFacetKey: String, CaseIterable, Identifiable {
 /// lookups the chips/summary hydrate names with.
 ///
 /// When `scopedAccountId` is set (the account-detail embedding) the list locks
-/// to that account and the filter UI is hidden; otherwise the MonthNavigator
-/// supplies a default month window that an explicit Date-range filter overrides.
+/// to that account, hides the filter UI, and browses month-by-month via the
+/// MonthNavigator. The main list mirrors web: no month navigator and no implicit
+/// date window — it shows all transactions and the filters govern the period.
 @Observable
 @MainActor
 final class TransactionListViewModel {
@@ -65,16 +66,22 @@ final class TransactionListViewModel {
     /// MonthNavigator is hidden (the range governs the period instead).
     var hasExplicitDateRange: Bool { filters.dateFrom != nil || filters.dateTo != nil }
 
-    /// The user's filters with the account lock and the default month window
-    /// folded in, so the same value drives both the list and the Summary query.
+    /// The user's filters with the account lock (and, for the scoped account-detail
+    /// list, the visible month) folded in, so the same value drives both the list
+    /// and the Summary query.
+    ///
+    /// The main Transactions list mirrors web: it applies **no** implicit date
+    /// window, so it defaults to all transactions and the filters alone govern the
+    /// period. Only the scoped account-detail embedding, which browses
+    /// month-by-month, folds the visible month in as a default window.
     var effectiveFilters: TransactionFilters {
         var f = filters
         if let scoped = scopedAccountId {
             f.accounts = Facet(values: [scoped])
-        }
-        if f.dateFrom == nil, f.dateTo == nil, let range = DateUtils.monthDateRange(yearMonth) {
-            f.dateFrom = range.start
-            f.dateTo = range.end
+            if f.dateFrom == nil, f.dateTo == nil, let range = DateUtils.monthDateRange(yearMonth) {
+                f.dateFrom = range.start
+                f.dateTo = range.end
+            }
         }
         return f
     }
