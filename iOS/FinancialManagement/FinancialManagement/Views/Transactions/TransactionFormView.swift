@@ -33,29 +33,37 @@ struct TransactionFormView: View {
                 .pickerStyle(.segmented)
             }
 
+            // Field order mirrors the web form
+            // (web/src/components/transactions/transaction-form.tsx): account(s) →
+            // amount → date → description → budget → category → fixed expense.
             Section("Details") {
-                CurrencyField(label: "Amount", value: $viewModel.amount)
-
                 AccountPicker(
-                    label: "Account",
+                    label: viewModel.type == .transfer ? "From" : "Account",
                     selectedId: $viewModel.accountId
                 )
 
                 if viewModel.type == .transfer {
                     AccountPicker(
-                        label: "To Account",
+                        label: "To",
                         selectedId: $viewModel.transferAccountId
                     )
                 }
 
-                // Category & budget apply to income/expense; transfers carry none.
-                if viewModel.type != .transfer {
-                    CategoryPicker(selectedId: $viewModel.categoryId)
+                CurrencyField(label: "Amount", value: $viewModel.amount)
 
+                DatePicker("Date", selection: $viewModel.transactionDate, displayedComponents: .date)
+
+                TextField("Description (optional)", text: $viewModel.description)
+
+                // Budget & category apply to income/expense; transfers carry none.
+                // Web lists budget before category.
+                if viewModel.type != .transfer {
                     BudgetPicker(
                         selectedBudgetId: $viewModel.budgetId,
                         transactionDate: viewModel.transactionDate
                     )
+
+                    CategoryPicker(selectedId: $viewModel.categoryId)
                 }
 
                 // Fixed-expense link marks the expense paid; expense only.
@@ -65,10 +73,6 @@ struct TransactionFormView: View {
                         transactionDate: viewModel.transactionDate
                     )
                 }
-
-                TextField("Description (optional)", text: $viewModel.description)
-
-                DatePicker("Date", selection: $viewModel.transactionDate, displayedComponents: .date)
             }
 
             TagPicker(selectedTags: $viewModel.selectedTags)

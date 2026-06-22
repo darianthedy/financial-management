@@ -19,10 +19,12 @@ struct TransactionListView: View {
 
     private var isScoped: Bool { viewModel.scopedAccountId != nil }
 
-    /// The MonthNavigator shows for the scoped account-detail list, and on the
-    /// main list until an explicit Date-range filter takes over the period.
+    /// The MonthNavigator is only used by the scoped account-detail embedding.
+    /// The main Transactions list mirrors web (web/src/pages/transactions.tsx):
+    /// no month navigator — filters drive the period and the list defaults to all
+    /// transactions.
     private var showsMonthNavigator: Bool {
-        isScoped || !viewModel.hasExplicitDateRange
+        isScoped
     }
 
     var body: some View {
@@ -46,8 +48,20 @@ struct TransactionListView: View {
         }
         .navigationTitle("Transactions")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showingForm = true } label: { Image(systemName: "plus") }
+            // Web header actions (web/src/pages/transactions.tsx): an outline
+            // "Summary" button and a filled primary "Add" button.
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button { showingSummary = true } label: {
+                    Label("Summary", systemImage: "chart.bar.xaxis")
+                }
+                .buttonStyle(.bordered)
+                .tint(Color.appForeground)
+
+                Button { showingForm = true } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.appPrimary)
             }
         }
         .sheet(isPresented: $showingForm) {
@@ -157,10 +171,6 @@ struct TransactionListView: View {
             } label: {
                 Image(systemName: "square.stack.3d.up")
             }
-
-            Button { showingSummary = true } label: {
-                Image(systemName: "chart.pie")
-            }
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -214,7 +224,9 @@ struct TransactionListView: View {
                     budgetName: viewModel.budgetName(for: txn),
                     fixedExpenseName: viewModel.fixedExpenseName(for: txn),
                     isSpread: viewModel.isSpread(txn),
-                    onCreateInstallment: { installmentSource = txn }
+                    onCreateInstallment: { installmentSource = txn },
+                    onEdit: { editingTransaction = txn },
+                    onDelete: { Task { await viewModel.deleteTransaction(txn) } }
                 )
                     .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
                     .contentShape(Rectangle())
