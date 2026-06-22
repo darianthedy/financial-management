@@ -27,17 +27,26 @@ struct BudgetFormSheet: View {
         !trimmedName.isEmpty && (Double(amount) ?? 0) > 0
     }
 
+    /// The month this budget belongs to, used in the title (web shows
+    /// "New budget · June 2026").
+    private var yearMonth: String {
+        switch mode {
+        case .add(let yearMonth): return yearMonth
+        case .edit(let progress): return progress.yearMonth
+        }
+    }
+
     private var title: String {
-        if case .edit = mode { return "Edit Budget" }
-        return "New Budget"
+        let prefix = { if case .edit = mode { return "Edit budget" }; return "New budget" }()
+        return "\(prefix) · \(DateUtils.formatYearMonth(yearMonth))"
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Budget Details") {
-                    TextField("Budget Name", text: $name)
-                    CurrencyField(label: "Monthly Amount", value: $amount)
+                Section {
+                    TextField("Name", text: $name)
+                    CurrencyField(label: "Monthly amount", value: $amount)
                     TextField("Note (optional)", text: $note, axis: .vertical)
                 }
             }

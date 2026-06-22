@@ -25,6 +25,9 @@ struct BudgetListView: View {
                                 name: progress.budgetName, yearMonth: progress.yearMonth
                             )
                         }
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 Task { await viewModel.removeBudget(id: progress.budgetId) }
@@ -36,7 +39,7 @@ struct BudgetListView: View {
                             } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
-                            .tint(.blue)
+                            .tint(.appPrimary)
                         }
                 }
 
@@ -48,13 +51,22 @@ struct BudgetListView: View {
                 )
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.appBackground)
             .overlay {
                 if viewModel.progress.isEmpty && !viewModel.isLoading {
                     EmptyStateView(
-                        title: "No Budgets",
-                        message: "Create a budget to track your spending limits, or copy last month's.",
+                        title: "No budgets this month",
+                        message: "Add a budget to track spending against a monthly target, or copy this month's set from the previous month.",
                         systemImage: "target"
-                    )
+                    ) {
+                        Button("Copy previous month") {
+                            Task { await viewModel.copyFromPreviousMonth() }
+                        }
+                        Button("Add budget") {
+                            formMode = .add(yearMonth: viewModel.yearMonth)
+                        }
+                    }
                 }
             }
             .monthPageTransition(
