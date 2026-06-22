@@ -13,15 +13,20 @@ struct TagPicker: View {
                 ProgressView()
             } else if tags.isEmpty {
                 Text("No tags available")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.appMutedForeground)
             } else {
                 ForEach(tags) { tag in
                     HStack {
+                        // Web prefixes each tag with a muted tag glyph
+                        // (`pages/tags.tsx`).
+                        Image(systemName: "tag")
+                            .font(.caption)
+                            .foregroundStyle(Color.appMutedForeground)
                         Text(tag.name)
                         Spacer()
                         if selectedTags.contains(tag.id) {
                             Image(systemName: "checkmark")
-                                .foregroundStyle(.tint)
+                                .foregroundStyle(Color.appPrimary)
                         }
                     }
                     .contentShape(Rectangle())

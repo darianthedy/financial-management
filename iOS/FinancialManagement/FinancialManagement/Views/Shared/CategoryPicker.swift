@@ -13,10 +13,13 @@ struct CategoryPicker: View {
         Picker("Category", selection: $selectedId) {
             Text("None").tag(UUID?.none)
             ForEach(categories) { category in
-                HStack {
-                    if let icon = category.icon {
-                        Text(icon)
-                    }
+                HStack(spacing: 8) {
+                    // Web identifies each category by a color swatch + name
+                    // (`pages/categories.tsx`): a small dot in the category's
+                    // own color, falling back to muted-foreground when unset.
+                    Circle()
+                        .fill(category.color.flatMap(Color.init(hex:)) ?? Color.appMutedForeground)
+                        .frame(width: 10, height: 10)
                     Text(category.name)
                 }
                 .tag(Optional(category.id))

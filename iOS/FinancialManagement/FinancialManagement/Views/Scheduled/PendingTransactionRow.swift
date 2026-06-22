@@ -13,20 +13,22 @@ struct PendingTransactionRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "clock.badge.exclamationmark")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appWarning)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(pending.description ?? pending.type.rawValue.capitalized)
                         .font(.subheadline.bold())
+                        .foregroundStyle(Color.appForeground)
                     Text("Due: \(pending.transactionDate, style: .date)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.appMutedForeground)
                 }
 
                 Spacer()
 
                 Text(pending.amount.asCurrency(code: appState.defaultCurrency))
                     .font(.body.monospacedDigit().bold())
+                    .foregroundStyle(Color.appForeground)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -44,7 +46,7 @@ struct PendingTransactionRow: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .tint(Color.appSuccess)
                 .controlSize(.small)
 
                 Button {
@@ -69,7 +71,7 @@ struct PendingTransactionRow: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.bordered)
-                .tint(.red)
+                .tint(Color.appDanger)
                 .controlSize(.small)
             }
             .disabled(isProcessing)
