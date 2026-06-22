@@ -70,16 +70,20 @@ struct TransactionFilterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                searchSection
-                typeSection
-                statusSection
+                // Section order mirrors web's filter panel
+                // (web/src/components/transactions/transaction-filters.tsx): date →
+                // status → type → account → amount → budget → category → fixed →
+                // tags. Search lives in the always-visible list search bar, so the
+                // panel itself carries none.
                 dateSection
-                amountSection
+                statusSection
+                typeSection
                 accountSection
-                categorySection
-                tagSection
+                amountSection
                 budgetSection
+                categorySection
                 fixedSection
+                tagSection
 
                 Section {
                     Button("Reset All Filters", role: .destructive) { reset() }
@@ -109,16 +113,6 @@ struct TransactionFilterSheet: View {
 
     // MARK: - Sections
 
-    private var searchSection: some View {
-        Section("Search") {
-            TextField("Description contains…", text: Binding(
-                get: { working.search ?? "" },
-                set: { working.search = $0.isEmpty ? nil : $0 }
-            ))
-            .autocorrectionDisabled()
-        }
-    }
-
     private var typeSection: some View {
         MultiSelectFacet(
             title: "Type",
@@ -139,29 +133,33 @@ struct TransactionFilterSheet: View {
         )
     }
 
+    /// Web's Date field: a row of quick-range preset chips plus From/To pickers.
+    /// "All time" appears (as on web) only while a range is set, to clear it back
+    /// to all dates.
     private var dateSection: some View {
-        Section("Date Range") {
-            Menu {
-                ForEach(DatePreset.allCases) { preset in
-                    Button(preset.label) { applyPreset(preset) }
-                }
-            } label: {
-                Label("Presets", systemImage: "calendar")
-            }
-
-            Toggle("Custom range", isOn: Binding(
-                get: { working.dateFrom != nil || working.dateTo != nil },
-                set: { on in
-                    if on {
-                        let r = DateUtils.monthDateRange(DateUtils.currentYearMonth())
-                        working.dateFrom = working.dateFrom ?? r?.start
-                        working.dateTo = working.dateTo ?? r?.end
-                    } else {
-                        working.dateFrom = nil
-                        working.dateTo = nil
+        Section("Date") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(visiblePresets) { preset in
+                        Button { applyPreset(preset) } label: {
+                            Text(preset.label)
+                                .font(.caption.weight(.medium))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    activePreset == preset ? Color.appPrimary : Color.appMuted,
+                                    in: Capsule()
+                                )
+                                .foregroundStyle(
+                                    activePreset == preset ? Color.appPrimaryForeground : Color.appForeground
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-            ))
+                .padding(.vertical, 4)
+            }
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
 
             if working.dateFrom != nil || working.dateTo != nil {
                 DatePicker("From", selection: Binding(
@@ -172,12 +170,42 @@ struct TransactionFilterSheet: View {
                     get: { working.dateTo ?? Date() },
                     set: { working.dateTo = $0 }
                 ), displayedComponents: .date)
+            } else {
+                Button("Custom range") {
+                    let r = DateUtils.monthDateRange(DateUtils.currentYearMonth())
+                    working.dateFrom = r?.start
+                    working.dateTo = r?.end
+                }
             }
         }
     }
 
+    /// The 4 quick presets, plus "All time" only while a range is active.
+    private var visiblePresets: [DatePreset] {
+        let base: [DatePreset] = [.thisMonth, .lastMonth, .last3Months, .thisYear]
+        return (working.dateFrom != nil || working.dateTo != nil) ? base + [.allTime] : base
+    }
+
+    /// The preset whose range matches the working bounds (day-precision), so it
+    /// can be highlighted like web.
+    private var activePreset: DatePreset? {
+        DatePreset.allCases.first { preset in
+            guard preset != .allTime else { return false }
+            let r = preset.range()
+            return sameDay(r.from, working.dateFrom) && sameDay(r.to, working.dateTo)
+        }
+    }
+
+    private func sameDay(_ a: Date?, _ b: Date?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return true
+        case let (x?, y?): return DateUtils.yearMonthDay(from: x) == DateUtils.yearMonthDay(from: y)
+        default: return false
+        }
+    }
+
     private var amountSection: some View {
-        Section("Amount Range") {
+        Section("Amount (\(appState.defaultCurrency))") {
             CurrencyField(label: "Min", value: $minAmount)
             CurrencyField(label: "Max", value: $maxAmount)
         }
