@@ -61,10 +61,10 @@ struct MultiSelectFacet<Value: Hashable & Codable>: View {
             HStack {
                 if let leading { Text(leading) }
                 Text(label)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.appForeground)
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                    Image(systemName: "checkmark").foregroundStyle(Color.appPrimary)
                 }
             }
             .contentShape(Rectangle())

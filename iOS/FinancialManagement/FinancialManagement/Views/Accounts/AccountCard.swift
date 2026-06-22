@@ -19,7 +19,7 @@ struct AccountCard: View {
                     if isDefault {
                         Image(systemName: "star.fill")
                             .font(.caption2)
-                            .foregroundStyle(.yellow)
+                            .foregroundStyle(Color.appWarning)
                     }
                 }
                 // web shows the type and an optional "Off dashboard" state as

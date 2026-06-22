@@ -16,10 +16,10 @@ struct CurrencyPickerView: View {
             LabeledContent(label) {
                 if let currency = appState.currency(for: selectedCode) {
                     Text("\(currency.symbol) \(currency.code)")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.appMutedForeground)
                 } else {
                     Text(selectedCode)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.appMutedForeground)
                 }
             }
         }
@@ -53,13 +53,13 @@ struct CurrencyPickerList: View {
                             .font(.headline)
                         Text(currency.name)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.appMutedForeground)
                     }
 
                     Spacer()
 
                     Text(currency.symbol)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.appMutedForeground)
 
                     if currency.code == selectedCode {
                         Image(systemName: "checkmark")
@@ -67,7 +67,7 @@ struct CurrencyPickerList: View {
                     }
                 }
             }
-            .tint(.primary)
+            .tint(Color.appForeground)
         }
         .searchable(text: $searchText, prompt: "Search currencies")
         .navigationTitle("Select Currency")

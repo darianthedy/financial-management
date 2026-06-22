@@ -90,7 +90,7 @@ struct AccountFormSheet: View {
 
                 if let error = errorMessage {
                     Section {
-                        Text(error).foregroundStyle(.red)
+                        Text(error).foregroundStyle(Color.appDanger)
                     }
                 }
             }
