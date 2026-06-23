@@ -14,10 +14,20 @@ struct TagPicker: View {
         query.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
-    /// Tags matching what the user typed (all tags when the field is empty).
+    /// Tags actually attached to the transaction, shown as removable chips —
+    /// mirrors web's `selectedTags`.
+    private var selectedTagList: [Tag] {
+        tags.filter { selectedTags.contains($0.id) }
+    }
+
+    /// Available tags (not yet selected) narrowed by what the user typed —
+    /// mirrors web's `filteredTags`, which drops already-selected tags from the
+    /// list so they only ever appear as chips.
     private var filteredTags: [Tag] {
-        guard !normalizedQuery.isEmpty else { return tags }
-        return tags.filter { $0.name.lowercased().contains(normalizedQuery) }
+        tags.filter { tag in
+            !selectedTags.contains(tag.id)
+                && (normalizedQuery.isEmpty || tag.name.lowercased().contains(normalizedQuery))
+        }
     }
 
     /// Offer "create" only when the typed name doesn't already exist verbatim,
@@ -29,6 +39,34 @@ struct TagPicker: View {
 
     var body: some View {
         Section("Tags") {
+            // Selected tags render as removable chips above the input, mirroring
+            // web: each attached tag is a primary pill (tag glyph + name + ✕)
+            // that detaches when tapped.
+            if !selectedTagList.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(selectedTagList) { tag in
+                        Button {
+                            selectedTags.remove(tag.id)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "tag")
+                                Text(tag.name)
+                                    .fontWeight(.medium)
+                                Image(systemName: "xmark")
+                            }
+                            .font(.caption)
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 10)
+                            .background(Color.appPrimary)
+                            .foregroundStyle(Color.appPrimaryForeground)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove tag \(tag.name)")
+                    }
+                }
+            }
+
             // Type to filter the list and, when nothing matches, create the tag —
             // mirroring web's typeable tag input.
             TextField("Add tag", text: $query)
@@ -39,10 +77,9 @@ struct TagPicker: View {
 
             if isLoading {
                 ProgressView()
-            } else if filteredTags.isEmpty && !canCreateTag {
-                Text("No tags yet")
-                    .foregroundStyle(Color.appMutedForeground)
             } else {
+                // Only unselected, matching tags are listed; tapping one attaches
+                // it (and clears the query) just like web's addTag.
                 ForEach(filteredTags) { tag in
                     HStack {
                         // Web prefixes each tag with a muted tag glyph
@@ -52,19 +89,9 @@ struct TagPicker: View {
                             .foregroundStyle(Color.appMutedForeground)
                         Text(tag.name)
                         Spacer()
-                        if selectedTags.contains(tag.id) {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.appPrimary)
-                        }
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        if selectedTags.contains(tag.id) {
-                            selectedTags.remove(tag.id)
-                        } else {
-                            selectedTags.insert(tag.id)
-                        }
-                    }
+                    .onTapGesture { addTag(tag.id) }
                 }
 
                 if canCreateTag {
@@ -78,6 +105,11 @@ struct TagPicker: View {
                         }
                     }
                     .disabled(isCreating)
+                } else if filteredTags.isEmpty {
+                    // Web distinguishes "no tags exist" from "every tag is already
+                    // attached".
+                    Text(tags.isEmpty ? "No tags yet" : "All tags selected")
+                        .foregroundStyle(Color.appMutedForeground)
                 }
             }
         }
@@ -86,12 +118,17 @@ struct TagPicker: View {
         }
     }
 
+    /// Attach a tag and clear the query, mirroring web's addTag.
+    private func addTag(_ id: UUID) {
+        selectedTags.insert(id)
+        query = ""
+    }
+
     /// Enter/return: select the first match if any, otherwise create the tag —
     /// matching web's onKeyDown handler.
     private func submitQuery() async {
-        if let first = filteredTags.first(where: { !selectedTags.contains($0.id) }) {
-            selectedTags.insert(first.id)
-            query = ""
+        if let first = filteredTags.first {
+            addTag(first.id)
         } else if canCreateTag {
             await createAndSelect()
         }
