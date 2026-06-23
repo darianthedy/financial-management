@@ -39,7 +39,18 @@ struct ActiveInstallmentsSection: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Color.appForeground)
                     .textCase(nil)
-                    .padding(.leading, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // Match the rows' horizontal inset, then add a little vertical
+                    // breathing room around the heading.
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    // Opaque backdrop so the pinned header doesn't let the rows
+                    // scrolling underneath it show through.
+                    .background(Color.appBackground)
+                    // Zero the plain-list header insets so the background spans
+                    // edge-to-edge (the horizontal padding above restores the
+                    // heading's alignment with the rows).
+                    .listRowInsets(EdgeInsets())
             }
         }
     }

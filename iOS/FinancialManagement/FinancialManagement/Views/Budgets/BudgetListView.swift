@@ -75,6 +75,12 @@ struct BudgetListView: View {
             )
         }
         .navigationTitle("Budgets")
+        // The List lives inside a VStack (under the pinned MonthNavigator), which
+        // detaches it from the nav bar's large-title scroll tracking — leaving the
+        // large title unrendered after scrolling. Pin the title inline so it stays
+        // visible regardless of that tracking (mirrors the scoped Transactions
+        // embedding, which shares this VStack-over-list shape).
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
