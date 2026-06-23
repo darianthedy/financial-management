@@ -15,6 +15,7 @@ struct PlannedExpensesCard: View {
     let paidFixedExpenseIds: Set<UUID>
     let yearMonth: String
     let currencyCode: String
+    let widestAmountBody: String
 
     /// Effective budget after virtual-installment reservations (P1), matching
     /// web's `effective_amount - reserved`.
@@ -79,12 +80,15 @@ struct PlannedExpensesCard: View {
                             .font(.subheadline)
                             .foregroundStyle(Color.appMutedForeground)
                         Spacer()
-                        Text(headline.asCurrency(code: currencyCode))
-                            .font(.subheadline.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.appCardForeground)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                        AmountColumnView(
+                            minorUnits: headline,
+                            currencyCode: currencyCode,
+                            widestNumber: widestAmountBody
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.appCardForeground)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     }
 
                     if !budgets.isEmpty {
@@ -146,12 +150,19 @@ struct PlannedExpensesCard: View {
                     .lineLimit(1)
                 Spacer()
                 HStack(spacing: 2) {
-                    Text(budget.spent.asCurrency(code: currencyCode))
+                    AmountColumnView(
+                        minorUnits: budget.spent,
+                        currencyCode: currencyCode,
+                        widestNumber: widestAmountBody
+                    )
                     Text("/")
-                    Text(eff.asCurrency(code: currencyCode))
+                    AmountColumnView(
+                        minorUnits: eff,
+                        currencyCode: currencyCode,
+                        widestNumber: widestAmountBody
+                    )
                 }
                 .font(.caption)
-                .monospacedDigit()
                 .foregroundStyle(overspent ? Color.appDanger : Color.appMutedForeground)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -207,12 +218,13 @@ struct PlannedExpensesCard: View {
                     .font(.caption)
                     .foregroundStyle(labelColor)
                 Spacer()
-                Text(subtotal.asCurrency(code: currencyCode))
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(accent ?? Color.appCardForeground)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                AmountColumnView(
+                    minorUnits: subtotal,
+                    currencyCode: currencyCode,
+                    widestNumber: widestAmountBody
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(accent ?? Color.appCardForeground)
             }
 
             ForEach(items) { item in
@@ -221,9 +233,12 @@ struct PlannedExpensesCard: View {
                         .font(.subheadline.weight(accent == nil ? .regular : .medium))
                         .lineLimit(1)
                     Spacer()
-                    Text(item.amount.asCurrency(code: currencyCode))
+                    AmountColumnView(
+                        minorUnits: item.amount,
+                        currencyCode: currencyCode,
+                        widestNumber: widestAmountBody
+                    )
                         .font(.subheadline)
-                        .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }

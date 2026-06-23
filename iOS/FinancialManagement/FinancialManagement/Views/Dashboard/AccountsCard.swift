@@ -10,6 +10,7 @@ import SwiftUI
 struct AccountsCard: View {
     let accounts: [DashboardAccount]
     let currencyCode: String
+    let widestAmountBody: String
 
     private var total: Int64 { accounts.reduce(Int64(0)) { $0 + $1.balance } }
 
@@ -27,7 +28,13 @@ struct AccountsCard: View {
                             .font(.subheadline)
                             .foregroundStyle(Color.appMutedForeground)
                         Spacer()
-                        amount(total, semibold: true)
+                        AmountColumnView(
+                            minorUnits: total,
+                            currencyCode: currencyCode,
+                            widestNumber: widestAmountBody
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.appCardForeground)
                     }
 
                     VStack(spacing: 8) {
@@ -45,7 +52,13 @@ struct AccountsCard: View {
 
                                 Spacer()
 
-                                amount(item.balance, semibold: true)
+                                AmountColumnView(
+                                    minorUnits: item.balance,
+                                    currencyCode: currencyCode,
+                                    widestNumber: widestAmountBody
+                                )
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(item.balance < 0 ? Color.appDanger : Color.appCardForeground)
                             }
                         }
                     }

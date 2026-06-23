@@ -10,6 +10,7 @@ import SwiftUI
 struct UnplannedExpensesCard: View {
     let groups: [UnplannedGroup]
     let currencyCode: String
+    let widestAmountBody: String
 
     private var total: Int64 { groups.reduce(Int64(0)) { $0 + $1.total } }
 
@@ -27,12 +28,15 @@ struct UnplannedExpensesCard: View {
                             .font(.subheadline)
                             .foregroundStyle(Color.appMutedForeground)
                         Spacer()
-                        Text(total.asCurrency(code: currencyCode))
-                            .font(.subheadline.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.appCardForeground)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                        AmountColumnView(
+                            minorUnits: total,
+                            currencyCode: currencyCode,
+                            widestNumber: widestAmountBody
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.appCardForeground)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     }
 
                     VStack(spacing: 8) {
@@ -59,9 +63,12 @@ struct UnplannedExpensesCard: View {
 
             Spacer()
 
-            Text(group.total.asCurrency(code: currencyCode))
+            AmountColumnView(
+                minorUnits: group.total,
+                currencyCode: currencyCode,
+                widestNumber: widestAmountBody
+            )
                 .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
                 .foregroundStyle(Color.appCardForeground)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

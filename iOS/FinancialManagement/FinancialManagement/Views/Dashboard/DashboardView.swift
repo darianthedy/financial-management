@@ -30,7 +30,10 @@ struct DashboardView: View {
 
                         AccountsCard(
                             accounts: data.accounts,
-                            currencyCode: appState.defaultCurrency
+                            currencyCode: appState.defaultCurrency,
+                            widestAmountBody: widestDashboardAmountBody(
+                                accounts: data.accounts
+                            )
                         )
 
                         PlannedExpensesCard(
@@ -38,12 +41,18 @@ struct DashboardView: View {
                             fixedExpenses: data.fixedExpenses,
                             paidFixedExpenseIds: data.paidFixedExpenseIds,
                             yearMonth: viewModel.yearMonth,
-                            currencyCode: appState.defaultCurrency
+                            currencyCode: appState.defaultCurrency,
+                            widestAmountBody: widestDashboardAmountBody(
+                                accounts: data.accounts
+                            )
                         )
 
                         UnplannedExpensesCard(
                             groups: data.unplanned,
-                            currencyCode: appState.defaultCurrency
+                            currencyCode: appState.defaultCurrency,
+                            widestAmountBody: widestDashboardAmountBody(
+                                accounts: data.accounts
+                            )
                         )
                     }
                 }
@@ -65,5 +74,17 @@ struct DashboardView: View {
         }
         .onDisappear { Task { await viewModel.unsubscribe() } }
         .refreshable { await viewModel.load() }
+    }
+
+    // MARK: - Amount alignment across dashboard cards
+
+    private func widestDashboardAmountBody(accounts: [DashboardAccount]) -> String {
+        var maxAbs: Int64 = accounts.map { abs($0.balance) }.max() ?? 0
+        if let data {
+            maxAbs = max(maxAbs, viewModel.budgets.map { abs($0.effectiveAmount) }.max() ?? 0)
+            maxAbs = max(maxAbs, viewModel.fixedExpenses.map { abs($0.amount) }.max() ?? 0)
+            maxAbs = max(maxAbs, viewModel.unplanned.map { abs($0.total) }.max() ?? 0)
+        }
+        return CurrencyUtils.numberBody(maxAbs, currency: appState.defaultCurrency)
     }
 }
