@@ -80,10 +80,10 @@ struct DashboardView: View {
 
     private func widestDashboardAmountBody(accounts: [DashboardAccount]) -> String {
         var maxAbs: Int64 = accounts.map { abs($0.balance) }.max() ?? 0
-        if let data {
-            maxAbs = max(maxAbs, viewModel.budgets.map { abs($0.effectiveAmount) }.max() ?? 0)
-            maxAbs = max(maxAbs, viewModel.fixedExpenses.map { abs($0.amount) }.max() ?? 0)
-            maxAbs = max(maxAbs, viewModel.unplanned.map { abs($0.total) }.max() ?? 0)
+        if let data = viewModel.data {
+            maxAbs = max(maxAbs, data.budgets.map { abs($0.effectiveAmount) }.max() ?? 0)
+            maxAbs = max(maxAbs, data.fixedExpenses.map { abs($0.amount) }.max() ?? 0)
+            maxAbs = max(maxAbs, data.unplanned.map { abs($0.total) }.max() ?? 0)
         }
         return CurrencyUtils.numberBody(maxAbs, currency: appState.defaultCurrency)
     }
