@@ -36,11 +36,6 @@ struct TransactionListView: View {
             // account-detail embedding keeps the inline title it had before.
             .navigationTitle("Transactions")
             .navigationBarTitleDisplayMode(isScoped ? .automatic : .large)
-            // Keep the bar's material background visible. With the large title +
-            // `.searchable`, SwiftUI's automatic scroll-edge→standard transition
-            // doesn't reliably engage here, leaving the bar transparent so rows
-            // show through it while scrolling; pinning it visible fixes that.
-            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     if isScoped {
@@ -415,6 +410,13 @@ struct TransactionListView: View {
         // Opaque backdrop so the pinned header doesn't let the rows scrolling
         // underneath it show through.
         .background(Color.appBackground)
+        // System-style hairline under the pinned header, matching the separator
+        // UIKit draws beneath plain-list section headers.
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.appBorder)
+                .frame(height: 0.5)
+        }
     }
 
     /// The widest number body across the loaded rows and the per-day nets, so the
