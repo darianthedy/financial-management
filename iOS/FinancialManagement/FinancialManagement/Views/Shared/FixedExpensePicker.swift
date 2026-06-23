@@ -16,6 +16,10 @@ struct FixedExpensePicker: View {
     // month change apart from a same-month edit and only re-link on the former.
     @State private var loadedYearMonth: String?
 
+    // Sentinel tag for the in-dropdown "Create…" item. A random UUID can't
+    // collide with a real fixed-expense id, so selecting it is unambiguous.
+    private static let createTag = UUID()
+
     private var yearMonth: String { DateUtils.yearMonth(from: transactionDate) }
 
     struct Option: Decodable, Identifiable {
@@ -25,20 +29,29 @@ struct FixedExpensePicker: View {
     }
 
     var body: some View {
-        Group {
-            Picker("Fixed Expense", selection: $selectedExpenseId) {
-                Text("None").tag(UUID?.none)
-                ForEach(options) { option in
-                    let amount = option.amount.asCurrency(code: appState.defaultCurrency)
-                    Text("\(option.name) (\(amount))").tag(Optional(option.id))
-                }
+        Picker("Fixed Expense", selection: $selectedExpenseId) {
+            Text("None").tag(UUID?.none)
+            ForEach(options) { option in
+                let amount = option.amount.asCurrency(code: appState.defaultCurrency)
+                Text("\(option.name) (\(amount))").tag(Optional(option.id))
             }
 
-            Button("Create fixed expense for this month") { showingCreate = true }
-                .font(.footnote)
+            // In-dropdown create action: selecting it opens the create sheet
+            // (handled in onChange) rather than picking a real fixed expense.
+            Divider()
+            Label("Create fixed expense for this month", systemImage: "plus")
+                .tag(Optional(Self.createTag))
         }
         .task { await load() }
         .onChange(of: transactionDate) { Task { await reloadForDateChange() } }
+        .onChange(of: selectedExpenseId) { previousId, newId in
+            // The "Create…" item isn't a real selection: revert to the prior
+            // value and open the create sheet instead.
+            if newId == Self.createTag {
+                selectedExpenseId = previousId
+                showingCreate = true
+            }
+        }
         .sheet(isPresented: $showingCreate) {
             CreateFixedExpenseSheet(yearMonth: yearMonth) { newExpenseId in
                 await load()
