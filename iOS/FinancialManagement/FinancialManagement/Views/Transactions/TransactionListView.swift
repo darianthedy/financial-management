@@ -236,6 +236,11 @@ struct TransactionListView: View {
                     }
                 } header: {
                     dateGroupHeader(group)
+                        // Reset the plain-list header insets so our own background
+                        // spans edge-to-edge, then restore the row's horizontal
+                        // inset internally to keep the heading aligned with the
+                        // rows below it.
+                        .listRowInsets(EdgeInsets())
                 }
             }
 
@@ -350,6 +355,15 @@ struct TransactionListView: View {
             }
         }
         .textCase(nil)
+        // Match the rows' horizontal inset (we zero the header's list insets in
+        // the Section so the background can reach the edges) plus a little
+        // vertical breathing room.
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Opaque backdrop so the pinned header doesn't let the rows scrolling
+        // underneath it show through.
+        .background(Color.appBackground)
     }
 
     /// The widest number body across the loaded rows and the per-day nets, so the
