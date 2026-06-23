@@ -10,30 +10,17 @@ struct TransactionListView: View {
     @State private var showingSummary = false
     @State private var searchText = ""
 
-    /// True only for the top-level Transactions tab, which owns its navigation
-    /// stack and therefore needs no back button — so we can hide the system bar
-    /// entirely and let our custom header reach the top. Pushed presentations
-    /// (e.g. the budget drilldown) leave it false to keep the bar's back button.
-    private let isRoot: Bool
-
     init(
         scopedAccountId: UUID? = nil,
-        initialFilters: TransactionFilters? = nil,
-        isRoot: Bool = false
+        initialFilters: TransactionFilters? = nil
     ) {
         _viewModel = State(initialValue: TransactionListViewModel(
             scopedAccountId: scopedAccountId, initialFilters: initialFilters
         ))
         _searchText = State(initialValue: initialFilters?.search ?? "")
-        self.isRoot = isRoot
     }
 
     private var isScoped: Bool { viewModel.scopedAccountId != nil }
-
-    /// The scoped account-detail embedding keeps the system large title + toolbar
-    /// actions; every other context renders its own heading so the title and the
-    /// Summary/Add buttons share one row (see `headerBar`).
-    private var usesCustomHeader: Bool { !isScoped }
 
     /// The MonthNavigator is only used by the scoped account-detail embedding.
     /// The main Transactions list mirrors web (web/src/pages/transactions.tsx):
@@ -44,6 +31,108 @@ struct TransactionListView: View {
     }
 
     var body: some View {
+        content
+            // The main list uses the native large title; the (dormant) scoped
+            // account-detail embedding keeps the inline title it had before.
+            .navigationTitle("Transactions")
+            .navigationBarTitleDisplayMode(isScoped ? .automatic : .large)
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    if isScoped {
+                        // Scoped account detail keeps web's labeled header actions:
+                        // an outline "Summary" button and a filled primary "Add".
+                        summaryButton(showLabel: true)
+                        addButton(showLabel: true)
+                    } else {
+                        // Main list: native nav-bar actions — Summary and Filter as
+                        // secondary icons, Add as the primary create affordance.
+                        // Search and the active-filter tokens live in the
+                        // `.searchable` field (see `content`).
+                        summaryToolbarButton
+                        filterToolbarButton
+                        addToolbarButton
+                    }
+                }
+            }
+            .sheet(isPresented: $showingForm) {
+                NavigationStack {
+                    TransactionFormView(
+                        defaultAccountId: appState.defaultAccountId,
+                        currency: appState.defaultCurrency,
+                        decimalPlaces: appState.decimalPlaces
+                    ) {
+                        await viewModel.load()
+                    }
+                }
+            }
+            .sheet(item: $editingTransaction) { txn in
+                NavigationStack {
+                    TransactionFormView(
+                        editing: txn,
+                        currency: appState.defaultCurrency,
+                        decimalPlaces: appState.decimalPlaces
+                    ) {
+                        await viewModel.load()
+                    }
+                }
+            }
+            .sheet(item: $installmentSource) { source in
+                CreateInstallmentSheet(source: source) {
+                    await viewModel.load()
+                }
+            }
+            .sheet(isPresented: $showingFilters) {
+                TransactionFilterSheet(initial: viewModel.filters) { newFilters in
+                    viewModel.applyFilters(newFilters)
+                    searchText = newFilters.search ?? ""
+                }
+            }
+            .sheet(isPresented: $showingSummary) {
+                TransactionSummarySheet(
+                    filters: viewModel.effectiveFilters,
+                    currencyCode: appState.defaultCurrency,
+                    accountsById: viewModel.accountsById,
+                    categoriesById: viewModel.categoriesById,
+                    tagsById: viewModel.tagsById
+                )
+            }
+            .swipeToNavigateMonth(
+                onPrevious: { if showsMonthNavigator { viewModel.navigateMonth(by: -1) } },
+                onNext: { if showsMonthNavigator { viewModel.navigateMonth(by: 1) } }
+            )
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
+    }
+
+    // MARK: - Content
+
+    /// The list (and, when scoped, the month navigator), with the native search
+    /// field + active-filter tokens layered on for the main list. The scoped
+    /// embedding omits search to preserve its month-by-month browsing.
+    @ViewBuilder private var content: some View {
+        if isScoped {
+            listStack
+        } else {
+            listStack
+                .searchable(
+                    text: $searchText,
+                    tokens: filterTokensBinding,
+                    prompt: "Search description"
+                ) { token in
+                    Text(token.label)
+                }
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                // Debounce: re-query only after typing pauses ~300ms.
+                .task(id: searchText) {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+                    viewModel.updateSearch(searchText)
+                }
+        }
+    }
+
+    private var listStack: some View {
         VStack(spacing: 0) {
             if showsMonthNavigator {
                 MonthNavigator(
@@ -54,120 +143,45 @@ struct TransactionListView: View {
                 .padding([.horizontal, .top])
             }
 
-            if usesCustomHeader { headerBar }
-
-            if !isScoped {
-                searchBar
-                if !viewModel.filters.isEmpty { chipsBar }
-            }
-
             transactionList
         }
-        // The custom header draws its own title, so collapse the system title to
-        // an empty inline bar (this keeps the back button on pushed
-        // presentations). The root tab has no back button, so hide the bar
-        // outright and let the header sit at the top.
-        .navigationTitle(usesCustomHeader ? "" : "Transactions")
-        .navigationBarTitleDisplayMode(usesCustomHeader ? .inline : .automatic)
-        .toolbar(isRoot ? .hidden : .automatic, for: .navigationBar)
-        .toolbar {
-            // Scoped account detail keeps web's header actions in the system bar:
-            // an outline "Summary" button and a filled primary "Add" button.
-            if isScoped {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    summaryButton(showLabel: true)
-                    addButton(showLabel: true)
-                }
-            }
-        }
-        .sheet(isPresented: $showingForm) {
-            NavigationStack {
-                TransactionFormView(
-                    defaultAccountId: appState.defaultAccountId,
-                    currency: appState.defaultCurrency,
-                    decimalPlaces: appState.decimalPlaces
-                ) {
-                    await viewModel.load()
-                }
-            }
-        }
-        .sheet(item: $editingTransaction) { txn in
-            NavigationStack {
-                TransactionFormView(
-                    editing: txn,
-                    currency: appState.defaultCurrency,
-                    decimalPlaces: appState.decimalPlaces
-                ) {
-                    await viewModel.load()
-                }
-            }
-        }
-        .sheet(item: $installmentSource) { source in
-            CreateInstallmentSheet(source: source) {
-                await viewModel.load()
-            }
-        }
-        .sheet(isPresented: $showingFilters) {
-            TransactionFilterSheet(initial: viewModel.filters) { newFilters in
-                viewModel.applyFilters(newFilters)
-                searchText = newFilters.search ?? ""
-            }
-        }
-        .sheet(isPresented: $showingSummary) {
-            TransactionSummarySheet(
-                filters: viewModel.effectiveFilters,
-                currencyCode: appState.defaultCurrency,
-                accountsById: viewModel.accountsById,
-                categoriesById: viewModel.categoriesById,
-                tagsById: viewModel.tagsById
-            )
-        }
-        .swipeToNavigateMonth(
-            onPrevious: { if showsMonthNavigator { viewModel.navigateMonth(by: -1) } },
-            onNext: { if showsMonthNavigator { viewModel.navigateMonth(by: 1) } }
-        )
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
     }
 
-    // MARK: - Header
+    // MARK: - Toolbar actions (main list)
 
-    /// The screen heading with its actions on the same row, mirroring web's page
-    /// header (web/src/pages/transactions.tsx) where "Summary" and "Add" sit
-    /// inline with the title.
-    ///
-    /// iOS large navigation titles always render on their own line *below* the
-    /// bar's trailing actions, so the system can't keep a big title and inline
-    /// buttons together — hence the hand-rolled header. When the row is too
-    /// narrow for the labeled pills (most iPhones, where the wide "Transactions"
-    /// title dominates), `ViewThatFits` falls back to icon-only buttons.
-    private var headerBar: some View {
-        HStack(spacing: 8) {
-            Text("Transactions")
-                .font(.largeTitle.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .layoutPriority(1)
-
-            Spacer(minLength: 8)
-
-            ViewThatFits(in: .horizontal) {
-                actionButtons(showLabels: true)
-                actionButtons(showLabels: false)
-            }
+    private var summaryToolbarButton: some View {
+        Button { showingSummary = true } label: {
+            Image(systemName: "chart.bar.xaxis")
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .tint(Color.appForeground)
+        .accessibilityLabel("Summary")
     }
 
-    private func actionButtons(showLabels: Bool) -> some View {
-        HStack(spacing: 8) {
-            summaryButton(showLabel: showLabels)
-            addButton(showLabel: showLabels)
+    /// Opens the faceted filter sheet. The icon fills and tints when any panel
+    /// filter is active, so the state stays visible even when the search bar
+    /// (which carries the per-filter tokens) is scrolled away.
+    private var filterToolbarButton: some View {
+        Button { showingFilters = true } label: {
+            Image(systemName: panelFilterCount > 0
+                  ? "line.3.horizontal.decrease.circle.fill"
+                  : "line.3.horizontal.decrease.circle")
         }
+        .tint(panelFilterCount > 0 ? Color.appPrimary : Color.appForeground)
+        .accessibilityLabel(panelFilterCount > 0 ? "Filters (\(panelFilterCount) active)" : "Filters")
     }
 
+    private var addToolbarButton: some View {
+        Button { showingForm = true } label: {
+            Image(systemName: "plus")
+        }
+        .tint(Color.appPrimary)
+        .accessibilityLabel("Add")
+    }
+
+    // MARK: - Scoped header actions (account-detail embedding)
+
+    /// The scoped account-detail embedding keeps web's labeled header actions in
+    /// the system bar: an outline "Summary" button and a filled primary "Add".
     private func summaryButton(showLabel: Bool) -> some View {
         Button { showingSummary = true } label: {
             if showLabel {
@@ -200,44 +214,44 @@ struct TransactionListView: View {
         .accessibilityLabel("Add")
     }
 
-    // MARK: - Bars
+    // MARK: - Filter tokens
 
-    /// Web's filter bar (web/src/components/transactions/transaction-filters.tsx):
-    /// the search field with a compact filter trigger on its right. The trigger
-    /// shows the active panel-filter count (green) or a sliders icon.
-    private var searchBar: some View {
-        HStack(spacing: 8) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(Color.appMutedForeground)
-                TextField("Search description", text: $searchText)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(Color.appMutedForeground)
-                    }
-                    .buttonStyle(.plain)
+    /// One active panel filter surfaced as a removable token inside the search
+    /// field. Identified by its facet key so the field can delete exactly that
+    /// facet.
+    private struct FilterToken: Identifiable {
+        let key: FilterFacetKey
+        let label: String
+        var id: String { key.rawValue }
+    }
+
+    /// Active panel filters — everything except the free-text search, which is the
+    /// search field itself — as tokens. This is the native iOS expression of web's
+    /// active-filter chips (web/src/components/transactions/transaction-filters.tsx).
+    private var filterTokens: [FilterToken] {
+        FilterFacetKey.allCases
+            .filter { $0 != .search }
+            .compactMap { key in chipLabel(for: key).map { FilterToken(key: key, label: $0) } }
+    }
+
+    /// Reading yields the current tokens; deleting one (the search field's built-in
+    /// token removal) clears exactly that facet and reloads. New filters are added
+    /// via the filter sheet, so there is no token-suggestion path here.
+    private var filterTokensBinding: Binding<[FilterToken]> {
+        Binding(
+            get: { filterTokens },
+            set: { newTokens in
+                let remaining = Set(newTokens.map(\.key))
+                for token in filterTokens where !remaining.contains(token.key) {
+                    viewModel.clearFacet(token.key)
                 }
             }
-            .padding(8)
-            .background(Color.appMuted)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-
-            filterButton
-        }
-        .padding(.horizontal)
-        .padding(.top, 8)
-        // Debounce: re-fires only after typing pauses ~300ms.
-        .task(id: searchText) {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            viewModel.updateSearch(searchText)
-        }
+        )
     }
 
     /// Active filters configured in the panel, i.e. everything except the
-    /// always-visible search — mirrors web's `countPanelFilters`, which the
-    /// filter button badges.
+    /// always-visible search — mirrors web's `countPanelFilters`. Drives the
+    /// filter toolbar button's active (filled) state.
     private var panelFilterCount: Int {
         var n = viewModel.filters.activeCount
         if let s = viewModel.filters.search,
@@ -245,65 +259,6 @@ struct TransactionListView: View {
             n -= 1
         }
         return n
-    }
-
-    private var filterButton: some View {
-        Button { showingFilters = true } label: {
-            Group {
-                if panelFilterCount > 0 {
-                    Text("\(panelFilterCount)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.appSuccess)
-                } else {
-                    Image(systemName: "slider.horizontal.3")
-                        .foregroundStyle(Color.appForeground)
-                }
-            }
-            .frame(width: 38, height: 38)
-            .background(Color.appMuted, in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                    .strokeBorder(Color.appBorder, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(panelFilterCount > 0 ? "Filters (\(panelFilterCount) active)" : "Filters")
-    }
-
-    private var chipsBar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(activeChips, id: \.key) { chip in
-                        removableChip(label: chip.label) { clear(chip.key) }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            Button("Clear all") {
-                viewModel.clearAllFilters()
-                searchText = ""
-            }
-            .font(.caption)
-            .tint(Color.appPrimary)
-            .padding(.horizontal)
-        }
-        .padding(.top, 8)
-    }
-
-    private func removableChip(label: String, onRemove: @escaping () -> Void) -> some View {
-        HStack(spacing: 4) {
-            Text(label).font(.caption.weight(.medium))
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(Color.appPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.appPrimary.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.appPrimary.opacity(0.3), lineWidth: 1))
     }
 
     private var transactionList: some View {
@@ -466,21 +421,9 @@ struct TransactionListView: View {
         return .appMutedForeground
     }
 
-    // MARK: - Chips
+    // MARK: - Filter labels
 
-    private struct Chip { let key: FilterFacetKey; let label: String }
-
-    private var activeChips: [Chip] {
-        FilterFacetKey.allCases.compactMap { key in
-            chipLabel(for: key).map { Chip(key: key, label: $0) }
-        }
-    }
-
-    private func clear(_ key: FilterFacetKey) {
-        viewModel.clearFacet(key)
-        if key == .search { searchText = "" }
-    }
-
+    /// The human-readable label for an active facet, reused as the token text.
     private func chipLabel(for key: FilterFacetKey) -> String? {
         let f = viewModel.filters
         switch key {

@@ -19,7 +19,7 @@ struct ContentRootView: View {
             .tabItem { Label("Accounts", systemImage: "wallet.bifold") }
 
             NavigationStack {
-                TransactionListView(isRoot: true)
+                TransactionListView()
             }
             // web ArrowLeftRight
             .tabItem { Label("Transactions", systemImage: "arrow.left.arrow.right") }
