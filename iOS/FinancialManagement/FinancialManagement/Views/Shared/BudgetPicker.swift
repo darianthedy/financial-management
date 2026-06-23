@@ -17,6 +17,10 @@ struct BudgetPicker: View {
     // month change apart from a same-month edit and only re-link on the former.
     @State private var loadedYearMonth: String?
 
+    // Sentinel tag for the in-dropdown "Create…" item. A random UUID can't
+    // collide with a real budget id, so selecting it is unambiguous.
+    private static let createTag = UUID()
+
     private var yearMonth: String { DateUtils.yearMonth(from: transactionDate) }
 
     struct Option: Decodable, Identifiable {
@@ -34,21 +38,30 @@ struct BudgetPicker: View {
     }
 
     var body: some View {
-        Group {
-            Picker("Budget", selection: $selectedBudgetId) {
-                Text("None").tag(UUID?.none)
-                ForEach(options) { option in
-                    // Mirror web: budget name plus how much is left this month.
-                    let remaining = option.remaining.asCurrency(code: appState.defaultCurrency)
-                    Text("\(option.budgetName) · \(remaining) left").tag(Optional(option.budgetId))
-                }
+        Picker("Budget", selection: $selectedBudgetId) {
+            Text("None").tag(UUID?.none)
+            ForEach(options) { option in
+                // Mirror web: budget name plus how much is left this month.
+                let remaining = option.remaining.asCurrency(code: appState.defaultCurrency)
+                Text("\(option.budgetName) · \(remaining) left").tag(Optional(option.budgetId))
             }
 
-            Button("Create budget for this month") { showingCreate = true }
-                .font(.footnote)
+            // In-dropdown create action: selecting it opens the create sheet
+            // (handled in onChange) rather than picking a real budget.
+            Divider()
+            Label("Create budget for this month", systemImage: "plus")
+                .tag(Optional(Self.createTag))
         }
         .task { await load() }
         .onChange(of: transactionDate) { Task { await reloadForDateChange() } }
+        .onChange(of: selectedBudgetId) { previousId, newId in
+            // The "Create…" item isn't a real selection: revert to the prior
+            // value and open the create sheet instead.
+            if newId == Self.createTag {
+                selectedBudgetId = previousId
+                showingCreate = true
+            }
+        }
         .sheet(isPresented: $showingCreate) {
             CreateBudgetSheet(yearMonth: yearMonth) { newBudgetId in
                 await load()

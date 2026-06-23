@@ -10,29 +10,41 @@ struct CategoryPicker: View {
     @State private var categories: [Category] = []
     @State private var showingCreate = false
 
+    // Sentinel tag for the in-dropdown "Create…" item. A random UUID can't
+    // collide with a real category id, so selecting it is unambiguous.
+    private static let createTag = UUID()
+
     var body: some View {
-        Group {
-            Picker("Category", selection: $selectedId) {
-                Text("None").tag(UUID?.none)
-                ForEach(categories) { category in
-                    HStack(spacing: 8) {
-                        // Web identifies each category by a color swatch + name
-                        // (`pages/categories.tsx`): a small dot in the category's
-                        // own color, falling back to muted-foreground when unset.
-                        Circle()
-                            .fill(category.color.flatMap(Color.init(hex:)) ?? Color.appMutedForeground)
-                            .frame(width: 10, height: 10)
-                        Text(category.name)
-                    }
-                    .tag(Optional(category.id))
+        Picker("Category", selection: $selectedId) {
+            Text("None").tag(UUID?.none)
+            ForEach(categories) { category in
+                HStack(spacing: 8) {
+                    // Web identifies each category by a color swatch + name
+                    // (`pages/categories.tsx`): a small dot in the category's
+                    // own color, falling back to muted-foreground when unset.
+                    Circle()
+                        .fill(category.color.flatMap(Color.init(hex:)) ?? Color.appMutedForeground)
+                        .frame(width: 10, height: 10)
+                    Text(category.name)
                 }
+                .tag(Optional(category.id))
             }
 
-            // Mirror web's inline "+ Create category" action.
-            Button("Create category") { showingCreate = true }
-                .font(.footnote)
+            // In-dropdown create action, mirroring web's "+ Create category".
+            // Selecting it opens the create sheet (handled in onChange).
+            Divider()
+            Label("Create category", systemImage: "plus")
+                .tag(Optional(Self.createTag))
         }
         .task { await loadCategories() }
+        .onChange(of: selectedId) { previousId, newId in
+            // The "Create…" item isn't a real selection: revert to the prior
+            // value and open the create sheet instead.
+            if newId == Self.createTag {
+                selectedId = previousId
+                showingCreate = true
+            }
+        }
         .sheet(isPresented: $showingCreate) {
             CreateCategorySheet { newCategoryId in
                 await loadCategories()
