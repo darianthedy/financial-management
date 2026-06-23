@@ -10,24 +10,30 @@ struct FinancialManagementApp: App {
         Self.configureNavigationBarAppearance()
     }
 
-    /// Forces an opaque navigation bar app-wide. iOS 26's default Liquid Glass
-    /// nav bar is translucent, so list rows scrolling under it — e.g. the strip
-    /// above a pinned section header in the Transactions list — show through.
-    /// An opaque background keyed to the `AppBackground` token hides them and
-    /// matches the app's solid, web-aligned surfaces; the opaque appearance also
-    /// carries the system hairline separator beneath the bar. Applied to every
-    /// appearance slot so it holds at the scroll edge (large title) and when
-    /// collapsed/compact alike.
+    /// Makes the navigation bar opaque **once scrolled** so list rows don't show
+    /// through it (iOS 26's default Liquid Glass bar is translucent), while
+    /// keeping the **scroll-edge** (top) state transparent so the large title
+    /// still renders there. Forcing the scroll-edge opaque suppresses the large
+    /// title — it only reappears after scrolling — so the two states are
+    /// configured separately. At the very top there is no content under the bar
+    /// to bleed through, so a transparent edge is safe.
     private static func configureNavigationBarAppearance() {
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(named: "AppBackground")
+        // Scrolled / standard state: opaque, keyed to the app background token so
+        // it matches the app's solid surfaces and carries the system hairline.
+        let scrolled = UINavigationBarAppearance()
+        scrolled.configureWithOpaqueBackground()
+        scrolled.backgroundColor = UIColor(named: "AppBackground")
+
+        // Scroll-edge (top) state: transparent, so the large title sits on the
+        // plain background as usual.
+        let edge = UINavigationBarAppearance()
+        edge.configureWithTransparentBackground()
 
         let bar = UINavigationBar.appearance()
-        bar.standardAppearance = appearance
-        bar.scrollEdgeAppearance = appearance
-        bar.compactAppearance = appearance
-        bar.compactScrollEdgeAppearance = appearance
+        bar.standardAppearance = scrolled
+        bar.compactAppearance = scrolled
+        bar.scrollEdgeAppearance = edge
+        bar.compactScrollEdgeAppearance = edge
     }
 
     var body: some Scene {
