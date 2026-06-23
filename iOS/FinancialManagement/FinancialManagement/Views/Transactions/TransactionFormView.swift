@@ -24,19 +24,19 @@ struct TransactionFormView: View {
 
     var body: some View {
         Form {
-            Section("Type") {
+            // Type, details, and tags are combined into a single section.
+            // Field order mirrors the web form
+            // (web/src/components/transactions/transaction-form.tsx): type →
+            // account(s) → amount → date → description → budget → category →
+            // fixed expense → tags.
+            Section {
                 Picker("Transaction Type", selection: $viewModel.type) {
                     ForEach(TransactionType.allCases, id: \.self) { type in
                         Text(type.rawValue.capitalized).tag(type)
                     }
                 }
                 .pickerStyle(.segmented)
-            }
 
-            // Field order mirrors the web form
-            // (web/src/components/transactions/transaction-form.tsx): account(s) →
-            // amount → date → description → budget → category → fixed expense.
-            Section("Details") {
                 AccountPicker(
                     label: viewModel.type == .transfer ? "From" : "Account",
                     selectedId: $viewModel.accountId
@@ -79,9 +79,9 @@ struct TransactionFormView: View {
                         transactionDate: viewModel.transactionDate
                     )
                 }
-            }
 
-            TagPicker(selectedTags: $viewModel.selectedTags)
+                TagPicker(selectedTags: $viewModel.selectedTags)
+            }
 
             if let error = viewModel.errorMessage {
                 Section {
