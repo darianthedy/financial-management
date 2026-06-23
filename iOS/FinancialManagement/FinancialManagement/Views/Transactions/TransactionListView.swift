@@ -137,17 +137,30 @@ struct TransactionListView: View {
         }
     }
 
-    private var listStack: some View {
-        VStack(spacing: 0) {
-            if showsMonthNavigator {
+    /// The main list keeps the `List` as the direct child of the navigation
+    /// container so the nav bar can track its scrolling — collapsing the large
+    /// title and pulling its material background in as content scrolls under it.
+    /// Wrapping the list in a `VStack` (or applying the month-page transition
+    /// directly to it) detaches that tracking and leaves the bar transparent, so
+    /// only the scoped embedding — which needs the month navigator above the
+    /// list — uses the stack, and the page transition rides an inner view there.
+    @ViewBuilder private var listStack: some View {
+        if showsMonthNavigator {
+            VStack(spacing: 0) {
                 MonthNavigator(
                     yearMonth: viewModel.yearMonth,
                     onPrevious: { viewModel.navigateMonth(by: -1) },
                     onNext: { viewModel.navigateMonth(by: 1) }
                 )
                 .padding([.horizontal, .top])
-            }
 
+                transactionList
+                    .monthPageTransition(
+                        yearMonth: viewModel.yearMonth,
+                        direction: viewModel.navigationDirection
+                    )
+            }
+        } else {
             transactionList
         }
     }
@@ -303,10 +316,9 @@ struct TransactionListView: View {
                 )
             }
         }
-        .monthPageTransition(
-            yearMonth: showsMonthNavigator ? viewModel.yearMonth : "filtered",
-            direction: viewModel.navigationDirection
-        )
+        // The month-page transition is applied by `listStack` for the scoped
+        // embedding only — applying it here (to the List itself) would detach the
+        // main list from the navigation bar's scroll tracking.
     }
 
     /// A single row with its tap/swipe actions and the infinite-scroll trigger.
