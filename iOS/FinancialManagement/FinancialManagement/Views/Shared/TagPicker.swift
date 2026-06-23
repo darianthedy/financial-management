@@ -15,35 +15,35 @@ struct TagPicker: View {
     }
 
     var body: some View {
-        Section("Tags") {
-            // Tapping the row opens a searchable picker sheet (web opens a tag
-            // dropdown). The row itself summarizes the current selection as chips.
-            Button {
-                showingPicker = true
-            } label: {
-                HStack {
-                    Group {
-                        if selectedTagList.isEmpty {
-                            Text("Add tags")
-                                .foregroundStyle(Color.appMutedForeground)
-                        } else {
-                            FlowLayout(spacing: 8) {
-                                ForEach(selectedTagList) { tag in
-                                    TagChip(name: tag.name)
-                                }
+        // A plain form row (no enclosing Section) so it can be combined with
+        // other fields in a single section. Tapping it opens a searchable
+        // picker sheet (web opens a tag dropdown); the row itself summarizes
+        // the current selection as chips.
+        Button {
+            showingPicker = true
+        } label: {
+            HStack {
+                Group {
+                    if selectedTagList.isEmpty {
+                        Text("Add tags")
+                            .foregroundStyle(Color.appMutedForeground)
+                    } else {
+                        FlowLayout(spacing: 8) {
+                            ForEach(selectedTagList) { tag in
+                                TagChip(name: tag.name)
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(Color.appMutedForeground)
                 }
-                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(Color.appMutedForeground)
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .task { await loadTags() }
         .sheet(isPresented: $showingPicker) {
             TagPickerSheet(tags: $tags, selectedTags: $selectedTags, isLoading: isLoading)
