@@ -10,14 +10,30 @@ struct TransactionListView: View {
     @State private var showingSummary = false
     @State private var searchText = ""
 
-    init(scopedAccountId: UUID? = nil, initialFilters: TransactionFilters? = nil) {
+    /// True only for the top-level Transactions tab, which owns its navigation
+    /// stack and therefore needs no back button — so we can hide the system bar
+    /// entirely and let our custom header reach the top. Pushed presentations
+    /// (e.g. the budget drilldown) leave it false to keep the bar's back button.
+    private let isRoot: Bool
+
+    init(
+        scopedAccountId: UUID? = nil,
+        initialFilters: TransactionFilters? = nil,
+        isRoot: Bool = false
+    ) {
         _viewModel = State(initialValue: TransactionListViewModel(
             scopedAccountId: scopedAccountId, initialFilters: initialFilters
         ))
         _searchText = State(initialValue: initialFilters?.search ?? "")
+        self.isRoot = isRoot
     }
 
     private var isScoped: Bool { viewModel.scopedAccountId != nil }
+
+    /// The scoped account-detail embedding keeps the system large title + toolbar
+    /// actions; every other context renders its own heading so the title and the
+    /// Summary/Add buttons share one row (see `headerBar`).
+    private var usesCustomHeader: Bool { !isScoped }
 
     /// The MonthNavigator is only used by the scoped account-detail embedding.
     /// The main Transactions list mirrors web (web/src/pages/transactions.tsx):
@@ -38,6 +54,8 @@ struct TransactionListView: View {
                 .padding([.horizontal, .top])
             }
 
+            if usesCustomHeader { headerBar }
+
             if !isScoped {
                 searchBar
                 if !viewModel.filters.isEmpty { chipsBar }
@@ -45,30 +63,21 @@ struct TransactionListView: View {
 
             transactionList
         }
-        .navigationTitle("Transactions")
+        // The custom header draws its own title, so collapse the system title to
+        // an empty inline bar (this keeps the back button on pushed
+        // presentations). The root tab has no back button, so hide the bar
+        // outright and let the header sit at the top.
+        .navigationTitle(usesCustomHeader ? "" : "Transactions")
+        .navigationBarTitleDisplayMode(usesCustomHeader ? .inline : .automatic)
+        .toolbar(isRoot ? .hidden : .automatic, for: .navigationBar)
         .toolbar {
-            // Web header actions (web/src/pages/transactions.tsx): an outline
-            // "Summary" button and a filled primary "Add" button.
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Explicit icon+text content: a bare `Label` renders icon-only in
-                // the toolbar, so spell out the row to keep web's labeled pills.
-                Button { showingSummary = true } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chart.bar.xaxis")
-                        Text("Summary")
-                    }
+            // Scoped account detail keeps web's header actions in the system bar:
+            // an outline "Summary" button and a filled primary "Add" button.
+            if isScoped {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    summaryButton(showLabel: true)
+                    addButton(showLabel: true)
                 }
-                .buttonStyle(.bordered)
-                .tint(Color.appForeground)
-
-                Button { showingForm = true } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                        Text("Add")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appPrimary)
             }
         }
         .sheet(isPresented: $showingForm) {
@@ -119,6 +128,76 @@ struct TransactionListView: View {
         )
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
+    }
+
+    // MARK: - Header
+
+    /// The screen heading with its actions on the same row, mirroring web's page
+    /// header (web/src/pages/transactions.tsx) where "Summary" and "Add" sit
+    /// inline with the title.
+    ///
+    /// iOS large navigation titles always render on their own line *below* the
+    /// bar's trailing actions, so the system can't keep a big title and inline
+    /// buttons together — hence the hand-rolled header. When the row is too
+    /// narrow for the labeled pills (most iPhones, where the wide "Transactions"
+    /// title dominates), `ViewThatFits` falls back to icon-only buttons.
+    private var headerBar: some View {
+        HStack(spacing: 8) {
+            Text("Transactions")
+                .font(.largeTitle.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            ViewThatFits(in: .horizontal) {
+                actionButtons(showLabels: true)
+                actionButtons(showLabels: false)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
+    private func actionButtons(showLabels: Bool) -> some View {
+        HStack(spacing: 8) {
+            summaryButton(showLabel: showLabels)
+            addButton(showLabel: showLabels)
+        }
+    }
+
+    private func summaryButton(showLabel: Bool) -> some View {
+        Button { showingSummary = true } label: {
+            if showLabel {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar.xaxis")
+                    Text("Summary")
+                }
+            } else {
+                Image(systemName: "chart.bar.xaxis")
+            }
+        }
+        .buttonStyle(.bordered)
+        .tint(Color.appForeground)
+        .accessibilityLabel("Summary")
+    }
+
+    private func addButton(showLabel: Bool) -> some View {
+        Button { showingForm = true } label: {
+            if showLabel {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                    Text("Add")
+                }
+            } else {
+                Image(systemName: "plus")
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Color.appPrimary)
+        .accessibilityLabel("Add")
     }
 
     // MARK: - Bars
