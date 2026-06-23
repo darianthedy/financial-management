@@ -12,7 +12,7 @@ interface Props
   onChange: (value: number) => void;
   /** Decimal places allowed for the selected currency (0 for e.g. IDR). */
   decimals: number;
-  /** Allow a leading minus sign (e.g. for an overdrawn starting balance). */
+  /** Show the −/+ sign buttons and allow a negative value (e.g. a refund). */
   allowNegative?: boolean;
 }
 
@@ -21,14 +21,17 @@ function groupInt(intPart: string): string {
   return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-/** Parse arbitrary typed input into a clean display string + numeric value. */
+/**
+ * Parse arbitrary typed input into a clean display string + numeric magnitude.
+ * The field itself is number-only — the sign is owned by the −/+ buttons — so
+ * anything that isn't a digit or decimal point (including a typed "-") is
+ * stripped here.
+ */
 function parseInput(
   raw: string,
   decimals: number,
-  allowNegative: boolean,
 ): { text: string; value: number } {
-  const negative = allowNegative && raw.includes("-");
-  // Keep only digits and dots; drop the sign, grouping commas, and anything else.
+  // Keep only digits and dots; drop signs, grouping commas, and anything else.
   let cleaned = raw.replace(/[^\d.]/g, "");
   if (decimals === 0) cleaned = cleaned.replace(/\./g, "");
 
@@ -51,25 +54,24 @@ function parseInput(
   // but keep a lone "0" (e.g. while typing "0.50").
   intPart = intPart.replace(/^0+(?=\d)/, "");
 
-  const sign = negative ? "-" : "";
   const groupedInt = groupInt(intPart);
-  const body = hasDot ? `${groupedInt}.${fracPart}` : groupedInt;
-  const text = body === "" && !negative ? "" : `${sign}${body}`;
+  const text = hasDot ? `${groupedInt}.${fracPart}` : groupedInt;
 
-  const numStr = `${sign}${intPart === "" ? "0" : intPart}${fracPart ? `.${fracPart}` : ""}`;
+  const numStr = `${intPart === "" ? "0" : intPart}${fracPart ? `.${fracPart}` : ""}`;
   const value = text === "" ? NaN : Number(numStr);
   return { text, value };
 }
 
 /**
- * Display for a value the user isn't actively typing: padded to full decimals
- * (1234 -> "1,234.00"). Zero / empty renders as "" so the placeholder shows a
- * bare "0" — never literal "0.00", which would otherwise sit in the field and
- * swallow typed digits into the fraction part.
+ * Display for a value the user isn't actively typing: the magnitude padded to
+ * full decimals (1234 -> "1,234.00"). Sign-free — the buttons show it. Zero /
+ * empty renders as "" so the placeholder shows a bare "0" — never literal
+ * "0.00", which would otherwise sit in the field and swallow typed digits into
+ * the fraction part.
  */
 function settledText(value: number, decimals: number): string {
   if (!Number.isFinite(value) || value === 0) return "";
-  const fixed = value.toFixed(decimals);
+  const fixed = Math.abs(value).toFixed(decimals);
   const [i, f] = fixed.split(".");
   const grouped = groupInt(i);
   return f ? `${grouped}.${f}` : grouped;
@@ -78,8 +80,11 @@ function settledText(value: number, decimals: number): string {
 export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
   ({ value, onChange, decimals, allowNegative = false, className, ...props }, ref) => {
     const [text, setText] = useState(() => settledText(value, decimals));
+    // The sign lives outside the field so the −/+ buttons own it and the input
+    // stays number-only. The magnitude (text) and sign are recombined on emit.
+    const [negative, setNegative] = useState(() => value < 0);
     const focused = useRef(false);
-    // Local ref so the sign toggle can refocus the field; merged into the
+    // Local ref so the sign buttons can refocus the field; merged into the
     // forwarded ref so callers still reach the underlying input.
     const inputRef = useRef<HTMLInputElement>(null);
     useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
@@ -89,24 +94,27 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
     useEffect(() => {
       if (focused.current) return;
       setText(settledText(value, decimals));
+      setNegative(value < 0);
     }, [value, decimals]);
 
-    // Mobile numeric/decimal keyboards have no minus key, so a leading "-" can't
-    // be typed there. The toggle flips the sign of the current text and re-parses
-    // it, giving a reachable way to enter negatives on every device.
-    const isNegative = text.trim().startsWith("-");
-    const toggleSign = () => {
-      const nextRaw = isNegative ? text.replace("-", "") : `-${text}`;
-      const { text: nextText, value: nextValue } = parseInput(
-        nextRaw,
-        decimals,
-        true,
+    // Combine the typed magnitude with the current sign into the signed value
+    // reported to the form.
+    const emit = (magnitude: number, isNegative: boolean) => {
+      onChange(
+        Number.isFinite(magnitude) ? (isNegative ? -magnitude : magnitude) : NaN,
       );
+    };
+
+    // Mobile numeric/decimal keyboards have no minus key, so a leading "-" can't
+    // be typed there. The buttons set the sign explicitly: "−" forces negative,
+    // "+" forces positive, each keeping whatever magnitude is already entered.
+    const setSign = (isNegative: boolean) => {
+      setNegative(isNegative);
+      const { value: magnitude } = parseInput(text, decimals);
       // Focus first so the value round-trip below doesn't trigger the settle
-      // effect and wipe a lone "-" typed into an otherwise empty field.
+      // effect and clobber an in-progress entry.
       inputRef.current?.focus();
-      setText(nextText);
-      onChange(nextValue);
+      emit(magnitude, isNegative);
     };
 
     const field = (
@@ -116,20 +124,19 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
         inputMode={decimals === 0 ? "numeric" : "decimal"}
         placeholder="0"
         {...props}
-        className={allowNegative ? `pr-11 ${className ?? ""}`.trim() : className}
+        className={allowNegative ? `pr-[4.75rem] ${className ?? ""}`.trim() : className}
         value={text}
         onFocus={(e) => {
           focused.current = true;
           props.onFocus?.(e);
         }}
         onChange={(e) => {
-          const { text: nextText, value: nextValue } = parseInput(
+          const { text: nextText, value: magnitude } = parseInput(
             e.target.value,
             decimals,
-            allowNegative,
           );
           setText(nextText);
-          onChange(nextValue);
+          emit(magnitude, negative);
         }}
         onBlur={(e) => {
           focused.current = false;
@@ -144,25 +151,43 @@ export const CurrencyAmountInput = forwardRef<HTMLInputElement, Props>(
 
     if (!allowNegative) return field;
 
+    // Don't steal focus on press (which would blur + settle the field);
+    // setSign refocuses the input itself.
+    const noBlur = (e: React.MouseEvent) => e.preventDefault();
+
     return (
       <div className="relative">
         {field}
-        <button
-          type="button"
-          // Don't steal focus on press (which would blur + settle the field);
-          // toggleSign refocuses the input itself.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={toggleSign}
-          aria-label="Toggle positive or negative"
-          aria-pressed={isNegative}
-          className={`absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[var(--radius)] border text-base font-medium leading-none transition-colors ${
-            isNegative
-              ? "border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
-              : "border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
-          }`}
-        >
-          {isNegative ? "−" : "+"}
-        </button>
+        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-1">
+          <button
+            type="button"
+            onMouseDown={noBlur}
+            onClick={() => setSign(true)}
+            aria-label="Make amount negative"
+            aria-pressed={negative}
+            className={`flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border text-lg font-medium leading-none transition-colors ${
+              negative
+                ? "border-[var(--color-danger)] bg-[var(--color-danger)] text-[var(--color-danger-foreground)]"
+                : "border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+            }`}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onMouseDown={noBlur}
+            onClick={() => setSign(false)}
+            aria-label="Make amount positive"
+            aria-pressed={!negative}
+            className={`flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border text-lg font-medium leading-none transition-colors ${
+              negative
+                ? "border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+                : "border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
+            }`}
+          >
+            +
+          </button>
+        </div>
       </div>
     );
   },
