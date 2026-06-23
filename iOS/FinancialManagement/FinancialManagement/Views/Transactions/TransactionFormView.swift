@@ -49,7 +49,13 @@ struct TransactionFormView: View {
                     )
                 }
 
-                CurrencyField(label: "Amount", value: $viewModel.amount)
+                // Income/expense can be negative (e.g. a refund as a negative
+                // expense); transfers stay positive — mirrors web.
+                CurrencyField(
+                    label: "Amount",
+                    value: $viewModel.amount,
+                    allowNegative: viewModel.type != .transfer
+                )
 
                 DatePicker("Date", selection: $viewModel.transactionDate, displayedComponents: .date)
 

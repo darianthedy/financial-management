@@ -13,20 +13,23 @@ struct BudgetPicker: View {
 
     @State private var options: [Option] = []
     @State private var showingCreate = false
+    // The month options were last loaded for, so a date change can tell a real
+    // month change apart from a same-month edit and only re-link on the former.
+    @State private var loadedYearMonth: String?
 
     private var yearMonth: String { DateUtils.yearMonth(from: transactionDate) }
 
     struct Option: Decodable, Identifiable {
         let budgetId: UUID
         let budgetName: String
-        let effectiveAmount: Int64
+        let remaining: Int64
 
         var id: UUID { budgetId }
 
         enum CodingKeys: String, CodingKey {
             case budgetId = "budget_id"
             case budgetName = "budget_name"
-            case effectiveAmount = "effective_amount"
+            case remaining
         }
     }
 
@@ -35,8 +38,9 @@ struct BudgetPicker: View {
             Picker("Budget", selection: $selectedBudgetId) {
                 Text("None").tag(UUID?.none)
                 ForEach(options) { option in
-                    let amount = option.effectiveAmount.asCurrency(code: appState.defaultCurrency)
-                    Text("\(option.budgetName) (\(amount))").tag(Optional(option.budgetId))
+                    // Mirror web: budget name plus how much is left this month.
+                    let remaining = option.remaining.asCurrency(code: appState.defaultCurrency)
+                    Text("\(option.budgetName) · \(remaining) left").tag(Optional(option.budgetId))
                 }
             }
 
@@ -44,7 +48,7 @@ struct BudgetPicker: View {
                 .font(.footnote)
         }
         .task { await load() }
-        .onChange(of: transactionDate) { Task { await load() } }
+        .onChange(of: transactionDate) { Task { await reloadForDateChange() } }
         .sheet(isPresented: $showingCreate) {
             CreateBudgetSheet(yearMonth: yearMonth) { newBudgetId in
                 await load()
@@ -53,16 +57,28 @@ struct BudgetPicker: View {
         }
     }
 
+    /// Reload options for the new month and, like web, re-link the selection to
+    /// the same-named budget in that month (or clear it when none matches).
+    private func reloadForDateChange() async {
+        let didMonthChange = loadedYearMonth != yearMonth
+        let previousName = options.first { $0.budgetId == selectedBudgetId }?.budgetName
+        await load()
+        if didMonthChange, let previousName {
+            selectedBudgetId = options.first { $0.budgetName == previousName }?.budgetId
+        }
+    }
+
     private func load() async {
         do {
             let client = SupabaseService.shared.client
             options = try await client
                 .from("v_budget_progress")
-                .select("budget_id,budget_name,effective_amount")
+                .select("budget_id,budget_name,remaining")
                 .eq("year_month", value: yearMonth)
                 .order("budget_name")
                 .execute()
                 .value
+            loadedYearMonth = yearMonth
         } catch {
             options = []
         }

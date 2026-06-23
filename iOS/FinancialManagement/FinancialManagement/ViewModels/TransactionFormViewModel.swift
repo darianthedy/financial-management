@@ -5,7 +5,23 @@ import Supabase
 @Observable
 @MainActor
 final class TransactionFormViewModel {
-    var type: TransactionType = .expense
+    // Switching type clears the fields the new type hides, mirroring web's type
+    // buttons: transfers drop the budget link, non-transfers drop the transfer
+    // account, and non-expenses drop the fixed-expense link. didSet does not fire
+    // during init, so edit-mode prefill is preserved.
+    var type: TransactionType = .expense {
+        didSet {
+            guard type != oldValue else { return }
+            if type != .transfer {
+                transferAccountId = nil
+            } else {
+                budgetId = nil
+            }
+            if type != .expense {
+                fixedExpenseId = nil
+            }
+        }
+    }
     var amount: String = ""
     var accountId: UUID?
     var transferAccountId: UUID?
