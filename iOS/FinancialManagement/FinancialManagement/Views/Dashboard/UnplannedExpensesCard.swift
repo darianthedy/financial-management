@@ -14,6 +14,14 @@ struct UnplannedExpensesCard: View {
 
     private var total: Int64 { groups.reduce(Int64(0)) { $0 + $1.total } }
 
+    /// Leading sign for an unplanned-expense amount. These are all expenses
+    /// (outflows), so a normal positive spend shows `-`; a category whose refunds
+    /// outweigh its charges (a net-negative total) shows `+`. Mirrors the expense
+    /// signing in `TransactionRow.amountSign`.
+    private func expenseSign(_ value: Int64) -> String {
+        value < 0 ? "+" : "-"
+    }
+
     var body: some View {
         DashboardCard(title: "Unplanned Expenses") {
             if groups.isEmpty {
@@ -30,6 +38,7 @@ struct UnplannedExpensesCard: View {
                         Spacer()
                         AmountColumnView(
                             minorUnits: total,
+                            sign: expenseSign(total),
                             currencyCode: currencyCode,
                             widestNumber: widestAmountBody
                         )
@@ -65,6 +74,7 @@ struct UnplannedExpensesCard: View {
 
             AmountColumnView(
                 minorUnits: group.total,
+                sign: expenseSign(group.total),
                 currencyCode: currencyCode,
                 widestNumber: widestAmountBody
             )
