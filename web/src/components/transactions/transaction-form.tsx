@@ -55,6 +55,8 @@ interface Props {
   defaultFixedExpenseId?: string;
   /** Pre-fill the date (e.g. to match a pre-linked fixed expense's month). */
   defaultDate?: string;
+  /** Pre-fill the amount, in display units (e.g. from a fixed expense's cost). */
+  defaultAmount?: number;
   onSaved?: () => void;
   onCancel?: () => void;
 }
@@ -79,6 +81,7 @@ export function TransactionForm({
   defaultAccountId,
   defaultFixedExpenseId,
   defaultDate,
+  defaultAmount,
   onSaved,
   onCancel,
 }: Props) {
@@ -141,7 +144,7 @@ export function TransactionForm({
       type: "expense",
       account_id: defaultAccountId ?? "",
       transfer_account_id: null,
-      amount: 0,
+      amount: defaultAmount ?? 0,
       date: defaultDate ?? todayIso(),
       description: "",
       budget_id: null,

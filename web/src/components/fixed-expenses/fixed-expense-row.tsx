@@ -9,8 +9,13 @@ import {
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils/currency";
-import { monthDateBounds } from "@/lib/utils/date";
+import {
+  formatCurrency,
+  toDisplayAmount,
+  currencyDecimals,
+  getAppCurrency,
+} from "@/lib/utils/currency";
+import { monthDateBounds, todayIso, yearMonthOf } from "@/lib/utils/date";
 import type { FixedExpenseWithStatus } from "@/lib/hooks/use-fixed-expenses";
 
 interface Props {
@@ -23,11 +28,23 @@ export function FixedExpenseRow({ fixedExpense, onEdit, onRemove }: Props) {
   const navigate = useNavigate();
   const { id, name, amount, year_month, paid } = fixedExpense;
 
-  // Pre-link a new transaction to this fixed expense. Dating it in the expense's
-  // month makes the transaction form list it as a linkable option (the picker
-  // is scoped to the date's month) and pre-selects it.
+  // Pre-link a new transaction to this fixed expense. The date must fall in the
+  // expense's month so the form lists it as a linkable option (the picker is
+  // scoped to the date's month) and pre-selects it: use today when it's already
+  // in that month, otherwise fall back to the month's first day. Prefilling the
+  // amount saves retyping the expense's known cost; it's converted to display
+  // units here (the form's field is in display units) using the same currency
+  // registry that already formats this row's amount.
   function addTransaction() {
-    navigate(`/transactions/new?fixedExpenseId=${id}&date=${year_month}-01`);
+    const today = todayIso();
+    const date = yearMonthOf(today) === year_month ? today : `${year_month}-01`;
+    const displayAmount = toDisplayAmount(
+      amount,
+      currencyDecimals(getAppCurrency()),
+    );
+    navigate(
+      `/transactions/new?fixedExpenseId=${id}&date=${date}&amount=${displayAmount}`,
+    );
   }
 
   // Jump to the transaction list pre-filtered to this fixed expense (matched by
