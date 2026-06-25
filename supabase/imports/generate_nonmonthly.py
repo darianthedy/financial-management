@@ -58,6 +58,12 @@ NS = uuid.UUID("9c1d7b40-5a2e-4f86-b3c1-7e9a0d4f8b22")
 # 6,000,000 ("Contractor 4" here vs the monthly "Papa" allowance) is NOT listed.
 # Extend this when importing additional monthly sheets.
 MONTHLY_OVERLAPS = {
+    # November 2025 (see overlaps-2025-11.md) — Surabaya-trip charges, descriptions
+    # match. The 2025-11-29 / 7,500,000 collision ("Kalung" expense here vs a blank
+    # monthly INCOME of the same amount) is a coincidence and is NOT listed.
+    ("2025-11-14", 1700000),    # Tiket Kereta / Tiket Kereta
+    ("2025-11-15", 1740000),    # Tiket Bus / Tiket Bus
+    ("2025-11-16", 3241496),    # Hotel / Hotel
     # January 2026 (see overlaps-2026-01.md) — both genuine card charges.
     ("2026-01-04", 599000),     # Celana (Fashion) / card-only charge
     ("2026-01-04", 247401),     # Sepatu (Fashion) / card-only charge
