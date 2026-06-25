@@ -61,11 +61,14 @@ def main():
         if date.startswith(YM) and amt is not None:
             nm.append((date, amt, r[1].strip(), r[2].strip()))
 
-    # Monthly transactions from the generated SQL.
+    # Monthly transactions from the generated SQL. The VALUES tuple is
+    # (id, acct, xfer, type, amount, date, budget, fixed, category, description);
+    # we capture type, amount, date and the trailing description (for display).
     tup = re.compile(
         r"^\s+\('[0-9a-f-]{36}',\s*'(?:BCA|CARD)'\s*,\s*(?:NULL|'CARD')\s*,"
         r"\s*'(\w+)'\s*,\s*(-?\d+),\s*'(" + YM + r"-\d\d)',"
-        r"\s*(?:NULL|'[^']*')\s*,\s*(?:NULL|'[^']*')\s*,\s*(NULL|'(?:[^']|'')*')\)")
+        r"\s*(?:NULL|'[^']*')\s*,\s*(?:NULL|'[^']*')\s*,\s*(?:NULL|'[^']*')\s*,"
+        r"\s*(NULL|'(?:[^']|'')*')\)")
     mo = defaultdict(list)
     for line in SQL.read_text().splitlines():
         m = tup.match(line)

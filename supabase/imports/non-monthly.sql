@@ -576,7 +576,7 @@ ON CONFLICT (id) DO NOTHING;
 COMMIT;
 
 -- ============================================================
--- 2025-11  (5 transaction(s))
+-- 2025-11  (5 transaction(s), 3 tagged duplicate(s))
 -- ============================================================
 BEGIN;
 INSERT INTO transactions
@@ -591,10 +591,10 @@ SELECT
   c.id,                       -- category_id (matched by name)
   NULL, NULL                  -- budget_id, fixed_expense_id (n/a)
 FROM (VALUES
-    ('d94048b5-f7d5-5bd0-b65b-a8fb58aac59c', 'BCA' ,       1700000, '2025-11-14', 'Surabaya Expenses'     , 'Tiket Kereta'),
-    ('708a98d5-97b7-5753-98a9-3d5e9c266fad', 'BCA' ,       1740000, '2025-11-15', 'Surabaya Expenses'     , 'Tiket Bus'),
+    ('d94048b5-f7d5-5bd0-b65b-a8fb58aac59c', 'CARD',       1700000, '2025-11-14', 'Surabaya Expenses'     , 'Tiket Kereta'),  -- Also in monthly 2025-11 sheet — kept HERE (on CARD) as the source; the monthly row is commented out (see overlaps-2025-11.md)
+    ('708a98d5-97b7-5753-98a9-3d5e9c266fad', 'CARD',       1740000, '2025-11-15', 'Surabaya Expenses'     , 'Tiket Bus'),  -- Also in monthly 2025-11 sheet — kept HERE (on CARD) as the source; the monthly row is commented out (see overlaps-2025-11.md)
     ('6bc45cdd-af5a-53f2-9b62-d4c93f172e61', 'BCA' ,       -850000, '2025-11-16', 'Surabaya Expenses'     , 'Tiket Bus Lidya'),
-    ('d44377a8-d0f3-5e2d-8a45-5f0f711e865c', 'BCA' ,       3241496, '2025-11-16', 'Surabaya Expenses'     , 'Hotel'),
+    ('d44377a8-d0f3-5e2d-8a45-5f0f711e865c', 'CARD',       3241496, '2025-11-16', 'Surabaya Expenses'     , 'Hotel'),  -- Also in monthly 2025-11 sheet — kept HERE (on CARD) as the source; the monthly row is commented out (see overlaps-2025-11.md)
     ('13356f3d-b5e0-503a-a4bc-73936d6753e6', 'BCA' ,       7500000, '2025-11-29', 'Wedding'               , 'Kalung')
   ) AS v(id, acct, amount, date, category_name, description)
 LEFT JOIN categories c ON c.user_id = '9e36aab2-dc6e-4ff6-9ae1-c81e82225424'::uuid AND c.name = v.category_name
