@@ -15,6 +15,11 @@ export default function TransactionFormPage() {
   const defaultAccountId = searchParams.get("accountId") ?? undefined;
   const defaultFixedExpenseId = searchParams.get("fixedExpenseId") ?? undefined;
   const defaultDate = searchParams.get("date") ?? undefined;
+  const amountParam = searchParams.get("amount");
+  const defaultAmount =
+    amountParam != null && amountParam !== "" && !Number.isNaN(Number(amountParam))
+      ? Number(amountParam)
+      : undefined;
 
   const [transaction, setTransaction] = useState<TransactionWithRelations | null>(null);
   const [loading, setLoading] = useState(!!id);
@@ -88,6 +93,7 @@ export default function TransactionFormPage() {
               defaultAccountId={defaultAccountId}
               defaultFixedExpenseId={defaultFixedExpenseId}
               defaultDate={defaultDate}
+              defaultAmount={defaultAmount}
               onSaved={handleSaved}
               onCancel={() => navigate(-1)}
             />
