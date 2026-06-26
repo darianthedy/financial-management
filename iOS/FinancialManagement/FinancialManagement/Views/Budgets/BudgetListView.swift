@@ -116,10 +116,6 @@ struct BudgetListView: View {
         .navigationDestination(item: $drilldown) { link in
             TransactionListView(initialFilters: link.filters)
         }
-        .swipeToNavigateMonth(
-            onPrevious: { viewModel.navigateMonth(by: -1) },
-            onNext: { viewModel.navigateMonth(by: 1) }
-        )
         .task {
             await viewModel.load()
             await viewModel.subscribeToChanges()

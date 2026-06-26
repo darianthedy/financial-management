@@ -96,10 +96,6 @@ struct TransactionListView: View {
                     tagsById: viewModel.tagsById
                 )
             }
-            .swipeToNavigateMonth(
-                onPrevious: { if showsMonthNavigator { viewModel.navigateMonth(by: -1) } },
-                onNext: { if showsMonthNavigator { viewModel.navigateMonth(by: 1) } }
-            )
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
     }
