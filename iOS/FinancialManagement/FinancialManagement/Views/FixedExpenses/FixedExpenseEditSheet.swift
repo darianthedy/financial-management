@@ -37,7 +37,7 @@ struct FixedExpenseEditSheet: View {
             Form {
                 Section("Expense Details") {
                     TextField("Name", text: $name)
-                    CurrencyField(label: "Amount", value: $amount)
+                    CurrencyField(label: "Amount", value: $amount, decimals: decimalPlaces)
                 }
 
                 if let errorMessage {

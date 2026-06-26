@@ -46,7 +46,7 @@ struct BudgetFormSheet: View {
             Form {
                 Section {
                     TextField("Name", text: $name)
-                    CurrencyField(label: "Monthly amount", value: $amount)
+                    CurrencyField(label: "Monthly amount", value: $amount, decimals: appState.decimalPlaces)
                     TextField("Note (optional)", text: $note, axis: .vertical)
                 }
             }

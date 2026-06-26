@@ -72,7 +72,7 @@ struct AccountFormSheet: View {
                         }
                     }
 
-                    CurrencyField(label: "Starting Balance", value: $startingBalance)
+                    CurrencyField(label: "Starting Balance", value: $startingBalance, decimals: appState.decimalPlaces)
                 }
 
                 // web gives each checkbox its own helper text.

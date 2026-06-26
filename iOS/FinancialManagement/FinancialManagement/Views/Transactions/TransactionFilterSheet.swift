@@ -206,8 +206,8 @@ struct TransactionFilterSheet: View {
 
     private var amountSection: some View {
         Section("Amount (\(appState.defaultCurrency))") {
-            CurrencyField(label: "Min", value: $minAmount)
-            CurrencyField(label: "Max", value: $maxAmount)
+            CurrencyField(label: "Min", value: $minAmount, decimals: appState.decimalPlaces)
+            CurrencyField(label: "Max", value: $maxAmount, decimals: appState.decimalPlaces)
         }
     }
 

@@ -54,6 +54,7 @@ struct TransactionFormView: View {
                 CurrencyField(
                     label: "Amount",
                     value: $viewModel.amount,
+                    decimals: appState.decimalPlaces,
                     allowNegative: viewModel.type != .transfer
                 )
 
