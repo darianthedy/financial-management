@@ -18,7 +18,12 @@ struct BudgetListView: View {
 
             List {
                 ForEach(viewModel.progress) { progress in
-                    BudgetCard(progress: progress, currencyCode: appState.defaultCurrency)
+                    BudgetCard(
+                        progress: progress,
+                        currencyCode: appState.defaultCurrency,
+                        onEdit: { formMode = .edit(progress) },
+                        onRemove: { Task { await viewModel.removeBudget(id: progress.budgetId) } }
+                    )
                         .contentShape(Rectangle())
                         .onTapGesture {
                             drilldown = BudgetDrilldown(
@@ -28,6 +33,9 @@ struct BudgetListView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        // The card's trailing three-dot menu (web parity) carries
+                        // Edit/Remove; the swipe actions remain as a native iOS
+                        // shortcut to the same actions.
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 Task { await viewModel.removeBudget(id: progress.budgetId) }
