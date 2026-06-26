@@ -12,8 +12,13 @@ import SwiftUI
 struct BudgetCard: View {
     let progress: BudgetProgress
     let currencyCode: String
+    /// Opens the edit form (web: the card's trailing "Edit" menu item).
+    var onEdit: (() -> Void)?
+    /// Removes this month's budget row after a confirmation (web: "Remove").
+    var onRemove: (() -> Void)?
 
     @State private var showingInfo = false
+    @State private var showRemoveConfirm = false
 
     /// Effective budget is periodic + carry-in minus installment reservations —
     /// what is actually available to spend this month. Both the bar and the
@@ -74,6 +79,40 @@ struct BudgetCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCardSurface()
+        .alert("Remove budget?", isPresented: $showRemoveConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) { onRemove?() }
+        } message: {
+            Text("Remove \"\(progress.budgetName)\" for \(DateUtils.formatYearMonth(progress.yearMonth))? This month's row is deleted; other months are unaffected.")
+        }
+    }
+
+    // MARK: - Actions menu (web: the card's trailing MoreVertical dropdown —
+    // Edit / Remove)
+
+    @ViewBuilder
+    private var actionsMenu: some View {
+        Menu {
+            if onEdit != nil {
+                Button { onEdit?() } label: { Label("Edit", systemImage: "pencil") }
+            }
+            if onRemove != nil {
+                Button(role: .destructive) {
+                    showRemoveConfirm = true
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+        } label: {
+            // Vertical dots to match web's MoreVertical (no vertical SF symbol).
+            Image(systemName: "ellipsis")
+                .font(.subheadline)
+                .rotationEffect(.degrees(90))
+                .foregroundStyle(Color.appMutedForeground)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// 8pt rounded track (muted) with a rounded fill, matching web's
@@ -112,6 +151,10 @@ struct BudgetCard: View {
             }
 
             Spacer()
+
+            if onEdit != nil || onRemove != nil {
+                actionsMenu
+            }
         }
     }
 
