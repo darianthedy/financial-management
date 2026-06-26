@@ -111,7 +111,13 @@ actor TransactionRepository {
             let type: TransactionType
             let amount: Int64
             let description: String?
-            let date: Date
+            // `date` is a Postgres `date` column (no time). Encode it as a
+            // `yyyy-MM-dd` string in the user's local calendar rather than a raw
+            // `Date`: the client's encoder serialises `Date` as a UTC ISO-8601
+            // timestamp, so local midnight in a timezone ahead of UTC would
+            // truncate to the previous day (e.g. 1 July → 30 June). Mirrors the
+            // update path, which already formats via `DateUtils.yearMonthDay`.
+            let date: String
             let transfer_account_id: UUID?
             let category_id: UUID?
             let budget_id: UUID?
@@ -126,7 +132,7 @@ actor TransactionRepository {
                 type: type,
                 amount: amount,
                 description: description,
-                date: transactionDate,
+                date: DateUtils.yearMonthDay(from: transactionDate),
                 transfer_account_id: transferAccountId,
                 category_id: categoryId,
                 budget_id: budgetId,
