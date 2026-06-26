@@ -14,6 +14,15 @@ struct UnplannedExpensesCard: View {
 
     private var total: Int64 { groups.reduce(Int64(0)) { $0 + $1.total } }
 
+    /// Leading sign for an amount, mirroring web's `formatCurrencyParts`: the raw
+    /// signed value is shown, so a negative total (a category whose refunds
+    /// outweigh its charges, e.g. Wedding) renders `-` while ordinary positive
+    /// spend renders with no sign. `AmountColumnView` only draws the magnitude, so
+    /// without this the negative sign is lost.
+    private func amountSign(_ value: Int64) -> String {
+        value < 0 ? "-" : ""
+    }
+
     var body: some View {
         DashboardCard(title: "Unplanned Expenses") {
             if groups.isEmpty {
@@ -30,6 +39,7 @@ struct UnplannedExpensesCard: View {
                         Spacer()
                         AmountColumnView(
                             minorUnits: total,
+                            sign: amountSign(total),
                             currencyCode: currencyCode,
                             widestNumber: widestAmountBody
                         )
@@ -65,6 +75,7 @@ struct UnplannedExpensesCard: View {
 
             AmountColumnView(
                 minorUnits: group.total,
+                sign: amountSign(group.total),
                 currencyCode: currencyCode,
                 widestNumber: widestAmountBody
             )
