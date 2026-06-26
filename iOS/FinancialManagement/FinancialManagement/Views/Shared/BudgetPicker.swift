@@ -120,7 +120,7 @@ private struct CreateBudgetSheet: View {
             Form {
                 Section("Budget for \(DateUtils.formatYearMonth(yearMonth))") {
                     TextField("Name", text: $name)
-                    CurrencyField(label: "Monthly amount", value: $amount)
+                    CurrencyField(label: "Monthly amount", value: $amount, decimals: appState.decimalPlaces)
                 }
                 if let errorMessage {
                     // Error text uses the danger token, matching web's FieldError.
