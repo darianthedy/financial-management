@@ -51,25 +51,30 @@ struct CurrencyField: View {
             }
 
             // Placeholder matches web's CurrencyAmountInput ("0", not "0.00").
-            // The custom binding reformats each keystroke: the getter shows the
-            // grouped text, the setter re-parses the raw input into grouped
-            // display text plus the clean numeric `value`.
-            TextField("0", text: Binding(
-                get: { displayText },
-                set: { raw in
-                    let parsed = CurrencyInputFormat.parse(raw, decimals: decimals, allowNegative: allowNegative)
-                    displayText = parsed.display
-                    value = parsed.numeric
-                }
-            ))
-            // Number-only keypad (digits + decimal separator); the sign is
-            // entered with the toggle above rather than typed.
-            .keyboardType(decimals == 0 ? .numberPad : .decimalPad)
-            .multilineTextAlignment(.trailing)
-            .frame(maxWidth: 150)
-            .focused($isFocused)
+            // Bound directly to displayText (not a transforming Binding): a
+            // get/set binding that rewrites its backing state from inside `set`
+            // does NOT push the reformatted text back into the live editing
+            // buffer, so grouping wouldn't appear while typing. Reformatting in
+            // `.onChange` below is a separate update cycle that does reflect.
+            TextField("0", text: $displayText)
+                // Number-only keypad (digits + decimal separator); the sign is
+                // entered with the toggle above rather than typed.
+                .keyboardType(decimals == 0 ? .numberPad : .decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 150)
+                .focused($isFocused)
         }
         .onAppear { displayText = settledText(from: value) }
+        // Reformat each keystroke into grouped display text + clean numeric
+        // `value`. Guarded to the active editing session: the settle/prefill
+        // paths set displayText themselves and must not be re-parsed back into
+        // `value` (which would, e.g., turn an external "1234" into "1234.00").
+        .onChange(of: displayText) { _, raw in
+            guard isFocused else { return }
+            let parsed = CurrencyInputFormat.parse(raw, decimals: decimals, allowNegative: allowNegative)
+            if parsed.display != displayText { displayText = parsed.display }
+            if parsed.numeric != value { value = parsed.numeric }
+        }
         // Re-sync from the outside (edit prefill, "use suggested", reset) — but
         // never while the user is actively typing, which would fight the cursor.
         .onChange(of: value) { _, newValue in
