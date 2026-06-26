@@ -64,10 +64,6 @@ struct DashboardView: View {
             .padding()
         }
         .navigationTitle("Dashboard")
-        .swipeToNavigateMonth(
-            onPrevious: { viewModel.navigateMonth(by: -1) },
-            onNext: { viewModel.navigateMonth(by: 1) }
-        )
         .task {
             await viewModel.load()
             await viewModel.subscribeToChanges()

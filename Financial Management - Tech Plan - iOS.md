@@ -1111,7 +1111,7 @@ Every facet except search, date range, and amount range is a **tri-state multi-s
 - A per-card info popover shows the carry-in and the optional note when either is present (e.g. "+$10 carried over" / "−$20 overspent"). **Carry-over is always on; there is no toggle.**
 - Tapping a budget opens the Transactions list filtered to that budget's **name**, scoped to the budget's own month.
 - Overspent budgets (`remaining < 0`) render the bar and "$X over" label in the danger color.
-- `MonthNavigator` (prev / next) with swipe support (§9.1).
+- `MonthNavigator` (prev / next) (§9.1).
 - **Add** → inserts a single `budgets` row for the selected month (`name`, `periodic_amount`, optional note). Identity is **name**; budgets carry no per-row currency. There is no header record.
 - **Edit** `periodic_amount`, `name`, or note for the selected month only — past months are untouched, but because carry-over is computed live, editing an earlier month re-flows every later month in the lineage.
 - **Remove** a budget for a month = delete that month's row; a deliberate gap resets that lineage's carry-over to 0.
@@ -1121,7 +1121,7 @@ Every facet except search, date range, and amount range is a **tri-state multi-s
 ### 8.5 Fixed Expenses
 
 - Current month's fixed expenses with paid/unpaid status (paid = at least one transaction references it via `fixed_expense_id`).
-- `MonthNavigator` with swipe support.
+- `MonthNavigator` (prev / next).
 - To mark one paid, the user creates/edits a transaction and links it — there is no standalone "mark as paid" toggle.
 - **Copy from Previous Month**, **Edit** (name/amount, selected month only), **Delete** (selected month only), and **Add** — per §5.6.
 
@@ -1166,9 +1166,9 @@ Lets a large expense be absorbed gradually by reserving future budget allowance;
 
 ## 9. UI / UX Guidelines
 
-### 9.1 Month Navigation — Swipe + Page Animation
+### 9.1 Month Navigation — Page Animation
 
-All screens that embed `MonthNavigator` (Dashboard, Transactions, Budgets, Fixed Expenses) must support **horizontal swipe gestures** to navigate between months. A `.swipeToNavigateMonth(onPrevious:onNext:)` view modifier (defined in `MonthNavigator.swift`) applies a `.simultaneousGesture(DragGesture)` that fires when horizontal displacement exceeds 50 pt and is at least 1.5× the vertical displacement, so it does not conflict with vertical `ScrollView` scrolling.
+All screens that embed `MonthNavigator` (Dashboard, Transactions, Budgets, Fixed Expenses) change months via the navigator's prev / next chevron buttons. (There is no swipe gesture: the iOS app deliberately does not bind horizontal drags to month navigation.)
 
 **Page transition animation:** When the month changes, the content below the `MonthNavigator` performs a horizontal push transition. This is achieved with a `.monthPageTransition(yearMonth:direction:)` modifier that applies `.id(yearMonth)` and `.transition(.push(from: direction))`. Each ViewModel's `navigateMonth(by:)` wraps state changes in `withAnimation(.easeInOut(duration: 0.3))`. The `MonthNavigator` title text uses `.contentTransition(.numericText())`.
 

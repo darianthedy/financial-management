@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Month-scoped fixed expenses (§8.5): an unpaid/paid split with subtotals,
-/// `MonthNavigator` with swipe, and add / copy-from-previous / edit / delete.
+/// `MonthNavigator`, and add / copy-from-previous / edit / delete.
 /// Paid is derived — to mark one paid the user links a transaction to it.
 struct FixedExpenseListView: View {
     @Environment(AppState.self) private var appState
@@ -55,10 +55,6 @@ struct FixedExpenseListView: View {
                 await viewModel.load()
             }
         }
-        .swipeToNavigateMonth(
-            onPrevious: { viewModel.navigateMonth(by: -1) },
-            onNext: { viewModel.navigateMonth(by: 1) }
-        )
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }

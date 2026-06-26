@@ -464,14 +464,14 @@ allowance; Dev scheme builds.
 
 **Run:**
 > In this repo, read `Financial Management - iOS Build Prompts.md` → prompt **P12**, and iOS
-> Tech Plan §9.1, §9.2, §13. Apply the month-navigation UX (swipe, page transition, prefetch)
+> Tech Plan §9.1, §9.2, §13. Apply the month-navigation UX (page transition, prefetch)
 > across all month-scoped screens, audit money-row layouts, and add the test suite. Build and
 > run tests (Dev scheme) before finishing. This can be done incrementally.
 
 **Read first:** iOS Tech Plan §9.1, §9.2, §13.
 
 **Build:**
-- `Views/Shared/MonthNavigator.swift`: `.swipeToNavigateMonth`, `.monthPageTransition`,
+- `Views/Shared/MonthNavigator.swift`: `.monthPageTransition`,
   `.contentTransition(.numericText())`; per-VM adjacent-month prefetch cache + animated
   `navigateMonth(by:)`. Apply to Dashboard, Transactions, Budgets, Fixed Expenses.
 - Audit multi-metric cards for the vertical stacked money-row layout (§9.2).
@@ -480,11 +480,11 @@ allowance; Dev scheme builds.
   (state/filter/pager/prefetch), and a happy-path XCUITest (login → add account → add txn →
   verify dashboard).
 
-**Rules in play:** swipe fires when horizontal displacement > 50pt and ≥1.5× vertical (so it
-doesn't fight vertical scroll). Prefetch: cached → apply in `withAnimation` (no spinner);
-uncached → spinner in transition; always refetch fresh afterward.
+**Rules in play:** months change via the `MonthNavigator` prev / next chevrons (no swipe
+gesture). Prefetch: cached → apply in `withAnimation` (no spinner); uncached → spinner in
+transition; always refetch fresh afterward.
 
-**Done when:** swipe + animated paging work on all four month-scoped screens with prefetch;
+**Done when:** animated paging works on all four month-scoped screens with prefetch;
 money rows don't wrap; `xcodebuild test` (Dev scheme) passes the unit/VM suites.
 
 ---
