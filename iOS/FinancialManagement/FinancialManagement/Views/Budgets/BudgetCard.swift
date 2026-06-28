@@ -79,7 +79,23 @@ struct BudgetCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .appCardSurface()
+        .background {
+            ZStack(alignment: .leading) {
+                Color.appCard
+                if isOverspent {
+                    Color.appDanger.opacity(0.06)
+                    Rectangle()
+                        .fill(Color.appDanger)
+                        .frame(width: 4)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                .strokeBorder(Color.appBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
     }
 
     // MARK: - Actions menu (web: the card's trailing MoreVertical dropdown —
