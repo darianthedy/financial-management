@@ -79,6 +79,27 @@ final class ScheduledTransactionViewModel {
         }
     }
 
+    /// Pause / resume a schedule without opening the editor (web's Pause/Resume).
+    func toggleActive(_ scheduled: ScheduledTransaction) async {
+        do {
+            try await repository.setActive(id: scheduled.id, isActive: !scheduled.isActive)
+            await load()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Delete a schedule. Already-generated transactions are kept; only the
+    /// schedule is removed (web's delete copy).
+    func deleteScheduled(_ scheduled: ScheduledTransaction) async {
+        do {
+            try await repository.delete(id: scheduled.id)
+            scheduledTransactions.removeAll { $0.id == scheduled.id }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// Live updates: confirms/edits/dismisses and newly generated pending rows
     /// all land in `transactions`; advancing `next_due_date` touches
     /// `scheduled_transactions`. Reload on either.

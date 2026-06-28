@@ -91,8 +91,10 @@ struct FixedExpensePicker: View {
 }
 
 /// Minimal inline fixed-expense creation for the month (name + amount), mirroring
-/// web's "+ Create fixed expense for this month". Full management is P07.
-private struct CreateFixedExpenseSheet: View {
+/// web's "+ Create fixed expense for this month". Full management is P07. Shared
+/// with `FixedExpenseNamePicker` (the scheduled-transaction form's lineage-name
+/// variant).
+struct CreateFixedExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     let yearMonth: String
