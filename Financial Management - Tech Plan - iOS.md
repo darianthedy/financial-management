@@ -1132,7 +1132,10 @@ Every facet except search, date range, and amount range is a **tri-state multi-s
 
 ### 8.7 Scheduled Transactions
 
-- List of active scheduled transactions with next due date.
+- A **Recurring** list of the schedules (active first, then soonest due — paused ones stay visible, dimmed, with a "Paused · next …" footer), mirroring web's `useScheduledTransactions` order.
+- **Full schedule CRUD**, at parity with web's `ScheduledForm`:
+  - **Add / Edit** (`ScheduledFormView` + `ScheduledTransactionFormViewModel`): type (income / expense only — scheduled transfers aren't supported because the generator can't copy a destination), account, positive amount, next due date, monthly recurrence (fixed), description, **budget** and **fixed-expense** links by **lineage name** (`BudgetNamePicker` / `FixedExpenseNamePicker`, resolved per due month at generation), single category, tags, and an Active toggle.
+  - **Pause / Resume** (`setActive`) and **Delete** (`delete`) via swipe actions and a context menu. Deleting a schedule keeps already-generated transactions (`transactions.scheduled_txn_id` is `ON DELETE SET NULL`); only the schedule and its `scheduled_transaction_tags` rows (cascade) are removed.
 - A section for **pending** transactions (`status = 'pending'`) awaiting confirmation, with confirm / edit / dismiss actions. Pending transactions are generated server-side by a `pg_cron` + Edge Function job (System Design §4.5); the app is notified via `NotificationService` (§10).
 
 ### 8.8 Budget / Virtual Installments (P1) — Spread an Expense Across Budgets

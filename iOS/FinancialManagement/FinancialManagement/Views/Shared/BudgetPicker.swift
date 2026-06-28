@@ -99,8 +99,9 @@ struct BudgetPicker: View {
 }
 
 /// Minimal inline budget creation: inserts one `budgets` row for the month
-/// (name + periodic amount). Full budget management is P06.
-private struct CreateBudgetSheet: View {
+/// (name + periodic amount). Full budget management is P06. Shared with
+/// `BudgetNamePicker` (the scheduled-transaction form's lineage-name variant).
+struct CreateBudgetSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     let yearMonth: String
