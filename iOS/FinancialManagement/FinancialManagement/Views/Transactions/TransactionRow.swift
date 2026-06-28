@@ -133,11 +133,14 @@ struct TransactionRow: View {
             }
         } label: {
             // Vertical dots to match web's MoreVertical (no vertical SF symbol).
+            // The glyph stays compact, but the tappable frame is the 44pt HIG
+            // minimum (the day-header net column mirrors this width — keep them
+            // in sync, see `dateGroupHeader`).
             Image(systemName: "ellipsis")
                 .font(.subheadline)
                 .rotationEffect(.degrees(90))
                 .foregroundStyle(Color.appMutedForeground)
-                .frame(width: 28, height: 28)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

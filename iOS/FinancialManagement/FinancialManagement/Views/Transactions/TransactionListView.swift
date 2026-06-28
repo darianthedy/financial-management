@@ -9,6 +9,11 @@ struct TransactionListView: View {
     @State private var showingFilters = false
     @State private var showingSummary = false
     @State private var searchText = ""
+    /// The transaction a trailing-swipe Delete is awaiting confirmation for. The
+    /// swipe Delete is destructive and permanent, so — like the ⋮-menu Delete
+    /// (see `TransactionRow`) — it routes through this alert instead of deleting
+    /// outright.
+    @State private var transactionPendingDelete: Transaction?
 
     init(
         scopedAccountId: UUID? = nil,
@@ -98,6 +103,23 @@ struct TransactionListView: View {
             }
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
+            // Swipe Delete confirmation — same copy as the ⋮-menu Delete alert in
+            // TransactionRow, so both destructive paths read identically.
+            .alert(
+                "Delete transaction?",
+                isPresented: Binding(
+                    get: { transactionPendingDelete != nil },
+                    set: { if !$0 { transactionPendingDelete = nil } }
+                ),
+                presenting: transactionPendingDelete
+            ) { txn in
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task { await viewModel.deleteTransaction(txn) }
+                }
+            } message: { _ in
+                Text("This permanently removes the transaction and updates the affected account balances. This can't be undone.")
+            }
     }
 
     // MARK: - Content
@@ -343,9 +365,12 @@ struct TransactionListView: View {
                     .tint(Color.appSuccess)
                 }
             }
-            .swipeActions(edge: .trailing) {
+            // `allowsFullSwipe: false` so a full trailing swipe can't fire the
+            // destructive Delete on its own — the tap still routes through the
+            // confirmation alert below, matching the ⋮-menu Delete.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
-                    Task { await viewModel.deleteTransaction(txn) }
+                    transactionPendingDelete = txn
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -382,7 +407,7 @@ struct TransactionListView: View {
             // Same component + shared width as the rows, so symbol and digits
             // align into one column through the header. The net carries an
             // explicit +/− sign; a day that nets to zero shows neither. The
-            // trailing spacer mirrors the row's ⋮ actions button (28pt) and its
+            // trailing spacer mirrors the row's ⋮ actions button (44pt) and its
             // 12pt gap, so the net lines up with the amount column above the menu.
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 AmountColumnView(
@@ -393,7 +418,7 @@ struct TransactionListView: View {
                 )
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(netColor(group.net))
-                Color.clear.frame(width: 28, height: 0)
+                Color.clear.frame(width: 44, height: 0)
             }
         }
         .textCase(nil)
