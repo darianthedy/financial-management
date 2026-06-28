@@ -10,7 +10,7 @@ import Supabase
 @Observable
 @MainActor
 final class ScheduledTransactionViewModel {
-    var scheduledTransactions: [ScheduledTransaction] = []
+    var scheduledTransactions: [EnrichedScheduledTransaction] = []
     var pendingTransactions: [Transaction] = []
     var isLoading = false
     var errorMessage: String?
@@ -33,11 +33,13 @@ final class ScheduledTransactionViewModel {
         defer { isLoading = false }
 
         do {
-            async let scheduled = repository.getAll()
-            async let pending = repository.getPendingTransactions()
+            async let rawScheduledFetch = repository.getAll()
+            async let pendingFetch = repository.getPendingTransactions()
 
-            scheduledTransactions = try await scheduled
-            let fetchedPending = try await pending
+            let rawScheduled = try await rawScheduledFetch
+            let fetchedPending = try await pendingFetch
+
+            scheduledTransactions = try await repository.enrich(rawScheduled)
             await notifyNewPending(fetchedPending)
             pendingTransactions = fetchedPending
         } catch {
@@ -80,7 +82,7 @@ final class ScheduledTransactionViewModel {
     }
 
     /// Pause / resume a schedule without opening the editor (web's Pause/Resume).
-    func toggleActive(_ scheduled: ScheduledTransaction) async {
+    func toggleActive(_ scheduled: EnrichedScheduledTransaction) async {
         do {
             try await repository.setActive(id: scheduled.id, isActive: !scheduled.isActive)
             await load()
@@ -91,7 +93,7 @@ final class ScheduledTransactionViewModel {
 
     /// Delete a schedule. Already-generated transactions are kept; only the
     /// schedule is removed (web's delete copy).
-    func deleteScheduled(_ scheduled: ScheduledTransaction) async {
+    func deleteScheduled(_ scheduled: EnrichedScheduledTransaction) async {
         do {
             try await repository.delete(id: scheduled.id)
             scheduledTransactions.removeAll { $0.id == scheduled.id }

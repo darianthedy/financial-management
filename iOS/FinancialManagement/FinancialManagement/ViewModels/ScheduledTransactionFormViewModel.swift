@@ -111,17 +111,24 @@ final class ScheduledTransactionFormViewModel {
     }
 
     var isValid: Bool {
-        // Web requires a strictly positive amount and an account.
         guard let minorUnits = parsedMinorUnits, minorUnits > 0 else { return false }
-        return accountId != nil
+        guard accountId != nil else { return false }
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count <= 200
     }
 
     func save() async {
         guard isValid, let minorUnits = parsedMinorUnits, let accountId else { return }
 
-        // Fixed-expense link is expense-only; income drops it (mirrors web).
-        let effectiveFixedExpenseName = type == .expense ? fixedExpenseName : nil
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedDescription.count > 200 {
+            errorMessage = "Description must be 200 characters or fewer."
+            return
+        }
+
+        // Reassert: fixed-expense link is expense-only (didSet guards during edits,
+        // but an explicit check before save matches web's Zod schema).
+        let effectiveFixedExpenseName = type == .expense ? fixedExpenseName : nil
 
         let fields = ScheduledTransactionRepository.Fields(
             accountId: accountId,
