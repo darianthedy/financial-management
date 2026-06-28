@@ -76,17 +76,17 @@ struct BudgetListView: View {
                                 // confirmation. allowsFullSwipe:false so a long swipe can't
                                 // auto-fire the destructive action.
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        pendingRemove = progress
-                                    } label: {
-                                        Label("Remove", systemImage: "trash")
-                                    }
                                     Button {
                                         formMode = .edit(progress)
                                     } label: {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     .tint(.appPrimary)
+                                    Button(role: .destructive) {
+                                        pendingRemove = progress
+                                    } label: {
+                                        Label("Remove", systemImage: "trash")
+                                    }
                                 }
                         }
                     } header: {
