@@ -107,10 +107,42 @@ actor InstallmentRepository {
             .value
         let sourceById = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
 
+        // Resolve the names the title precedence needs — a linked fixed expense
+        // and category — so the title can follow web's `deriveTitle`
+        // (fixed expense → category → description → type). The source row's own
+        // ids drive these lookups; budget never applies (the source is detached).
+        let categoryIds = Array(Set(sources.compactMap(\.categoryId)))
+        var categoryById: [UUID: Category] = [:]
+        if !categoryIds.isEmpty {
+            let categories: [Category] = try await client
+                .from("categories")
+                .select()
+                .in("id", values: categoryIds)
+                .execute()
+                .value
+            categoryById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+        }
+
+        let fixedExpenseIds = Array(Set(sources.compactMap(\.fixedExpenseId)))
+        var fixedExpenseNameById: [UUID: String] = [:]
+        if !fixedExpenseIds.isEmpty {
+            struct FixedExpenseName: Decodable { let id: UUID; let name: String }
+            let rows: [FixedExpenseName] = try await client
+                .from("fixed_expenses")
+                .select("id, name")
+                .in("id", values: fixedExpenseIds)
+                .execute()
+                .value
+            fixedExpenseNameById = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.name) })
+        }
+
         return headers.map { header in
-            ActiveInstallment(
+            let source = sourceById[header.sourceTransactionId]
+            return ActiveInstallment(
                 installment: header,
-                source: sourceById[header.sourceTransactionId],
+                source: source,
+                category: source?.categoryId.flatMap { categoryById[$0] },
+                fixedExpenseName: source?.fixedExpenseId.flatMap { fixedExpenseNameById[$0] },
                 budgetNames: namesByInstallment[header.id] ?? []
             )
         }
@@ -128,18 +160,31 @@ actor InstallmentRepository {
 }
 
 /// One "Active installments" entry: the header plus its source expense (for the
-/// title and back-link) and the budget-name chips it reserves across.
+/// title and back-link) and the budget-name chips it reserves across. The
+/// source's linked category and fixed-expense name are resolved alongside so the
+/// title can follow the same precedence the Transactions list uses.
 struct ActiveInstallment: Identifiable, Sendable {
     let installment: BudgetInstallment
     let source: Transaction?
+    /// The source expense's linked category, if any (second in the title order).
+    let category: Category?
+    /// The source expense's linked fixed-expense name, if any (top of the order).
+    let fixedExpenseName: String?
     let budgetNames: [String]
 
     var id: UUID { installment.id }
 
-    /// Title derived from the source expense, falling back to the header note.
+    /// Title derived from the source expense, mirroring web's `deriveTitle`
+    /// (`web/src/components/transactions/transaction-display.tsx`): fixed expense
+    /// → category → description → the type word. Budget never applies — the
+    /// source row is detached from any single budget. The header note stands in
+    /// for the description if the source's own is missing, and the type word
+    /// resolves to "Expense" for these expense-only sources.
     var title: String {
+        if let fixedExpenseName, !fixedExpenseName.isEmpty { return fixedExpenseName }
+        if let name = category?.name, !name.isEmpty { return name }
         if let description = source?.description, !description.isEmpty { return description }
         if let note = installment.description, !note.isEmpty { return note }
-        return "Installment"
+        return (source?.type ?? .expense).rawValue.capitalized
     }
 }
