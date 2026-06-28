@@ -15,6 +15,7 @@ struct FixedExpenseFormSheet: View {
     @State private var amount = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var showDiscardConfirm = false
 
     private let repository = FixedExpenseRepository()
 
@@ -22,6 +23,11 @@ struct FixedExpenseFormSheet: View {
 
     private var isValid: Bool {
         !trimmedName.isEmpty && (Double(amount) ?? 0) > 0
+    }
+
+    /// Any meaningful input entered, so a swipe-down / Cancel should confirm.
+    private var hasChanges: Bool {
+        !name.isEmpty || !amount.isEmpty
     }
 
     var body: some View {
@@ -42,12 +48,24 @@ struct FixedExpenseFormSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(!isValid || isSaving)
                 }
+            }
+            // Guard the swipe-down dismissal too, then confirm via Cancel.
+            .interactiveDismissDisabled(hasChanges)
+            .confirmationDialog(
+                "Discard new fixed expense?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
             }
         }
     }

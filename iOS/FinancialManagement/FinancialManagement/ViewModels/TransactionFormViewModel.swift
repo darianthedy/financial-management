@@ -41,6 +41,38 @@ final class TransactionFormViewModel {
     private let decimalPlaces: Int
     private let repository = TransactionRepository()
 
+    /// Snapshot of the editable fields the form opened with, so unsaved edits can
+    /// be detected for the discard-changes guard. Tags are tracked separately
+    /// because they load asynchronously after init.
+    private struct Snapshot: Equatable {
+        var type: TransactionType
+        var amount: String
+        var accountId: UUID?
+        var transferAccountId: UUID?
+        var categoryId: UUID?
+        var budgetId: UUID?
+        var fixedExpenseId: UUID?
+        var description: String
+        var transactionDate: Date
+    }
+    private var initialSnapshot: Snapshot!
+    private var initialTags: Set<UUID> = []
+
+    private var currentSnapshot: Snapshot {
+        Snapshot(
+            type: type, amount: amount, accountId: accountId,
+            transferAccountId: transferAccountId, categoryId: categoryId,
+            budgetId: budgetId, fixedExpenseId: fixedExpenseId,
+            description: description, transactionDate: transactionDate
+        )
+    }
+
+    /// True once the user edits any field (or the tag set) away from the opened
+    /// values — drives the form's discard-changes guard.
+    var hasChanges: Bool {
+        currentSnapshot != initialSnapshot || selectedTags != initialTags
+    }
+
     init(
         editing transaction: Transaction? = nil,
         defaultAccountId: UUID? = nil,
@@ -65,12 +97,17 @@ final class TransactionFormViewModel {
             // New transactions pre-select the user's default account (§5.3).
             self.accountId = defaultAccountId
         }
+
+        // Baseline for the discard-changes guard, captured after prefill. The tag
+        // baseline starts empty and is set when `loadTags` resolves.
+        self.initialSnapshot = currentSnapshot
     }
 
     func loadTags() async {
         guard let transaction = editingTransaction else { return }
         do {
             selectedTags = try await repository.getTagIds(transactionId: transaction.id)
+            initialTags = selectedTags
         } catch {}
     }
 

@@ -30,11 +30,12 @@ struct AccountsCard: View {
                         Spacer()
                         AmountColumnView(
                             minorUnits: total,
+                            sign: total < 0 ? "-" : "",
                             currencyCode: currencyCode,
                             widestNumber: widestAmountBody
                         )
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.appCardForeground)
+                        .foregroundStyle(total < 0 ? Color.appDanger : Color.appCardForeground)
                     }
 
                     VStack(spacing: 8) {
@@ -54,6 +55,10 @@ struct AccountsCard: View {
 
                                 AmountColumnView(
                                     minorUnits: item.balance,
+                                    // Negative balances must read as negative without
+                                    // relying on the danger color alone (HIG: don't
+                                    // encode meaning in color only).
+                                    sign: item.balance < 0 ? "-" : "",
                                     currencyCode: currencyCode,
                                     widestNumber: widestAmountBody
                                 )

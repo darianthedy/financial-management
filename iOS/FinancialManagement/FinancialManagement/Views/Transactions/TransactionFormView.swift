@@ -4,6 +4,7 @@ struct TransactionFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @State private var viewModel: TransactionFormViewModel
+    @State private var showDiscardConfirm = false
     var onSaved: (() async -> Void)?
 
     init(
@@ -95,7 +96,9 @@ struct TransactionFormView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") {
+                    if viewModel.hasChanges { showDiscardConfirm = true } else { dismiss() }
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
@@ -109,6 +112,15 @@ struct TransactionFormView: View {
                 }
                 .disabled(!viewModel.isValid || viewModel.isSaving)
             }
+        }
+        .interactiveDismissDisabled(viewModel.hasChanges)
+        .confirmationDialog(
+            "Discard changes?",
+            isPresented: $showDiscardConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Keep Editing", role: .cancel) {}
         }
         .task { await viewModel.loadTags() }
     }

@@ -14,6 +14,11 @@ struct FixedExpenseEditSheet: View {
     @State private var amount: String
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var showDiscardConfirm = false
+
+    /// The values the sheet opened with, so an edit can be detected.
+    private let initialName: String
+    private let initialAmount: String
 
     private let repository = FixedExpenseRepository()
 
@@ -21,15 +26,23 @@ struct FixedExpenseEditSheet: View {
         self.expense = expense
         self.decimalPlaces = decimalPlaces
         self.onSaved = onSaved
-        _name = State(initialValue: expense.name)
         let display = CurrencyUtils.toDisplayAmount(expense.amount, decimalPlaces: decimalPlaces)
-        _amount = State(initialValue: String(format: "%.\(decimalPlaces)f", display))
+        let amountText = String(format: "%.\(decimalPlaces)f", display)
+        self.initialName = expense.name
+        self.initialAmount = amountText
+        _name = State(initialValue: expense.name)
+        _amount = State(initialValue: amountText)
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
     private var isValid: Bool {
         !trimmedName.isEmpty && (Double(amount) ?? 0) > 0
+    }
+
+    /// True once the user edits away from the opened values.
+    private var hasChanges: Bool {
+        name != initialName || amount != initialAmount
     }
 
     var body: some View {
@@ -50,12 +63,23 @@ struct FixedExpenseEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(!isValid || isSaving)
                 }
+            }
+            .interactiveDismissDisabled(hasChanges)
+            .confirmationDialog(
+                "Discard changes?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
             }
         }
     }

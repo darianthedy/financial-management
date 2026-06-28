@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MoreView: View {
+    @State private var showingSignOutConfirm = false
+
     var body: some View {
         // Secondary destinations mirror web's nav-config.ts non-primary items.
         // Categories and Tags also live there, but their management screens are
@@ -33,15 +35,27 @@ struct MoreView: View {
 
             Section {
                 Button(role: .destructive) {
-                    Task {
-                        let vm = AuthViewModel()
-                        await vm.signOut()
-                    }
+                    showingSignOutConfirm = true
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
         }
         .navigationTitle("More")
+        .confirmationDialog(
+            "Sign out?",
+            isPresented: $showingSignOutConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Sign Out", role: .destructive) {
+                Task {
+                    let vm = AuthViewModel()
+                    await vm.signOut()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll need to sign in again to access your accounts.")
+        }
     }
 }

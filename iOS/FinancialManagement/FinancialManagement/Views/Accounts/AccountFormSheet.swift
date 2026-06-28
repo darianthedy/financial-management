@@ -19,6 +19,7 @@ struct AccountFormSheet: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var didLoad = false
+    @State private var showDiscardConfirm = false
 
     // Avatar staged locally; uploaded only on submit so cancelling never orphans
     // a Storage object. `removeImage` flags clearing an existing image.
@@ -35,6 +36,26 @@ struct AccountFormSheet: View {
     }
 
     private var isEditing: Bool { account != nil }
+
+    /// True once the user enters/edits meaningful input (including staging or
+    /// clearing the avatar), so a swipe-down / Cancel should confirm. Compared
+    /// against the account's opening values when editing, or empty defaults when
+    /// creating.
+    private var hasChanges: Bool {
+        if stagedImage != nil || removeImage { return true }
+        if let account {
+            return name != account.name
+                || type != account.type
+                || startingBalance != Self.balanceString(account.startingBalance, decimalPlaces: appState.decimalPlaces)
+                || showOnDashboard != account.showOnDashboard
+                || setAsDefault != (appState.defaultAccountId == account.id)
+        }
+        return !name.isEmpty
+            || !startingBalance.isEmpty
+            || type != .bankAccount
+            || showOnDashboard != true
+            || setAsDefault
+    }
 
     var body: some View {
         NavigationStack {
@@ -98,7 +119,9 @@ struct AccountFormSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
@@ -119,6 +142,18 @@ struct AccountFormSheet: View {
                         removeImage = false
                     }
                 }
+            }
+            // Block accidental swipe-to-dismiss while there are unsaved edits or a
+            // save is in flight, so work isn't silently lost. Cancel routes through
+            // the discard confirmation below.
+            .interactiveDismissDisabled(hasChanges || isSaving)
+            .confirmationDialog(
+                "Discard changes?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
             }
         }
     }
