@@ -59,7 +59,8 @@ extension Color {
 
     /// Subtle surface (chips, fills). web `--color-muted`.
     static let appMuted = Color("AppMuted")
-    /// Secondary / de-emphasized text. web `--color-muted-foreground`.
+    /// Secondary / de-emphasized text. web `--color-muted-foreground` (light: HSL 220 9% 45%,
+    /// darkened 1% from the web's 46% so muted chip text clears WCAG AA 4.5:1 on the muted fill).
     static let appMutedForeground = Color("AppMutedForeground")
 
     /// Card surface. web `--color-card`.
