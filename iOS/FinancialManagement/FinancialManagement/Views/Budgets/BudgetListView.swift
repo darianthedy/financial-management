@@ -13,84 +13,109 @@ struct BudgetListView: View {
     @State private var pendingCancel: ActiveInstallment?
 
     var body: some View {
-        List {
-            Section {
-                ForEach(viewModel.progress) { progress in
-                    BudgetCard(
-                        progress: progress,
-                        currencyCode: appState.defaultCurrency,
-                        onEdit: { formMode = .edit(progress) },
-                        onRemove: { pendingRemove = progress }
-                    )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            drilldown = BudgetDrilldown(
-                                name: progress.budgetName, yearMonth: progress.yearMonth
-                            )
-                        }
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        // The card's trailing three-dot menu (web parity) carries
-                        // Edit/Remove; the swipe actions remain as a native iOS
-                        // shortcut to the same actions — including the same remove
-                        // confirmation. allowsFullSwipe:false so a long swipe can't
-                        // auto-fire the destructive action.
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingRemove = progress
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-                            Button {
-                                formMode = .edit(progress)
-                            } label: {
-                                Label("Edit", systemImage: "pencil")
-                            }
-                            .tint(.appPrimary)
-                        }
-                }
-            } header: {
-                MonthNavigator(
-                    yearMonth: viewModel.yearMonth,
-                    onPrevious: { viewModel.navigateMonth(by: -1) },
-                    onNext: { viewModel.navigateMonth(by: 1) }
-                )
-                .padding(.vertical, 8)
-                .background(Color.appBackground)
-                .listRowInsets(EdgeInsets())
-            }
-
-            ActiveInstallmentsSection(
-                installments: viewModel.activeInstallments,
-                currencyCode: appState.defaultCurrency,
-                onSelect: { installmentSource = $0 },
-                onCancel: { pendingCancel = $0 }
-            )
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Color.appBackground)
-        .overlay {
+        Group {
             if viewModel.progress.isEmpty && !viewModel.isLoading {
-                EmptyStateView(
-                    title: "No budgets this month",
-                    message: "Add a budget to track spending against a monthly target, or copy this month's set from the previous month.",
-                    systemImage: "target"
-                ) {
-                    Button("Copy previous month") {
-                        Task { await viewModel.copyFromPreviousMonth() }
+                VStack(spacing: 0) {
+                    MonthNavigator(
+                        yearMonth: viewModel.yearMonth,
+                        onPrevious: { viewModel.navigateMonth(by: -1) },
+                        onNext: { viewModel.navigateMonth(by: 1) }
+                    )
+                    .padding(.vertical, 8)
+                    .background(Color.appBackground)
+
+                    GeometryReader { geo in
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                Spacer(minLength: 0)
+                                EmptyStateView(
+                                    title: "No budgets this month",
+                                    message: "Add a budget to track spending against a monthly target, or copy this month's set from the previous month.",
+                                    systemImage: "target"
+                                ) {
+                                    Button("Copy previous month") {
+                                        Task { await viewModel.copyFromPreviousMonth() }
+                                    }
+                                    Button("Add budget") {
+                                        formMode = .add(yearMonth: viewModel.yearMonth)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                        }
+                        .background(Color.appBackground)
                     }
-                    Button("Add budget") {
-                        formMode = .add(yearMonth: viewModel.yearMonth)
-                    }
+                    .monthPageTransition(
+                        yearMonth: viewModel.yearMonth,
+                        direction: viewModel.navigationDirection
+                    )
                 }
+            } else {
+                List {
+                    Section {
+                        ForEach(viewModel.progress) { progress in
+                            BudgetCard(
+                                progress: progress,
+                                currencyCode: appState.defaultCurrency,
+                                onEdit: { formMode = .edit(progress) },
+                                onRemove: { pendingRemove = progress }
+                            )
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    drilldown = BudgetDrilldown(
+                                        name: progress.budgetName, yearMonth: progress.yearMonth
+                                    )
+                                }
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                // The card's trailing three-dot menu (web parity) carries
+                                // Edit/Remove; the swipe actions remain as a native iOS
+                                // shortcut to the same actions — including the same remove
+                                // confirmation. allowsFullSwipe:false so a long swipe can't
+                                // auto-fire the destructive action.
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        pendingRemove = progress
+                                    } label: {
+                                        Label("Remove", systemImage: "trash")
+                                    }
+                                    Button {
+                                        formMode = .edit(progress)
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    .tint(.appPrimary)
+                                }
+                        }
+                    } header: {
+                        MonthNavigator(
+                            yearMonth: viewModel.yearMonth,
+                            onPrevious: { viewModel.navigateMonth(by: -1) },
+                            onNext: { viewModel.navigateMonth(by: 1) }
+                        )
+                        .padding(.vertical, 8)
+                        .background(Color.appBackground)
+                        .listRowInsets(EdgeInsets())
+                    }
+
+                    ActiveInstallmentsSection(
+                        installments: viewModel.activeInstallments,
+                        currencyCode: appState.defaultCurrency,
+                        onSelect: { installmentSource = $0 },
+                        onCancel: { pendingCancel = $0 }
+                    )
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color.appBackground)
+                .monthPageTransition(
+                    yearMonth: viewModel.yearMonth,
+                    direction: viewModel.navigationDirection
+                )
             }
         }
-        .monthPageTransition(
-            yearMonth: viewModel.yearMonth,
-            direction: viewModel.navigationDirection
-        )
         .navigationTitle("Budgets")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
