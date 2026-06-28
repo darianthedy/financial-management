@@ -44,8 +44,8 @@ struct CurrencyField: View {
                             RoundedRectangle(cornerRadius: 6)
                                 .stroke(isNegative ? Color.appDanger : Color.appBorder)
                         )
-                        // Keep the 30pt bordered chrome (mirrors web's +/− button)
-                        // but expand the tappable region to the 44×44pt HIG minimum.
+                        // Keep the 30pt bordered box visually, but expand the
+                        // tappable area to the 44pt HIG minimum.
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }

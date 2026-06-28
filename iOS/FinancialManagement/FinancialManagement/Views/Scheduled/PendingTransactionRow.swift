@@ -33,51 +33,63 @@ struct PendingTransactionRow: View {
                     .minimumScaleFactor(0.7)
             }
 
-            HStack(spacing: 8) {
-                Button {
-                    isProcessing = true
-                    Task {
-                        await onConfirm()
-                        isProcessing = false
-                    }
-                } label: {
-                    Label("Confirm", systemImage: "checkmark")
-                        // Keep the compact look but guarantee a 44pt-tall hit area
-                        // (HIG minimum); minHeight lets the row still grow at XXL.
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .lineLimit(1)
+            // Three inline actions. At default sizes they sit side by side, but at
+            // larger Dynamic Type / narrow widths three labelled buttons crowd and
+            // truncate ("Conf…", "Dis…"), so ViewThatFits falls back to a full-width
+            // vertical stack. Each button keeps a 44pt-tall hit area (HIG minimum).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    actionButtons(fillWidth: false)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appSuccess)
-                .controlSize(.small)
-
-                Button {
-                    onEdit()
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .lineLimit(1)
+                VStack(spacing: 8) {
+                    actionButtons(fillWidth: true)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Button {
-                    isProcessing = true
-                    Task {
-                        await onDismiss()
-                        isProcessing = false
-                    }
-                } label: {
-                    Label("Dismiss", systemImage: "xmark")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.bordered)
-                .tint(Color.appDanger)
-                .controlSize(.small)
             }
             .disabled(isProcessing)
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func actionButtons(fillWidth: Bool) -> some View {
+        Button {
+            isProcessing = true
+            Task {
+                await onConfirm()
+                isProcessing = false
+            }
+        } label: {
+            Label("Confirm", systemImage: "checkmark")
+                .frame(maxWidth: fillWidth ? .infinity : nil, minHeight: 44)
+                .lineLimit(1)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Color.appSuccess)
+        .controlSize(.small)
+
+        Button {
+            onEdit()
+        } label: {
+            Label("Edit", systemImage: "pencil")
+                .frame(maxWidth: fillWidth ? .infinity : nil, minHeight: 44)
+                .lineLimit(1)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+
+        Button {
+            isProcessing = true
+            Task {
+                await onDismiss()
+                isProcessing = false
+            }
+        } label: {
+            Label("Dismiss", systemImage: "xmark")
+                .frame(maxWidth: fillWidth ? .infinity : nil, minHeight: 44)
+                .lineLimit(1)
+        }
+        .buttonStyle(.bordered)
+        .tint(Color.appDanger)
+        .controlSize(.small)
     }
 }
