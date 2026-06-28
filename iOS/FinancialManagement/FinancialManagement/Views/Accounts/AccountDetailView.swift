@@ -48,6 +48,17 @@ struct AccountDetailView: View {
             }
         }
         .navigationTitle(viewModel.account?.name ?? "Account")
+        .alert("Archive account?", isPresented: $showingArchiveConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Archive", role: .destructive) {
+                Task {
+                    await viewModel.archiveAccount()
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("\"\(viewModel.account?.name ?? "This account")\" will be hidden from your accounts. Its transaction history is preserved.")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit") { showingEditSheet = true }
@@ -63,20 +74,5 @@ struct AccountDetailView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
-        .confirmationDialog(
-            "Archive this account?",
-            isPresented: $showingArchiveConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Archive Account", role: .destructive) {
-                Task {
-                    await viewModel.archiveAccount()
-                    dismiss()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Archiving hides this account and its transactions from the app. You can't undo this here.")
-        }
     }
 }
