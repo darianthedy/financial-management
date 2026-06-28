@@ -5,6 +5,7 @@ struct AccountDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AccountDetailViewModel
     @State private var showingEditSheet = false
+    @State private var showingArchiveConfirm = false
 
     init(accountId: UUID) {
         _viewModel = State(initialValue: AccountDetailViewModel(accountId: accountId))
@@ -41,10 +42,7 @@ struct AccountDetailView: View {
 
                 Section {
                     Button("Archive Account", role: .destructive) {
-                        Task {
-                            await viewModel.archiveAccount()
-                            dismiss()
-                        }
+                        showingArchiveConfirm = true
                     }
                 }
             }
@@ -65,5 +63,20 @@ struct AccountDetailView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
+        .confirmationDialog(
+            "Archive this account?",
+            isPresented: $showingArchiveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Archive Account", role: .destructive) {
+                Task {
+                    await viewModel.archiveAccount()
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Archiving hides this account and its transactions from the app. You can't undo this here.")
+        }
     }
 }

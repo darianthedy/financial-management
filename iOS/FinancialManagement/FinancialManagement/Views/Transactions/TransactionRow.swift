@@ -9,7 +9,6 @@ import SwiftUI
 /// amount (success/danger/foreground per type) over the date.
 struct TransactionRow: View {
     @Environment(AppState.self) private var appState
-    @State private var showDeleteConfirm = false
     let transaction: Transaction
     /// The transaction's source account, used for the avatar. Falls back to a
     /// type glyph when unavailable.
@@ -39,7 +38,9 @@ struct TransactionRow: View {
     var onCreateInstallment: (() -> Void)?
     /// Opens the edit form (web: the row's "Edit" menu item; the row tap also edits).
     var onEdit: (() -> Void)?
-    /// Deletes the transaction after a confirmation (web: the "Delete" menu item).
+    /// Requests deletion (web: the "Delete" menu item). The owning list presents the
+    /// shared confirmation alert and performs the delete, so the row's ⋮ menu and the
+    /// list's swipe action go through the same guard.
     var onDelete: (() -> Void)?
 
     /// Eligible only for an expense that is not already spread.
@@ -100,12 +101,6 @@ struct TransactionRow: View {
             actionsMenu
         }
         .padding(.vertical, 4)
-        .alert("Delete transaction?", isPresented: $showDeleteConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) { onDelete?() }
-        } message: {
-            Text("This permanently removes the transaction and updates the affected account balances. This can't be undone.")
-        }
     }
 
     // MARK: - Actions menu (web: the row's trailing MoreVertical dropdown —
@@ -124,9 +119,9 @@ struct TransactionRow: View {
                     Label("Create virtual installment", systemImage: "square.grid.2x2")
                 }
             }
-            if onDelete != nil {
+            if let onDelete {
                 Button(role: .destructive) {
-                    showDeleteConfirm = true
+                    onDelete()
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -137,7 +132,9 @@ struct TransactionRow: View {
                 .font(.subheadline)
                 .rotationEffect(.degrees(90))
                 .foregroundStyle(Color.appMutedForeground)
-                .frame(width: 28, height: 28)
+                // 44×44 hit area (HIG minimum). The glyph stays visually small;
+                // the frame just enlarges the tappable region.
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

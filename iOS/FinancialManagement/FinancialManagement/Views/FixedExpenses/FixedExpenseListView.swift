@@ -8,6 +8,8 @@ struct FixedExpenseListView: View {
     @State private var viewModel = FixedExpenseListViewModel()
     @State private var showingForm = false
     @State private var editingExpense: FixedExpense?
+    /// The expense awaiting delete confirmation (swipe-only here).
+    @State private var pendingDelete: FixedExpense?
 
     private var currencyCode: String { appState.defaultCurrency }
 
@@ -57,6 +59,23 @@ struct FixedExpenseListView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
+        // Confirm the swipe delete (HIG: confirm permanent deletes), matching the
+        // other destructive swipes across the app.
+        .alert(
+            "Delete fixed expense?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            presenting: pendingDelete
+        ) { expense in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteExpense(expense) }
+            }
+        } message: { expense in
+            Text("Delete \"\(expense.name)\" for this month? Other months are unaffected.")
+        }
     }
 
     @ViewBuilder
@@ -117,7 +136,7 @@ struct FixedExpenseListView: View {
                 )
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
-                        Task { await viewModel.deleteExpense(expense) }
+                        pendingDelete = expense
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }

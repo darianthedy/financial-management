@@ -14,11 +14,12 @@ struct BudgetCard: View {
     let currencyCode: String
     /// Opens the edit form (web: the card's trailing "Edit" menu item).
     var onEdit: (() -> Void)?
-    /// Removes this month's budget row after a confirmation (web: "Remove").
+    /// Requests removal of this month's budget row (web: "Remove"). The owning list
+    /// presents the shared confirmation alert, so the card's ⋮ menu and the list's
+    /// swipe action go through the same guard.
     var onRemove: (() -> Void)?
 
     @State private var showingInfo = false
-    @State private var showRemoveConfirm = false
 
     /// Effective budget is periodic + carry-in minus installment reservations —
     /// what is actually available to spend this month. Both the bar and the
@@ -79,12 +80,6 @@ struct BudgetCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCardSurface()
-        .alert("Remove budget?", isPresented: $showRemoveConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Remove", role: .destructive) { onRemove?() }
-        } message: {
-            Text("Remove \"\(progress.budgetName)\" for \(DateUtils.formatYearMonth(progress.yearMonth))? This month's row is deleted; other months are unaffected.")
-        }
     }
 
     // MARK: - Actions menu (web: the card's trailing MoreVertical dropdown —
@@ -96,9 +91,9 @@ struct BudgetCard: View {
             if onEdit != nil {
                 Button { onEdit?() } label: { Label("Edit", systemImage: "pencil") }
             }
-            if onRemove != nil {
+            if let onRemove {
                 Button(role: .destructive) {
-                    showRemoveConfirm = true
+                    onRemove()
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }
@@ -109,7 +104,9 @@ struct BudgetCard: View {
                 .font(.subheadline)
                 .rotationEffect(.degrees(90))
                 .foregroundStyle(Color.appMutedForeground)
-                .frame(width: 28, height: 28)
+                // 44×44 hit area (HIG minimum). The glyph stays visually small;
+                // the frame just enlarges the tappable region.
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -42,7 +42,9 @@ struct PendingTransactionRow: View {
                     }
                 } label: {
                     Label("Confirm", systemImage: "checkmark")
-                        .frame(maxWidth: .infinity)
+                        // Keep the compact look but guarantee a 44pt-tall hit area
+                        // (HIG minimum); minHeight lets the row still grow at XXL.
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .lineLimit(1)
                 }
                 .buttonStyle(.borderedProminent)
@@ -53,7 +55,7 @@ struct PendingTransactionRow: View {
                     onEdit()
                 } label: {
                     Label("Edit", systemImage: "pencil")
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .lineLimit(1)
                 }
                 .buttonStyle(.bordered)
@@ -67,7 +69,7 @@ struct PendingTransactionRow: View {
                     }
                 } label: {
                     Label("Dismiss", systemImage: "xmark")
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .lineLimit(1)
                 }
                 .buttonStyle(.bordered)
