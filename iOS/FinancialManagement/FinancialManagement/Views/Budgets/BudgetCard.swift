@@ -141,8 +141,9 @@ struct BudgetCard: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("More actions")
+        .accessibilityLabel("Actions for \(progress.budgetName)")
         .accessibilityHint("Edit or remove this budget")
+        .accessibilityIdentifier("budget-actions-menu")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -168,6 +169,23 @@ struct BudgetCard: View {
                 .foregroundStyle(Color.appForeground)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // VoiceOver reads the full name even when the label is
+                // visually clipped by lineLimit/truncation.
+                .accessibilityLabel(progress.budgetName)
+                .accessibilityIdentifier("budget-name")
+                // Long-press shows full name as a system preview for sighted
+                // users on small screens where the name is truncated.
+                .contextMenu {
+                    Button {
+                        UIPasteboard.general.string = progress.budgetName
+                    } label: {
+                        Label("Copy Name", systemImage: "doc.on.doc")
+                    }
+                } preview: {
+                    Text(progress.budgetName)
+                        .font(.body.weight(.medium))
+                        .padding()
+                }
 
             if progress.carryOverAmount != 0 || (progress.description?.isEmpty == false) {
                 Button {
@@ -183,8 +201,9 @@ struct BudgetCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Budget details")
+                .accessibilityLabel("Show details for \(progress.budgetName)")
                 .accessibilityHint("Shows carry-over amount and any notes for this budget")
+                .accessibilityIdentifier("budget-info-button")
                 .accessibilityAddTraits(.isButton)
                 .popover(isPresented: $showingInfo,
                          attachmentAnchor: .rect(.bounds),
