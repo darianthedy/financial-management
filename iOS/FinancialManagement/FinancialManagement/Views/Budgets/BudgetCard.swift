@@ -142,6 +142,11 @@ struct BudgetCard: View {
                     Image(systemName: "info.circle")
                         .font(.subheadline)
                         .foregroundStyle(Color.appMutedForeground)
+                        // 44×44 hit area (HIG minimum), matching the ⋮ menu. The
+                        // glyph stays visually small; the frame only enlarges the
+                        // tappable region and the popover still anchors to it.
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showingInfo) { infoPopover }
