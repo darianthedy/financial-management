@@ -143,7 +143,10 @@ struct AccountFormSheet: View {
                     }
                 }
             }
-            .interactiveDismissDisabled(hasChanges)
+            // Block accidental swipe-to-dismiss while there are unsaved edits or a
+            // save is in flight, so work isn't silently lost. Cancel routes through
+            // the discard confirmation below.
+            .interactiveDismissDisabled(hasChanges || isSaving)
             .confirmationDialog(
                 "Discard changes?",
                 isPresented: $showDiscardConfirm,
