@@ -38,6 +38,18 @@ struct BudgetCard: View {
     /// web uses two states only: primary under budget, danger when overspent.
     private var barColor: Color { isOverspent ? .appDanger : .appPrimary }
 
+    private var cardAccessibilityLabel: String {
+        let spentStr = progress.spent.asCurrency(code: currencyCode)
+        let budgetStr = effectiveBudget.asCurrency(code: currencyCode)
+        if isOverspent {
+            let overStr = (-progress.remaining).asCurrency(code: currencyCode)
+            return "\(progress.budgetName), \(spentStr) of \(budgetStr), \(overStr) over budget"
+        } else {
+            let remainingStr = progress.remaining.asCurrency(code: currencyCode)
+            return "\(progress.budgetName), \(spentStr) of \(budgetStr), \(remainingStr) remaining"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -97,6 +109,8 @@ struct BudgetCard: View {
                 .strokeBorder(Color.appBorder, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(cardAccessibilityLabel)
     }
 
     // MARK: - Actions menu (web: the card's trailing MoreVertical dropdown —
@@ -127,6 +141,9 @@ struct BudgetCard: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("More actions")
+        .accessibilityHint("Edit or remove this budget")
+        .accessibilityAddTraits(.isButton)
     }
 
     /// 8pt rounded track (muted) with a rounded fill, matching web's
@@ -166,6 +183,9 @@ struct BudgetCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Budget details")
+                .accessibilityHint("Shows carry-over amount and any notes for this budget")
+                .accessibilityAddTraits(.isButton)
                 .popover(isPresented: $showingInfo,
                          attachmentAnchor: .rect(.bounds),
                          arrowEdge: .top) { infoPopover }
