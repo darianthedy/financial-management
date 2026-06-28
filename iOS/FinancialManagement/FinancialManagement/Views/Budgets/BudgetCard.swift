@@ -149,7 +149,9 @@ struct BudgetCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .popover(isPresented: $showingInfo) { infoPopover }
+                .popover(isPresented: $showingInfo,
+                         attachmentAnchor: .rect(.bounds),
+                         arrowEdge: .top) { infoPopover }
             }
 
             Spacer()
@@ -177,6 +179,12 @@ struct BudgetCard: View {
             }
         }
         .padding()
+        // Cap width so the popover stays compact on iPhone; on iPad the
+        // window width is already constrained by the native popover chrome.
+        .frame(minWidth: 180, maxWidth: 280)
+        // Prevent degradation to a full-screen sheet in compact size classes
+        // (iPhone). Requires iOS 16.4+; below that the system falls back to
+        // a sheet automatically, but this project targets iOS 26.1+.
         .presentationCompactAdaptation(.popover)
     }
 }
