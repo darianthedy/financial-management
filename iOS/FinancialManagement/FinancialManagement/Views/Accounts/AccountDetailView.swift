@@ -5,6 +5,7 @@ struct AccountDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AccountDetailViewModel
     @State private var showingEditSheet = false
+    @State private var showingArchiveConfirm = false
 
     init(accountId: UUID) {
         _viewModel = State(initialValue: AccountDetailViewModel(accountId: accountId))
@@ -41,15 +42,23 @@ struct AccountDetailView: View {
 
                 Section {
                     Button("Archive Account", role: .destructive) {
-                        Task {
-                            await viewModel.archiveAccount()
-                            dismiss()
-                        }
+                        showingArchiveConfirm = true
                     }
                 }
             }
         }
         .navigationTitle(viewModel.account?.name ?? "Account")
+        .alert("Archive account?", isPresented: $showingArchiveConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Archive", role: .destructive) {
+                Task {
+                    await viewModel.archiveAccount()
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("\"\(viewModel.account?.name ?? "This account")\" will be hidden from your accounts. Its transaction history is preserved.")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit") { showingEditSheet = true }
