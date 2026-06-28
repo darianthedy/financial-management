@@ -1,5 +1,31 @@
 import Foundation
 
+/// A `ScheduledTransaction` enriched with joined account, category, and tag
+/// metadata resolved via batched lookups in `ScheduledTransactionRepository.enrich(_:)`,
+/// mirroring web's `ScheduledTransactionWithAccount` (use-scheduled-transactions.ts).
+struct EnrichedScheduledTransaction: Identifiable, Sendable {
+    let base: ScheduledTransaction
+
+    let accountName: String?
+    let accountImageUrl: String?
+    let accountType: AccountType?
+
+    let categoryName: String?
+    let categoryColor: String?
+
+    let tagNames: [String]
+
+    // Passthroughs — avoids `.base.x` at every call site.
+    var id: UUID { base.id }
+    var type: TransactionType { base.type }
+    var amount: Int64 { base.amount }
+    var description: String? { base.description }
+    var isActive: Bool { base.isActive }
+    var nextDueDate: Date { base.nextDueDate }
+    var budgetName: String? { base.budgetName }
+    var fixedExpenseName: String? { base.fixedExpenseName }
+}
+
 /// Recurring template that the server turns into `pending` transactions (System
 /// Design §4.5). The column is `recurrence` (not `recurrence_interval`) and
 /// `next_due_date` (not `next_occurrence`); the app is single-currency so there

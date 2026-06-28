@@ -159,6 +159,99 @@ actor ScheduledTransactionRepository {
             .execute()
     }
 
+    // MARK: - Enrichment
+
+    /// Resolves account, category, and tag metadata for a list of scheduled
+    /// transactions in batched lookups — no N+1. Mirrors the three-way
+    /// `Promise.all` in the web hook (use-scheduled-transactions.ts lines 51-78).
+    func enrich(_ scheduled: [ScheduledTransaction]) async throws -> [EnrichedScheduledTransaction] {
+        guard !scheduled.isEmpty else { return [] }
+
+        struct AccountRow: Decodable {
+            let id: UUID; let name: String; let type: AccountType; let imageUrl: String?
+            enum CodingKeys: String, CodingKey {
+                case id, name, type; case imageUrl = "image_url"
+            }
+        }
+        struct CategoryRow: Decodable { let id: UUID; let name: String; let color: String? }
+        struct TagLinkRow: Decodable {
+            let scheduledTransactionId: UUID; let tagId: UUID
+            enum CodingKeys: String, CodingKey {
+                case scheduledTransactionId = "scheduled_transaction_id"
+                case tagId = "tag_id"
+            }
+        }
+        struct TagRow: Decodable { let id: UUID; let name: String }
+
+        let accountIds = Array(Set(scheduled.map(\.accountId)))
+        let catIds     = Array(Set(scheduled.compactMap(\.categoryId)))
+        let schedIds   = scheduled.map(\.id)
+
+        // Accounts and tag links in parallel; categories conditional on catIds.
+        async let accountsFetch: [AccountRow] = client
+            .from("accounts")
+            .select("id, name, type, image_url")
+            .in("id", value: accountIds)
+            .execute().value
+
+        async let tagLinksFetch: [TagLinkRow] = client
+            .from("scheduled_transaction_tags")
+            .select("scheduled_transaction_id, tag_id")
+            .in("scheduled_transaction_id", value: schedIds)
+            .execute().value
+
+        let accounts = try await accountsFetch
+        let tagLinks = try await tagLinksFetch
+
+        let categories: [CategoryRow]
+        if catIds.isEmpty {
+            categories = []
+        } else {
+            categories = try await client
+                .from("categories")
+                .select("id, name, color")
+                .in("id", value: catIds)
+                .execute().value
+        }
+
+        let tagIds = Array(Set(tagLinks.map(\.tagId)))
+        let tagRows: [TagRow]
+        if tagIds.isEmpty {
+            tagRows = []
+        } else {
+            tagRows = try await client
+                .from("tags")
+                .select("id, name")
+                .in("id", value: tagIds)
+                .execute().value
+        }
+
+        let accountById  = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0) })
+        let categoryById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+        let tagNameById  = Dictionary(uniqueKeysWithValues: tagRows.map { ($0.id, $0.name) })
+
+        var tagsByScheduled: [UUID: [String]] = [:]
+        for link in tagLinks {
+            if let name = tagNameById[link.tagId] {
+                tagsByScheduled[link.scheduledTransactionId, default: []].append(name)
+            }
+        }
+
+        return scheduled.map { s in
+            let acct = accountById[s.accountId]
+            let cat  = s.categoryId.flatMap { categoryById[$0] }
+            return EnrichedScheduledTransaction(
+                base: s,
+                accountName: acct?.name,
+                accountImageUrl: acct?.imageUrl,
+                accountType: acct?.type,
+                categoryName: cat?.name,
+                categoryColor: cat?.color,
+                tagNames: tagsByScheduled[s.id] ?? []
+            )
+        }
+    }
+
     // MARK: - Tags (many-to-many via scheduled_transaction_tags)
 
     func getTagIds(scheduledId: UUID) async throws -> Set<UUID> {
