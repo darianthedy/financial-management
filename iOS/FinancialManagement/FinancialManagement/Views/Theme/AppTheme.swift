@@ -17,6 +17,24 @@ import SwiftUI
 enum AppTheme {
     /// Matches web's `--radius: 0.625rem` (10pt at the web 16px root font size).
     static let cornerRadius: CGFloat = 10
+
+    // MARK: - Spacing tokens (budget-related views)
+
+    /// Horizontal inset for budget list rows and section headers. Shared by
+    /// `BudgetListView`, `ActiveInstallmentsSection`, and the section header
+    /// padding so all content aligns on the same column.
+    static let cardHorizontalPadding: CGFloat = 16
+
+    /// Top/bottom inset for each budget list row (the gap between cards).
+    static let cardVerticalPadding: CGFloat = 6
+
+    /// Vertical breathing room above and below section headings.
+    static let sectionSpacing: CGFloat = 8
+
+    /// Uniform inner padding applied inside every card surface (`BudgetCard`,
+    /// `ActiveInstallmentsSection` rows). Changing this one token reflows all
+    /// card content simultaneously.
+    static let cardInnerPadding: CGFloat = 16
 }
 
 extension View {
@@ -33,6 +51,19 @@ extension View {
                     .strokeBorder(Color.appBorder, lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
+    }
+
+    /// Applies the standard `listRowInsets` for budget cards and installment
+    /// rows so that all rows in `BudgetListView` align on the same horizontal
+    /// column. Updating `AppTheme.cardHorizontalPadding` / `cardVerticalPadding`
+    /// reflows every row at once.
+    func budgetRowInsets() -> some View {
+        listRowInsets(EdgeInsets(
+            top: AppTheme.cardVerticalPadding,
+            leading: AppTheme.cardHorizontalPadding,
+            bottom: AppTheme.cardVerticalPadding,
+            trailing: AppTheme.cardHorizontalPadding
+        ))
     }
 }
 

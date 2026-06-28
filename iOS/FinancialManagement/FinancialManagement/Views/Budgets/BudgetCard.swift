@@ -90,7 +90,7 @@ struct BudgetCard: View {
                 .foregroundStyle(Color.appMutedForeground)
             }
         }
-        .padding(16)
+        .padding(AppTheme.cardInnerPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             ZStack(alignment: .leading) {
