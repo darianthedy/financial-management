@@ -13,15 +13,8 @@ struct BudgetListView: View {
     @State private var pendingCancel: ActiveInstallment?
 
     var body: some View {
-        VStack(spacing: 0) {
-            MonthNavigator(
-                yearMonth: viewModel.yearMonth,
-                onPrevious: { viewModel.navigateMonth(by: -1) },
-                onNext: { viewModel.navigateMonth(by: 1) }
-            )
-            .padding()
-
-            List {
+        List {
+            Section {
                 ForEach(viewModel.progress) { progress in
                     BudgetCard(
                         progress: progress,
@@ -57,45 +50,48 @@ struct BudgetListView: View {
                             .tint(.appPrimary)
                         }
                 }
-
-                ActiveInstallmentsSection(
-                    installments: viewModel.activeInstallments,
-                    currencyCode: appState.defaultCurrency,
-                    onSelect: { installmentSource = $0 },
-                    onCancel: { pendingCancel = $0 }
+            } header: {
+                MonthNavigator(
+                    yearMonth: viewModel.yearMonth,
+                    onPrevious: { viewModel.navigateMonth(by: -1) },
+                    onNext: { viewModel.navigateMonth(by: 1) }
                 )
+                .padding(.vertical, 8)
+                .background(Color.appBackground)
+                .listRowInsets(EdgeInsets())
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Color.appBackground)
-            .overlay {
-                if viewModel.progress.isEmpty && !viewModel.isLoading {
-                    EmptyStateView(
-                        title: "No budgets this month",
-                        message: "Add a budget to track spending against a monthly target, or copy this month's set from the previous month.",
-                        systemImage: "target"
-                    ) {
-                        Button("Copy previous month") {
-                            Task { await viewModel.copyFromPreviousMonth() }
-                        }
-                        Button("Add budget") {
-                            formMode = .add(yearMonth: viewModel.yearMonth)
-                        }
+
+            ActiveInstallmentsSection(
+                installments: viewModel.activeInstallments,
+                currencyCode: appState.defaultCurrency,
+                onSelect: { installmentSource = $0 },
+                onCancel: { pendingCancel = $0 }
+            )
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.appBackground)
+        .overlay {
+            if viewModel.progress.isEmpty && !viewModel.isLoading {
+                EmptyStateView(
+                    title: "No budgets this month",
+                    message: "Add a budget to track spending against a monthly target, or copy this month's set from the previous month.",
+                    systemImage: "target"
+                ) {
+                    Button("Copy previous month") {
+                        Task { await viewModel.copyFromPreviousMonth() }
+                    }
+                    Button("Add budget") {
+                        formMode = .add(yearMonth: viewModel.yearMonth)
                     }
                 }
             }
-            .monthPageTransition(
-                yearMonth: viewModel.yearMonth,
-                direction: viewModel.navigationDirection
-            )
         }
+        .monthPageTransition(
+            yearMonth: viewModel.yearMonth,
+            direction: viewModel.navigationDirection
+        )
         .navigationTitle("Budgets")
-        // The List lives inside a VStack (under the pinned MonthNavigator), which
-        // detaches it from the nav bar's large-title scroll tracking — leaving the
-        // large title unrendered after scrolling. Pin the title inline so it stays
-        // visible regardless of that tracking (mirrors the scoped Transactions
-        // embedding, which shares this VStack-over-list shape).
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
