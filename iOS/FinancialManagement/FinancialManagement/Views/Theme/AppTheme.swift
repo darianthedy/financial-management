@@ -15,8 +15,17 @@ import SwiftUI
 /// `AppTheme.cornerRadius`, …) instead of ad-hoc colors so the whole app stays
 /// aligned with web in one place.
 enum AppTheme {
-    /// Matches web's `--radius: 0.625rem` (10pt at the web 16px root font size).
-    static let cornerRadius: CGFloat = 10
+    /// 12pt, up from web's `--radius: 0.625rem` (0.625 × 16 = 10pt).
+    ///
+    /// The web token is intentionally kept at 10pt for cross-browser consistency
+    /// with its base font size. On iOS the same 10pt value renders noticeably
+    /// squarer than native cards because UIKit/SwiftUI corners are drawn at 3×
+    /// pixel density with no sub-pixel rounding. 12pt matches the rounded-rect
+    /// convention used across the iOS platform (List rows, sheets, widgets) while
+    /// staying close enough to the web token that the two surfaces read as the
+    /// same design system. All card surfaces share this single token so any future
+    /// revision stays consistent automatically.
+    static let cornerRadius: CGFloat = 12
 
     // MARK: - Spacing tokens (budget-related views)
 
