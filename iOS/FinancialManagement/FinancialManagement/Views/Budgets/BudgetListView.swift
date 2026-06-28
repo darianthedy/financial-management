@@ -69,7 +69,7 @@ struct BudgetListView: View {
                                 }
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .budgetRowInsets()
                                 // The card's trailing three-dot menu (web parity) carries
                                 // Edit/Remove; the swipe actions remain as a native iOS
                                 // shortcut to the same actions — including the same remove

@@ -26,7 +26,7 @@ struct ActiveInstallmentsSection: View {
                         .onTapGesture { if let source = item.source { onSelect(source) } }
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .budgetRowInsets()
                         // Cancel requests deletion; the owning list confirms it
                         // before cascading. allowsFullSwipe:false so a long swipe
                         // can't auto-fire the destructive action.
@@ -46,8 +46,8 @@ struct ActiveInstallmentsSection: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Match the rows' horizontal inset, then add a little vertical
                     // breathing room around the heading.
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, AppTheme.cardHorizontalPadding)
+                    .padding(.vertical, AppTheme.sectionSpacing)
                     // Opaque backdrop so the pinned header doesn't let the rows
                     // scrolling underneath it show through.
                     .background(Color.appBackground)
@@ -91,7 +91,7 @@ struct ActiveInstallmentsSection: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppTheme.cardInnerPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCardSurface()
     }
