@@ -59,11 +59,56 @@ struct BudgetFormSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                    CurrencyField(label: "Monthly amount", value: $amount, decimals: appState.decimalPlaces)
-                    TextField("Note (optional)", text: $note, axis: .vertical)
+            ZStack {
+                Color.appBackground.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            cardField(title: "Name") {
+                                TextField("Budget name", text: $name)
+                                    .textFieldStyle(.plain)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 44)
+                                    .background(Color.appBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                                            .strokeBorder(Color.appInput, lineWidth: 1)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+                            }
+
+                            cardField(title: "Monthly amount") {
+                                // label: "" avoids repeating the title inside the HStack
+                                CurrencyField(label: "", value: $amount, decimals: appState.decimalPlaces)
+                                    .textFieldStyle(.plain)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 44)
+                                    .background(Color.appBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                                            .strokeBorder(Color.appInput, lineWidth: 1)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+                            }
+
+                            cardField(title: "Note (optional)") {
+                                TextField("", text: $note, axis: .vertical)
+                                    .textFieldStyle(.plain)
+                                    .padding(12)
+                                    .frame(minHeight: 80, alignment: .topLeading)
+                                    .background(Color.appBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                                            .strokeBorder(Color.appInput, lineWidth: 1)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
+                            }
+                        }
+                        .padding(20)
+                        .appCardSurface()
+                    }
+                    .padding(16)
                 }
             }
             .navigationTitle(title)
@@ -89,6 +134,20 @@ struct BudgetFormSheet: View {
                 Button("Discard Changes", role: .destructive) { dismiss() }
                 Button("Keep Editing", role: .cancel) {}
             }
+        }
+    }
+
+    /// A labeled form field: bold caption above, bordered input box below.
+    /// Mirrors the `field()` helper in `LoginView`.
+    private func cardField<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Color.appForeground)
+            content()
         }
     }
 
