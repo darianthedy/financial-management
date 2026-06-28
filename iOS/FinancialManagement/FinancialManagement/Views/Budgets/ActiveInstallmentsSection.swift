@@ -3,8 +3,9 @@ import SwiftUI
 /// The Budgets page's "Active installments" list (§4.11 / §8.8): only the
 /// installments that reserve allowance in the displayed month. Each entry shows
 /// the source expense's title, total, month span, and budget-name chips; taps
-/// link back to the source expense; a swipe **Cancel** deletes the header (which
-/// cascades to its allocations so future budgets recover their allowance).
+/// link back to the source expense; a swipe **Cancel** (confirmed by the owning
+/// list) deletes the header, which cascades to its allocations so future budgets
+/// recover their allowance.
 ///
 /// Mirrors web's `InstallmentList`
 /// (`web/src/components/budgets/installment-list.tsx`): a "Active installments"
@@ -26,7 +27,10 @@ struct ActiveInstallmentsSection: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .swipeActions(edge: .trailing) {
+                        // Cancel requests deletion; the owning list confirms it
+                        // before cascading. allowsFullSwipe:false so a long swipe
+                        // can't auto-fire the destructive action.
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
                                 onCancel(item)
                             } label: {

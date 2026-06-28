@@ -6,6 +6,11 @@ struct BudgetListView: View {
     @State private var formMode: BudgetFormSheet.Mode?
     @State private var drilldown: BudgetDrilldown?
     @State private var installmentSource: Transaction?
+    /// The budget awaiting remove confirmation — shared by the card ⋮ menu and the
+    /// trailing swipe so both go through one alert.
+    @State private var pendingRemove: BudgetProgress?
+    /// The installment awaiting cancel confirmation (swipe-only here).
+    @State private var pendingCancel: ActiveInstallment?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +27,7 @@ struct BudgetListView: View {
                         progress: progress,
                         currencyCode: appState.defaultCurrency,
                         onEdit: { formMode = .edit(progress) },
-                        onRemove: { Task { await viewModel.removeBudget(id: progress.budgetId) } }
+                        onRemove: { pendingRemove = progress }
                     )
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -35,10 +40,12 @@ struct BudgetListView: View {
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         // The card's trailing three-dot menu (web parity) carries
                         // Edit/Remove; the swipe actions remain as a native iOS
-                        // shortcut to the same actions.
-                        .swipeActions(edge: .trailing) {
+                        // shortcut to the same actions — including the same remove
+                        // confirmation. allowsFullSwipe:false so a long swipe can't
+                        // auto-fire the destructive action.
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                Task { await viewModel.removeBudget(id: progress.budgetId) }
+                                pendingRemove = progress
                             } label: {
                                 Label("Remove", systemImage: "trash")
                             }
@@ -55,7 +62,7 @@ struct BudgetListView: View {
                     installments: viewModel.activeInstallments,
                     currencyCode: appState.defaultCurrency,
                     onSelect: { installmentSource = $0 },
-                    onCancel: { item in Task { await viewModel.cancelInstallment(item) } }
+                    onCancel: { pendingCancel = $0 }
                 )
             }
             .listStyle(.plain)
@@ -130,6 +137,40 @@ struct BudgetListView: View {
         }
         .onDisappear { Task { await viewModel.unsubscribe() } }
         .refreshable { await viewModel.load() }
+        // Shared remove confirmation for both the card ⋮ menu and the swipe action
+        // (HIG: confirm permanent deletes).
+        .alert(
+            "Remove budget?",
+            isPresented: Binding(
+                get: { pendingRemove != nil },
+                set: { if !$0 { pendingRemove = nil } }
+            ),
+            presenting: pendingRemove
+        ) { progress in
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) {
+                Task { await viewModel.removeBudget(id: progress.budgetId) }
+            }
+        } message: { progress in
+            Text("Remove \"\(progress.budgetName)\" for \(DateUtils.formatYearMonth(progress.yearMonth))? This month's row is deleted; other months are unaffected.")
+        }
+        // Cancelling an installment deletes its header and cascades to its
+        // allocations, so confirm it like the other destructive swipes.
+        .alert(
+            "Cancel installment?",
+            isPresented: Binding(
+                get: { pendingCancel != nil },
+                set: { if !$0 { pendingCancel = nil } }
+            ),
+            presenting: pendingCancel
+        ) { item in
+            Button("Keep Installment", role: .cancel) {}
+            Button("Cancel Installment", role: .destructive) {
+                Task { await viewModel.cancelInstallment(item) }
+            }
+        } message: { item in
+            Text("Cancel \"\(item.title)\"? Its future reservations are deleted and the affected budgets recover their allowance. This can't be undone.")
+        }
     }
 }
 

@@ -9,6 +9,9 @@ struct TransactionListView: View {
     @State private var showingFilters = false
     @State private var showingSummary = false
     @State private var searchText = ""
+    /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
+    /// and the trailing swipe so they share one confirmation alert.
+    @State private var pendingDelete: Transaction?
 
     init(
         scopedAccountId: UUID? = nil,
@@ -98,6 +101,23 @@ struct TransactionListView: View {
             }
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
+            // Shared delete confirmation for both the row ⋮ menu and the swipe
+            // action (HIG: confirm permanent deletes).
+            .alert(
+                "Delete transaction?",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                presenting: pendingDelete
+            ) { txn in
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task { await viewModel.deleteTransaction(txn) }
+                }
+            } message: { _ in
+                Text("This permanently removes the transaction and updates the affected account balances. This can't be undone.")
+            }
     }
 
     // MARK: - Content
@@ -328,7 +348,7 @@ struct TransactionListView: View {
             widestNumber: widestAmountBody,
             onCreateInstallment: { installmentSource = txn },
             onEdit: { editingTransaction = txn },
-            onDelete: { Task { await viewModel.deleteTransaction(txn) } }
+            onDelete: { pendingDelete = txn }
         )
             .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
             .contentShape(Rectangle())
@@ -343,9 +363,12 @@ struct TransactionListView: View {
                     .tint(Color.appSuccess)
                 }
             }
-            .swipeActions(edge: .trailing) {
+            // allowsFullSwipe:false so the destructive action can't auto-fire on a
+            // long swipe — it reveals the button, which then routes through the
+            // shared confirmation alert (consistent with FixedExpenses).
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
-                    Task { await viewModel.deleteTransaction(txn) }
+                    pendingDelete = txn
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -382,8 +405,9 @@ struct TransactionListView: View {
             // Same component + shared width as the rows, so symbol and digits
             // align into one column through the header. The net carries an
             // explicit +/− sign; a day that nets to zero shows neither. The
-            // trailing spacer mirrors the row's ⋮ actions button (28pt) and its
-            // 12pt gap, so the net lines up with the amount column above the menu.
+            // trailing spacer mirrors the row's ⋮ actions button (44pt hit area)
+            // and its 12pt gap, so the net lines up with the amount column above
+            // the menu.
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 AmountColumnView(
                     minorUnits: group.net,
@@ -393,7 +417,7 @@ struct TransactionListView: View {
                 )
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(netColor(group.net))
-                Color.clear.frame(width: 28, height: 0)
+                Color.clear.frame(width: 44, height: 0)
             }
         }
         .textCase(nil)

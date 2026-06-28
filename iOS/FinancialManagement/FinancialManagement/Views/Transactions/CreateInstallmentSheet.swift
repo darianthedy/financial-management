@@ -24,6 +24,7 @@ struct CreateInstallmentSheet: View {
     @State private var availableNames: [String] = []
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var showDiscardConfirm = false
 
     private let repository = InstallmentRepository()
 
@@ -57,6 +58,12 @@ struct CreateInstallmentSheet: View {
     private var isBalanced: Bool { remaining == 0 }
     private var canSave: Bool { !selectedNames.isEmpty && isBalanced && !isSaving }
 
+    /// True once the user configures the spread away from its opened defaults
+    /// (this month, 3 months, no budgets chosen) — drives the discard guard.
+    private var hasChanges: Bool {
+        !selectedNames.isEmpty || months != 3 || startOffset != 0
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -77,12 +84,23 @@ struct CreateInstallmentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
                         .disabled(!canSave)
                 }
+            }
+            .interactiveDismissDisabled(hasChanges)
+            .confirmationDialog(
+                "Discard this installment?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
             }
             .task { await loadBudgetNames() }
             .onChange(of: selectedNames) { _, _ in applyEvenSplit() }

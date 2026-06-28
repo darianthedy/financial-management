@@ -20,11 +20,27 @@ struct BudgetFormSheet: View {
     @State private var amount = ""
     @State private var note = ""
     @State private var isSaving = false
+    @State private var showDiscardConfirm = false
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
     private var isValid: Bool {
         !trimmedName.isEmpty && (Double(amount) ?? 0) > 0
+    }
+
+    /// True once the user enters/edits meaningful input, so a swipe-down / Cancel
+    /// should confirm. For edits, compared against the row's opening values.
+    private var hasChanges: Bool {
+        switch mode {
+        case .add:
+            return !name.isEmpty || !amount.isEmpty || !note.isEmpty
+        case .edit(let progress):
+            let display = CurrencyUtils.toDisplayAmount(progress.periodicAmount, decimalPlaces: appState.decimalPlaces)
+            let initialAmount = String(format: "%.\(appState.decimalPlaces)f", display)
+            return name != progress.budgetName
+                || amount != initialAmount
+                || note != (progress.description ?? "")
+        }
     }
 
     /// The month this budget belongs to, used in the title (web shows
@@ -54,7 +70,9 @@ struct BudgetFormSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
@@ -62,6 +80,15 @@ struct BudgetFormSheet: View {
                 }
             }
             .onAppear(perform: loadInitialValues)
+            .interactiveDismissDisabled(hasChanges)
+            .confirmationDialog(
+                "Discard changes?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
+            }
         }
     }
 

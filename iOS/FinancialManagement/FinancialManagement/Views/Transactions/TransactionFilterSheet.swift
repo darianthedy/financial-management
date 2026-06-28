@@ -54,6 +54,7 @@ struct TransactionFilterSheet: View {
     @State private var working: TransactionFilters
     @State private var minAmount = ""
     @State private var maxAmount = ""
+    @State private var showDiscardConfirm = false
 
     @State private var accounts: [Account] = []
     @State private var categories: [Category] = []
@@ -65,6 +66,15 @@ struct TransactionFilterSheet: View {
         self.initial = initial
         self.onApply = onApply
         _working = State(initialValue: initial)
+    }
+
+    /// True once the user changes a facet or an amount field away from the values
+    /// the sheet opened with — drives the discard-changes guard. (The amount text
+    /// fields stage into `working` only on Apply, so they're compared separately.)
+    private var hasChanges: Bool {
+        working != initial
+            || minAmount != Self.amountText(initial.amountMin, decimalPlaces: appState.decimalPlaces)
+            || maxAmount != Self.amountText(initial.amountMax, decimalPlaces: appState.decimalPlaces)
     }
 
     var body: some View {
@@ -95,11 +105,22 @@ struct TransactionFilterSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply") { apply() }
                 }
+            }
+            .interactiveDismissDisabled(hasChanges)
+            .confirmationDialog(
+                "Discard filter changes?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard Changes", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
             }
             .task { await loadOptions() }
             .onChange(of: working.dateFrom) { Task { await loadNameOptions() } }
