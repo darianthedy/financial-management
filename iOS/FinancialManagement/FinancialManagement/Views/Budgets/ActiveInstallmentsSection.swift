@@ -40,7 +40,7 @@ struct ActiveInstallmentsSection: View {
                 }
             } header: {
                 Text("Active installments")
-                    .font(.title3.weight(.semibold))
+                    .font(.title3)
                     .foregroundStyle(Color.appForeground)
                     .textCase(nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -64,7 +64,7 @@ struct ActiveInstallmentsSection: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
-                        .font(.body.weight(.medium))
+                        .font(.headline)
                         .foregroundStyle(Color.appForeground)
                         .lineLimit(1)
                     Text(item.installment.totalAmount.asCurrency(code: currencyCode))
@@ -81,7 +81,7 @@ struct ActiveInstallmentsSection: View {
                     HStack(spacing: 6) {
                         ForEach(item.budgetNames, id: \.self) { name in
                             Text(name)
-                                .font(.caption.weight(.medium))
+                                .font(.caption)
                                 .foregroundStyle(Color.appMutedForeground)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 3)
