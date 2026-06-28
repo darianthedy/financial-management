@@ -53,11 +53,11 @@ struct BudgetCard: View {
 
                 if isOverspent {
                     Text("\((-progress.remaining).asCurrency(code: currencyCode)) over")
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline)
                         .foregroundStyle(Color.appDanger)
                 } else {
                     Text("\(progress.remaining.asCurrency(code: currencyCode)) left")
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline)
                         .foregroundStyle(Color.appForeground)
                 }
             }
@@ -66,13 +66,14 @@ struct BudgetCard: View {
             // separate from the carry-over label (which lives in the info
             // popover). Already netted into `remaining` by v_budget_progress.
             if progress.reserved > 0 {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Image(systemName: "lock.fill")
                         .font(.caption2)
-                    Text("−\(progress.reserved.asCurrency(code: currencyCode)) reserved for installments")
+                    Text("Reserved for installments")
                         .font(.caption)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    Spacer()
+                    Text("−\(progress.reserved.asCurrency(code: currencyCode))")
+                        .font(.caption)
                 }
                 .foregroundStyle(Color.appMutedForeground)
             }
@@ -146,7 +147,7 @@ struct BudgetCard: View {
     private var header: some View {
         HStack(spacing: 4) {
             Text(progress.budgetName)
-                .font(.body.weight(.medium))
+                .font(.headline)
                 .foregroundStyle(Color.appForeground)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -183,7 +184,7 @@ struct BudgetCard: View {
                 Text(positive
                     ? "+\(progress.carryOverAmount.asCurrency(code: currencyCode)) carried over"
                     : "\(progress.carryOverAmount.asCurrency(code: currencyCode)) overspent")
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline)
                     .foregroundStyle(positive ? Color.appSuccess : Color.appDanger)
             }
             if let note = progress.description, !note.isEmpty {
