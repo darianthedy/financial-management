@@ -3,11 +3,26 @@ import SwiftUI
 struct PendingTransactionRow: View {
     @Environment(AppState.self) private var appState
     let pending: Transaction
+    /// Resolved budget name — top of the title precedence (budget → fixed expense → category → description → type).
+    var budgetName: String?
+    /// Resolved fixed expense name — second in the title precedence.
+    var fixedExpenseName: String?
+    /// Resolved category name — third in the title precedence.
+    var categoryName: String?
     var onConfirm: () async -> Void
     var onEdit: () -> Void
     var onDismiss: () async -> Void
 
     @State private var isProcessing = false
+
+    /// Title precedence: budget (non-transfer) → fixed expense → category → description → type word.
+    private var title: String {
+        if let budgetName, pending.type != .transfer { return budgetName }
+        if let fixedExpenseName { return fixedExpenseName }
+        if let categoryName { return categoryName }
+        if let description = pending.description, !description.isEmpty { return description }
+        return pending.type.rawValue.capitalized
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -16,7 +31,7 @@ struct PendingTransactionRow: View {
                     .foregroundStyle(Color.appWarning)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pending.description ?? pending.type.rawValue.capitalized)
+                    Text(title)
                         .font(.subheadline.bold())
                         .foregroundStyle(Color.appForeground)
                     Text("Due: \(pending.transactionDate, style: .date)")

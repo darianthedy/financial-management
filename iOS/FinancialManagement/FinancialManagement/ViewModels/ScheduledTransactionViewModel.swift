@@ -12,6 +12,11 @@ import Supabase
 final class ScheduledTransactionViewModel {
     var scheduledTransactions: [EnrichedScheduledTransaction] = []
     var pendingTransactions: [Transaction] = []
+    /// Budget / fixed-expense / category names keyed by id, used to derive pending
+    /// transaction row titles following the same rule as the main Transactions list.
+    var budgetNamesById: [UUID: String] = [:]
+    var fixedNamesById: [UUID: String] = [:]
+    var categoriesById: [UUID: String] = [:]
     var isLoading = false
     var errorMessage: String?
 
@@ -42,9 +47,40 @@ final class ScheduledTransactionViewModel {
             scheduledTransactions = try await repository.enrich(rawScheduled)
             await notifyNewPending(fetchedPending)
             pendingTransactions = fetchedPending
+            await loadPendingLookups()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Resolves budget, fixed-expense, and category names for pending transaction
+    /// title derivation, mirroring the lookups in TransactionListViewModel.
+    private func loadPendingLookups() async {
+        let client = SupabaseService.shared.client
+        struct NameRow: Decodable { let id: UUID; let name: String }
+        struct CategoryRow: Decodable { let id: UUID; let name: String }
+        do {
+            async let budgets: [NameRow] = client.from("budgets").select("id,name").execute().value
+            async let fixed: [NameRow] = client.from("fixed_expenses").select("id,name").execute().value
+            async let cats: [CategoryRow] = client.from("categories").select("id,name").execute().value
+            budgetNamesById = Dictionary(try await budgets.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            fixedNamesById = Dictionary(try await fixed.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            categoriesById = Dictionary(try await cats.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        } catch {
+            // Non-fatal: rows fall back to description / type word.
+        }
+    }
+
+    func budgetName(for txn: Transaction) -> String? {
+        txn.budgetId.flatMap { budgetNamesById[$0] }
+    }
+
+    func fixedExpenseName(for txn: Transaction) -> String? {
+        txn.fixedExpenseId.flatMap { fixedNamesById[$0] }
+    }
+
+    func categoryName(for txn: Transaction) -> String? {
+        txn.categoryId.flatMap { categoriesById[$0] }
     }
 
     /// Fires one local notification per pending transaction not seen on a prior
