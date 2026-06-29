@@ -312,7 +312,6 @@ final class TransactionListViewModel {
     // MARK: - Lookups (hydrate chips / summary / rows)
 
     private func loadLookups() async {
-        guard accountsById.isEmpty, categoriesById.isEmpty, tagsById.isEmpty else { return }
         let client = SupabaseService.shared.client
 
         /// id → name rows for budgets / fixed expenses (web reads the same).
