@@ -16,6 +16,9 @@ struct ScheduledListView: View {
                     ForEach(viewModel.pendingTransactions) { pending in
                         PendingTransactionRow(
                             pending: pending,
+                            budgetName: viewModel.budgetName(for: pending),
+                            fixedExpenseName: viewModel.fixedExpenseName(for: pending),
+                            categoryName: viewModel.categoryName(for: pending),
                             onConfirm: { await viewModel.confirmPending(pending) },
                             onEdit: { editingPending = pending },
                             onDismiss: { await viewModel.dismissPending(pending) }
