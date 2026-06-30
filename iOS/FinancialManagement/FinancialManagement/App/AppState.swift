@@ -2,13 +2,20 @@ import Foundation
 import Observation
 import Supabase
 
+enum AuthStatus {
+    case loading
+    case authenticated
+    case unauthenticated
+}
+
 /// Global app state: auth status plus the single-currency context (default
 /// currency, its decimal places, the full currencies list, and the default
 /// account) that every formatter and form reads. See iOS Tech Plan §4.3.
 @Observable
 @MainActor
 final class AppState {
-    var isAuthenticated = false
+    var authStatus: AuthStatus = .loading
+    var isAuthenticated: Bool { authStatus == .authenticated }
     var currentUser: User?
 
     // Single-currency context, loaded once after sign-in.
@@ -29,19 +36,19 @@ final class AppState {
             switch event {
             case .initialSession, .signedIn, .tokenRefreshed:
                 if let session {
-                    isAuthenticated = true
                     currentUser = session.user
                     await loadCurrencyData()
+                    authStatus = .authenticated
                 } else {
-                    isAuthenticated = false
                     currentUser = nil
+                    authStatus = .unauthenticated
                 }
             case .signedOut:
-                isAuthenticated = false
                 currentUser = nil
                 defaultCurrency = "USD"
                 defaultAccountId = nil
                 currencies = []
+                authStatus = .unauthenticated
             default:
                 break
             }
