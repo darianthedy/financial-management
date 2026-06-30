@@ -39,9 +39,12 @@ struct FinancialManagementApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if appState.isAuthenticated {
+                switch appState.authStatus {
+                case .loading:
+                    SplashView()
+                case .authenticated:
                     ContentRootView()
-                } else {
+                case .unauthenticated:
                     LoginView()
                 }
             }
