@@ -13,7 +13,7 @@ final class TagListViewModel {
     private let supabase = SupabaseService.shared.client
     private var realtimeChannel: RealtimeChannelV2?
     private var currentUserId: UUID? {
-        try? supabase.auth.session.user.id
+        get async { try? await supabase.auth.session.user.id }
     }
 
     func load() async {
@@ -28,7 +28,7 @@ final class TagListViewModel {
     }
 
     func subscribeToChanges() async {
-        guard let userId = currentUserId else { return }
+        guard let userId = await currentUserId else { return }
         let channel = supabase.realtimeV2.channel("tags-realtime-\(userId)")
         let changes = channel.postgresChange(AnyAction.self, schema: "public", table: "tags")
         await channel.subscribe()
@@ -49,7 +49,7 @@ final class TagListViewModel {
 
     func create(name: String) async {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, let userId = currentUserId else { return }
+        guard !trimmed.isEmpty, let userId = await currentUserId else { return }
         do {
             let tag = try await repository.create(name: trimmed, userId: userId)
             tags.append(tag)
