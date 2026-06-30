@@ -40,8 +40,9 @@ struct ActiveInstallmentsSection: View {
                 }
             } header: {
                 Text("Active installments")
-                    .font(.title3)
-                    .foregroundStyle(Color.appForeground)
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.appMutedForeground)
                     .textCase(nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Match the rows' horizontal inset, then add a little vertical
@@ -103,10 +104,10 @@ struct ActiveInstallmentsSection: View {
         let count = installment.months
         return (Text(span(installment))
             .font(.subheadline)
-            .foregroundColor(Color.appMutedForeground)
+            .foregroundStyle(Color.appMutedForeground)
             + Text(" · \(count) month\(count == 1 ? "" : "s")")
             .font(.subheadline)
-            .foregroundColor(Color.appForeground))
+            .foregroundStyle(Color.appForeground))
     }
 
     private func span(_ installment: BudgetInstallment) -> String {
