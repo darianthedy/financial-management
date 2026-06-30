@@ -1,6 +1,6 @@
 import Foundation
 
-struct Tag: Codable, Identifiable, Sendable {
+struct Tag: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     let userId: UUID
     var name: String
