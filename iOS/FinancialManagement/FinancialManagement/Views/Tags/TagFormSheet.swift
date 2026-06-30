@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct TagFormSheet: View {
     enum Mode: Identifiable {
