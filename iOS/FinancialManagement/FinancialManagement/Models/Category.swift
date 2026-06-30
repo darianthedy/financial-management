@@ -1,6 +1,6 @@
 import Foundation
 
-struct Category: Codable, Identifiable, Sendable {
+struct Category: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     let userId: UUID
     var name: String

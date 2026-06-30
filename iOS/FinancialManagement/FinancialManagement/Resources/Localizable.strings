@@ -46,6 +46,14 @@
 "confirm" = "Confirm";
 "skip" = "Skip";
 
+/* Categories */
+"categories" = "Categories";
+"new_category" = "New category";
+"edit_category" = "Edit category";
+"add_category" = "Add category";
+"categories_empty_title" = "No categories yet";
+"categories_empty_message" = "Create categories to classify your income and expenses.";
+
 /* Settings */
 "settings" = "Settings";
 "more" = "More";

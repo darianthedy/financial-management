@@ -5,11 +5,17 @@ struct MoreView: View {
 
     var body: some View {
         // Secondary destinations mirror web's nav-config.ts non-primary items.
-        // Categories and Tags also live there, but their management screens are
-        // not yet implemented on iOS (only the form pickers exist), so they are
-        // intentionally omitted here until those screens land.
+        // Tags management screen is not yet implemented on iOS (only the form
+        // picker exists), so it is intentionally omitted here until it lands.
         List {
             Section("Management") {
+                NavigationLink {
+                    CategoryListView()
+                } label: {
+                    // web Tag
+                    Label("Categories", systemImage: "tag")
+                }
+
                 NavigationLink {
                     FixedExpenseListView()
                 } label: {
