@@ -40,9 +40,9 @@ struct ActiveInstallmentsSection: View {
                 }
             } header: {
                 Text("Active installments")
-                    .font(.footnote)
+                    .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Color.appMutedForeground)
+                    .foregroundStyle(Color.appForeground)
                     .textCase(nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Match the rows' horizontal inset, then add a little vertical
