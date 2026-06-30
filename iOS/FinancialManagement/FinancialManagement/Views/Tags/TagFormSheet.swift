@@ -145,7 +145,7 @@ struct TagFormSheet: View {
         do {
             switch mode {
             case .add:
-                _ = try await repository.create(name: trimmed, userId: try currentUserId())
+                _ = try await repository.create(name: trimmed, userId: try await currentUserId())
             case .edit(let tag):
                 _ = try await repository.update(id: tag.id, name: trimmed)
             }
@@ -156,10 +156,7 @@ struct TagFormSheet: View {
         }
     }
 
-    private func currentUserId() throws -> UUID {
-        if let id = SupabaseService.shared.client.auth.session.user.id as UUID? {
-            return id
-        }
-        throw NSError(domain: "Auth", code: 401)
+    private func currentUserId() async throws -> UUID {
+        try await SupabaseService.shared.client.auth.session.user.id
     }
 }
