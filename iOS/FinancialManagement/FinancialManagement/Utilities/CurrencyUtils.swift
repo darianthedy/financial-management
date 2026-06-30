@@ -16,6 +16,35 @@ enum CurrencyUtils {
         decimalPlacesCache[currencyCode] ?? 2
     }
 
+    // `NumberFormatter` is very expensive to instantiate (it loads ICU/locale
+    // data on first use and is non-trivial thereafter). The formatting helpers
+    // below are called once per row — and re-run while a List re-evaluates its
+    // visible rows mid-swipe — so allocating a fresh formatter each call burns
+    // the frame budget and shows up as a stutter before swipe actions render.
+    // Cache and reuse a configured formatter per (style, currency, digits).
+    private static let formatterLock = NSLock()
+    private static var formatterCache: [String: NumberFormatter] = [:]
+
+    private static func cachedFormatter(
+        style: NumberFormatter.Style,
+        currency: String,
+        fractionDigits: Int
+    ) -> NumberFormatter {
+        let key = "\(style.rawValue)|\(currency)|\(fractionDigits)"
+        formatterLock.lock()
+        defer { formatterLock.unlock() }
+
+        if let existing = formatterCache[key] { return existing }
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = style
+        if style == .currency { formatter.currencyCode = currency }
+        formatter.minimumFractionDigits = fractionDigits
+        formatter.maximumFractionDigits = fractionDigits
+        formatterCache[key] = formatter
+        return formatter
+    }
+
     static func toMinorUnits(_ amount: Double, decimalPlaces: Int = 2) -> Int64 {
         let factor = pow(10.0, Double(decimalPlaces))
         return Int64((amount * factor).rounded())
@@ -27,11 +56,7 @@ enum CurrencyUtils {
     }
 
     static func format(_ minorUnits: Int64, currency: String = "USD", decimalPlaces: Int = 2) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        formatter.minimumFractionDigits = decimalPlaces
-        formatter.maximumFractionDigits = decimalPlaces
+        let formatter = cachedFormatter(style: .currency, currency: currency, fractionDigits: decimalPlaces)
         return formatter.string(from: NSNumber(value: toDisplayAmount(minorUnits, decimalPlaces: decimalPlaces))) ?? "$0.00"
     }
 
@@ -43,10 +68,7 @@ enum CurrencyUtils {
     /// amounts aligns. Mirrors web `widestCurrencyNumber` / `formatCurrencyParts`.
     static func numberBody(_ minorUnits: Int64, currency: String) -> String {
         let dp = fractionDigits(for: currency)
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = dp
-        formatter.maximumFractionDigits = dp
+        let formatter = cachedFormatter(style: .decimal, currency: currency, fractionDigits: dp)
         return formatter.string(from: NSNumber(value: toDisplayAmount(abs(minorUnits), decimalPlaces: dp))) ?? "0"
     }
 
