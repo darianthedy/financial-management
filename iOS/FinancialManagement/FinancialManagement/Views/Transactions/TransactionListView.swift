@@ -508,20 +508,11 @@ struct TransactionListView: View {
     }
 
     private func amountChipLabel(_ f: TransactionFilters) -> String? {
-        let signPart: String? = f.amountSign.map { $0 == .negative ? "Expense" : "Income" }
         let code = appState.defaultCurrency
-        let rangePart: String? = {
-            switch (f.amountMin, f.amountMax) {
-            case let (min?, max?): return "\(min.asCurrency(code: code)) – \(max.asCurrency(code: code))"
-            case let (min?, nil): return "≥ \(min.asCurrency(code: code))"
-            case let (nil, max?): return "≤ \(max.asCurrency(code: code))"
-            case (nil, nil): return nil
-            }
-        }()
-        switch (signPart, rangePart) {
-        case let (sign?, range?): return "\(sign): \(range)"
-        case let (sign?, nil): return sign
-        case (nil, let range?): return range
+        switch (f.amountMin, f.amountMax) {
+        case let (min?, max?): return "\(min.asCurrency(code: code)) – \(max.asCurrency(code: code))"
+        case let (min?, nil): return "≥ \(min.asCurrency(code: code))"
+        case let (nil, max?): return "≤ \(max.asCurrency(code: code))"
         case (nil, nil): return nil
         }
     }
