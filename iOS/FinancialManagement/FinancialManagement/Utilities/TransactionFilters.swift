@@ -1,6 +1,19 @@
 import Foundation
 import Supabase
 
+/// Tri-state sign filter for transaction amounts.
+enum AmountSign: String, Codable, CaseIterable {
+    case negative
+    case positive
+
+    var label: String {
+        switch self {
+        case .negative: return "Expense"
+        case .positive: return "Income"
+        }
+    }
+}
+
 /// A tri-state multi-select facet.
 ///
 /// The facet itself is held as an `Optional` on `TransactionFilters`:
@@ -37,6 +50,7 @@ struct TransactionFilters: Equatable, Codable {
     /// input via `CurrencyUtils.toMinorUnits` at the input edge).
     var amountMin: Int64?
     var amountMax: Int64?
+    var amountSign: AmountSign?
     var budgets: Facet<String>?
     var fixedExpenses: Facet<String>?
 
@@ -53,7 +67,7 @@ struct TransactionFilters: Equatable, Codable {
         if dateFrom != nil || dateTo != nil { n += 1 }
         if categories != nil { n += 1 }
         if tags != nil { n += 1 }
-        if amountMin != nil || amountMax != nil { n += 1 }
+        if amountMin != nil || amountMax != nil || amountSign != nil { n += 1 }
         if budgets != nil { n += 1 }
         if fixedExpenses != nil { n += 1 }
         return n
@@ -119,6 +133,16 @@ func applyFilters(
     }
     if let max = filters.amountMax {
         q = q.lte("amount", value: String(max))
+    }
+
+    // Amount sign — narrows results when set.
+    if let sign = filters.amountSign {
+        switch sign {
+        case .negative:
+            q = q.lt("amount", value: "0")
+        case .positive:
+            q = q.gt("amount", value: "0")
+        }
     }
 
     // Category — selected ids and/or "(Blanks)".
