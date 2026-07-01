@@ -234,9 +234,9 @@ struct TransactionFilterSheet: View {
             CurrencyField(label: "Max", value: $maxAmount, decimals: appState.decimalPlaces)
 
             Picker("Sign", selection: $amountSign) {
-                Text("All").tag(nil as AmountSign?)
-                Text("Expense").tag(AmountSign.negative)
-                Text("Income").tag(AmountSign.positive)
+                Text("All").tag(AmountSign?.none)
+                Text("Expense").tag(AmountSign?.negative)
+                Text("Income").tag(AmountSign?.positive)
             }
             .pickerStyle(.segmented)
         }
