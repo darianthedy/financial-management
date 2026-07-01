@@ -54,7 +54,6 @@ struct TransactionFilterSheet: View {
     @State private var working: TransactionFilters
     @State private var minAmount = ""
     @State private var maxAmount = ""
-    @State private var amountSign: AmountSign? = nil
     @State private var showDiscardConfirm = false
 
     @State private var accounts: [Account] = []
@@ -76,7 +75,6 @@ struct TransactionFilterSheet: View {
         working != initial
             || minAmount != Self.amountText(initial.amountMin, decimalPlaces: appState.decimalPlaces)
             || maxAmount != Self.amountText(initial.amountMax, decimalPlaces: appState.decimalPlaces)
-            || amountSign != initial.amountSign
     }
 
     var body: some View {
@@ -131,7 +129,6 @@ struct TransactionFilterSheet: View {
         .onAppear {
             minAmount = Self.amountText(initial.amountMin, decimalPlaces: appState.decimalPlaces)
             maxAmount = Self.amountText(initial.amountMax, decimalPlaces: appState.decimalPlaces)
-            amountSign = initial.amountSign
         }
     }
 
@@ -232,13 +229,6 @@ struct TransactionFilterSheet: View {
         Section("Amount (\(appState.defaultCurrency))") {
             CurrencyField(label: "Min", value: $minAmount, decimals: appState.decimalPlaces)
             CurrencyField(label: "Max", value: $maxAmount, decimals: appState.decimalPlaces)
-
-            Picker("Sign", selection: $amountSign) {
-                Text("All").tag(nil as AmountSign?)
-                Text("Expense").tag(AmountSign.negative)
-                Text("Income").tag(AmountSign.positive)
-            }
-            .pickerStyle(.segmented)
         }
     }
 
@@ -298,14 +288,12 @@ struct TransactionFilterSheet: View {
         working = TransactionFilters()
         minAmount = ""
         maxAmount = ""
-        amountSign = nil
     }
 
     private func apply() {
         var f = working
         f.amountMin = Self.parseAmount(minAmount, decimalPlaces: appState.decimalPlaces)
         f.amountMax = Self.parseAmount(maxAmount, decimalPlaces: appState.decimalPlaces)
-        f.amountSign = amountSign
         if let s = f.search, s.trimmingCharacters(in: .whitespaces).isEmpty { f.search = nil }
         onApply(f)
         dismiss()

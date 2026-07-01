@@ -200,7 +200,7 @@ final class TransactionListViewModel {
         case .accounts: filters.accounts = nil
         case .statuses: filters.statuses = nil
         case .date: filters.dateFrom = nil; filters.dateTo = nil
-        case .amount: filters.amountMin = nil; filters.amountMax = nil; filters.amountSign = nil
+        case .amount: filters.amountMin = nil; filters.amountMax = nil
         case .categories: filters.categories = nil
         case .tags: filters.tags = nil
         case .budgets: filters.budgets = nil
