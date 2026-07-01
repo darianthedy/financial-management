@@ -46,14 +46,14 @@ export function parseFilters(params: URLSearchParams): TransactionFilters {
   const search = params.get("search");
   if (search) f.search = search;
 
-  const amtMin = params.get("amtMin");
-  if (amtMin) {
-    const n = Number(amtMin);
+  const amtMinRaw = params.get("amtMin");
+  if (amtMinRaw !== null) {
+    const n = Number(amtMinRaw);
     if (Number.isFinite(n)) f.amountMin = n;
   }
-  const amtMax = params.get("amtMax");
-  if (amtMax) {
-    const n = Number(amtMax);
+  const amtMaxRaw = params.get("amtMax");
+  if (amtMaxRaw !== null) {
+    const n = Number(amtMaxRaw);
     if (Number.isFinite(n)) f.amountMax = n;
   }
 

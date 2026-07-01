@@ -378,33 +378,33 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
 
             <FilterField label={`Amount (${defaultCurrency})`}>
               <div className="flex items-center gap-2">
-                <CurrencyAmountInput
+                <SignableAmountInput
                   decimals={decimals}
                   value={
                     filters.amountMin != null
                       ? toDisplayAmount(filters.amountMin, decimals)
                       : NaN
                   }
-                  onChange={(v) =>
-                    Number.isFinite(v)
-                      ? patch({ amountMin: toMinorUnits(v, decimals) })
-                      : clear("amountMin")
-                  }
+                  onChange={(v) => {
+                    if (Number.isNaN(v)) clear("amountMin");
+                    else patch({ amountMin: toMinorUnits(v, decimals) });
+                  }}
+                  placeholder="Min"
                   aria-label="Minimum amount"
                 />
                 <span className="text-[var(--color-muted-foreground)]">–</span>
-                <CurrencyAmountInput
+                <SignableAmountInput
                   decimals={decimals}
                   value={
                     filters.amountMax != null
                       ? toDisplayAmount(filters.amountMax, decimals)
                       : NaN
                   }
-                  onChange={(v) =>
-                    Number.isFinite(v)
-                      ? patch({ amountMax: toMinorUnits(v, decimals) })
-                      : clear("amountMax")
-                  }
+                  onChange={(v) => {
+                    if (Number.isNaN(v)) clear("amountMax");
+                    else patch({ amountMax: toMinorUnits(v, decimals) });
+                  }}
+                  placeholder="Max"
                   aria-label="Maximum amount"
                 />
               </div>
@@ -484,6 +484,59 @@ export function TransactionFiltersBar({ filters, onChange }: Props) {
             Clear all
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+type SignableAmountInputProps = {
+  decimals: number;
+  value: number;
+  onChange: (value: number) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  className?: string;
+};
+
+function SignableAmountInput({
+  decimals,
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  className,
+}: SignableAmountInputProps) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <div className="relative">
+      <CurrencyAmountInput
+        decimals={decimals}
+        value={value}
+        onChange={onChange}
+        allowNegative
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className={`min-w-0 ${focused ? "pr-11" : ""} ${className ?? ""}`.trim()}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+      />
+      {focused && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() =>
+            onChange(
+              Number.isFinite(value)
+                ? -value
+                : NaN,
+            )
+          }
+          aria-label="Toggle amount sign"
+          className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[var(--radius)] border border-[var(--color-border)] text-sm text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]"
+        >
+          {Number.isFinite(value) && value < 0 ? "−" : "+"}
+        </button>
       )}
     </div>
   );
