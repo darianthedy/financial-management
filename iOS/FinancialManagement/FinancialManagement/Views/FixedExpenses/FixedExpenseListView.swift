@@ -8,6 +8,8 @@ struct FixedExpenseListView: View {
     @State private var viewModel = FixedExpenseListViewModel()
     @State private var showingForm = false
     @State private var editingExpense: FixedExpense?
+    /// The expense we're adding a linked (paid) transaction for.
+    @State private var addingTransactionFor: FixedExpense?
     /// The expense awaiting delete confirmation (swipe-only here).
     @State private var pendingDelete: FixedExpense?
 
@@ -55,6 +57,23 @@ struct FixedExpenseListView: View {
         .sheet(item: $editingExpense) { expense in
             FixedExpenseEditSheet(expense: expense, decimalPlaces: appState.decimalPlaces) {
                 await viewModel.load()
+            }
+        }
+        // "Add transaction" opens the transaction form pre-linked to this expense
+        // (an expense, which marks it paid) with the amount and month prefilled —
+        // mirrors web's `addTransaction`.
+        .sheet(item: $addingTransactionFor) { expense in
+            NavigationStack {
+                TransactionFormView(
+                    defaultAccountId: appState.defaultAccountId,
+                    currency: appState.defaultCurrency,
+                    decimalPlaces: appState.decimalPlaces,
+                    prefillFixedExpenseId: expense.id,
+                    prefillAmount: prefillAmount(for: expense),
+                    prefillDate: prefillDate(for: expense)
+                ) {
+                    await viewModel.load()
+                }
             }
         }
         .task { await viewModel.load() }
@@ -134,6 +153,34 @@ struct FixedExpenseListView: View {
                     isPaid: viewModel.isPaid(expense),
                     currencyCode: currencyCode
                 )
+                // Web parity: each row carries Add transaction / Edit / Delete.
+                // The context menu holds all three (like web's ⋮ dropdown); the
+                // swipe actions remain as the native iOS shortcut.
+                .contextMenu {
+                    Button {
+                        addingTransactionFor = expense
+                    } label: {
+                        Label("Add Transaction", systemImage: "arrow.left.arrow.right")
+                    }
+                    Button {
+                        editingExpense = expense
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        pendingDelete = expense
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        addingTransactionFor = expense
+                    } label: {
+                        Label("Add Transaction", systemImage: "arrow.left.arrow.right")
+                    }
+                    .tint(Color.appSuccess)
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         pendingDelete = expense
@@ -157,5 +204,21 @@ struct FixedExpenseListView: View {
                     .minimumScaleFactor(0.7)
             }
         }
+    }
+
+    /// Prefilled amount (display units) for a linked transaction — the expense's
+    /// known cost, so the user doesn't retype it. Mirrors web's `toDisplayAmount`.
+    private func prefillAmount(for expense: FixedExpense) -> String {
+        String(CurrencyUtils.toDisplayAmount(expense.amount, decimalPlaces: appState.decimalPlaces))
+    }
+
+    /// Prefilled date for a linked transaction: today when it falls in the
+    /// expense's month (so the fixed-expense picker lists and pre-selects it),
+    /// otherwise the month's first day. Mirrors web's `addTransaction`.
+    private func prefillDate(for expense: FixedExpense) -> Date {
+        if DateUtils.yearMonth(from: Date()) == expense.yearMonth {
+            return Date()
+        }
+        return DateUtils.monthDateRange(expense.yearMonth)?.start ?? Date()
     }
 }
