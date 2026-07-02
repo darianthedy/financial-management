@@ -21,7 +21,7 @@ enum DateUtils {
 
     /// `YYYY-MM-DD` for writing a Postgres `date` column (no time component).
     static func yearMonthDay(from date: Date) -> String {
-        yearMonthDayFormatter.string(from: date
+        yearMonthDayFormatter.string(from: date)
     }
 
     static func currentYearMonth() -> String {
