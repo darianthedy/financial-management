@@ -12,13 +12,19 @@ struct TransactionFormView: View {
         defaultAccountId: UUID? = nil,
         currency: String = "USD",
         decimalPlaces: Int = 2,
+        prefillFixedExpenseId: UUID? = nil,
+        prefillAmount: String? = nil,
+        prefillDate: Date? = nil,
         onSaved: (() async -> Void)? = nil
     ) {
         _viewModel = State(initialValue: TransactionFormViewModel(
             editing: transaction,
             defaultAccountId: defaultAccountId,
             currency: currency,
-            decimalPlaces: decimalPlaces
+            decimalPlaces: decimalPlaces,
+            prefillFixedExpenseId: prefillFixedExpenseId,
+            prefillAmount: prefillAmount,
+            prefillDate: prefillDate
         ))
         self.onSaved = onSaved
     }

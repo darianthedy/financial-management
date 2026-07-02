@@ -77,7 +77,10 @@ final class TransactionFormViewModel {
         editing transaction: Transaction? = nil,
         defaultAccountId: UUID? = nil,
         currency: String = "USD",
-        decimalPlaces: Int = 2
+        decimalPlaces: Int = 2,
+        prefillFixedExpenseId: UUID? = nil,
+        prefillAmount: String? = nil,
+        prefillDate: Date? = nil
     ) {
         self.currency = currency
         self.decimalPlaces = decimalPlaces
@@ -96,6 +99,19 @@ final class TransactionFormViewModel {
         } else {
             // New transactions pre-select the user's default account (§5.3).
             self.accountId = defaultAccountId
+
+            // Adding a transaction from the Fixed Expenses screen pre-links it to
+            // that expense (an expense, marking it paid) and prefills the known
+            // amount and month date, mirroring web's `addTransaction`. `didSet`
+            // does not fire during init, so setting `type` here won't clear the
+            // fixed-expense link. The prefill becomes the discard-guard baseline
+            // (snapshot is captured below), so opening then saving unchanged works.
+            if let prefillFixedExpenseId {
+                self.type = .expense
+                self.fixedExpenseId = prefillFixedExpenseId
+            }
+            if let prefillAmount { self.amount = prefillAmount }
+            if let prefillDate { self.transactionDate = prefillDate }
         }
 
         // Baseline for the discard-changes guard, captured after prefill. The tag
