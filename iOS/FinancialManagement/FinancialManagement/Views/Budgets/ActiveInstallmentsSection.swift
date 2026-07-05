@@ -113,8 +113,7 @@ struct ActiveInstallmentsSection: View {
     private func span(_ installment: BudgetInstallment) -> String {
         let start = DateUtils.formatYearMonth(installment.startYearMonth)
         guard installment.months > 1 else { return start }
-        let endMonth = DateUtils.navigate(installment.startYearMonth, by: installment.months - 1)
-        let end = DateUtils.formatYearMonth(endMonth)
+        let end = DateUtils.formatYearMonth(installment.endYearMonth)
         return "\(start) – \(end)"
     }
 }

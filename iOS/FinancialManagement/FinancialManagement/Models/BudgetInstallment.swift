@@ -26,6 +26,13 @@ struct BudgetInstallment: Codable, Identifiable, Sendable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+
+    /// The last `YYYY-MM` this installment reserves in — the start month advanced
+    /// by `months - 1`. Because `YYYY-MM` strings sort chronologically, this also
+    /// serves as a sort key for ordering by earliest ending month.
+    var endYearMonth: String {
+        DateUtils.navigate(startYearMonth, by: months - 1)
+    }
 }
 
 /// One row per non-zero grid cell. Targets a budget LINEAGE by name, not a budget id.
