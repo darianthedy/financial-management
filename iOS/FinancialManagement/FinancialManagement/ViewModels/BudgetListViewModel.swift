@@ -25,6 +25,7 @@ final class BudgetListViewModel {
     private let supabase = SupabaseService.shared.client
     private var realtimeChannel: RealtimeChannelV2?
     private var progressCache: [String: [BudgetProgress]] = [:]
+    private var installmentsCache: [String: [ActiveInstallment]] = [:]
 
     func load() async {
         let month = yearMonth
@@ -34,18 +35,24 @@ final class BudgetListViewModel {
         }
         defer { if yearMonth == month { isLoading = false } }
 
+        async let progressResult = repository.progress(yearMonth: month)
+        async let installmentsResult = try? installmentRepository.activeInstallments(reservingIn: month)
+
         do {
-            let rows = try await repository.progress(yearMonth: month)
+            let rows = try await progressResult
             progressCache[month] = rows
-            guard yearMonth == month else { return }
-            progress = rows
+            if yearMonth == month {
+                progress = rows
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
 
-        if let installments = try? await installmentRepository.activeInstallments(reservingIn: month),
-           yearMonth == month {
-            activeInstallments = installments
+        if let installments = await installmentsResult {
+            installmentsCache[month] = installments
+            if yearMonth == month {
+                activeInstallments = installments
+            }
         }
 
         await prefetchAdjacentMonths()
@@ -61,7 +68,7 @@ final class BudgetListViewModel {
         withAnimation(.easeInOut(duration: 0.3)) {
             yearMonth = newMonth
             progress = cached ?? []
-            activeInstallments = []
+            activeInstallments = installmentsCache[newMonth] ?? []
             isLoading = !hasCache
         }
 
@@ -162,16 +169,23 @@ final class BudgetListViewModel {
     /// cache and reload the visible month.
     private func invalidateAndReload() {
         progressCache.removeAll()
+        installmentsCache.removeAll()
         Task { await load() }
     }
 
     private func prefetchAdjacentMonths() async {
         let months = [-1, 1].map { DateUtils.navigate(yearMonth, by: $0) }
-        for month in months where progressCache[month] == nil {
-            do {
-                progressCache[month] = try await repository.progress(yearMonth: month)
-            } catch {
-                // Non-fatal: prefetch failure is silent.
+        for month in months {
+            if progressCache[month] == nil {
+                do {
+                    progressCache[month] = try await repository.progress(yearMonth: month)
+                } catch {
+                    // Non-fatal: prefetch failure is silent.
+                }
+            }
+            if installmentsCache[month] == nil,
+               let installments = try? await installmentRepository.activeInstallments(reservingIn: month) {
+                installmentsCache[month] = installments
             }
         }
     }
