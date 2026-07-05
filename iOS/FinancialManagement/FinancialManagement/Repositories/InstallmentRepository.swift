@@ -146,6 +146,16 @@ actor InstallmentRepository {
                 budgetNames: namesByInstallment[header.id] ?? []
             )
         }
+        // Order by earliest ending month first; tie-break on the start month so
+        // a shorter span that ends sooner leads, then fall back to newest-created
+        // for a stable order. `YYYY-MM` strings sort chronologically.
+        .sorted { lhs, rhs in
+            let lEnd = lhs.installment.endYearMonth, rEnd = rhs.installment.endYearMonth
+            if lEnd != rEnd { return lEnd < rEnd }
+            let lStart = lhs.installment.startYearMonth, rStart = rhs.installment.startYearMonth
+            if lStart != rStart { return lStart < rStart }
+            return lhs.installment.createdAt > rhs.installment.createdAt
+        }
     }
 
     /// Cancel an installment by deleting its header; `ON DELETE CASCADE` clears
