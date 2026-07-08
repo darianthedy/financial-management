@@ -25,6 +25,8 @@ struct DashboardView: View {
                     } else if let data = viewModel.data {
                         BudgetVerdictBanner(
                             budgets: data.budgets,
+                            fixedExpenses: data.fixedExpenses,
+                            paidFixedExpenseTotals: data.paidFixedExpenseTotals,
                             currencyCode: appState.defaultCurrency
                         )
 
@@ -39,7 +41,7 @@ struct DashboardView: View {
                         PlannedExpensesCard(
                             budgets: data.budgets,
                             fixedExpenses: data.fixedExpenses,
-                            paidFixedExpenseIds: data.paidFixedExpenseIds,
+                            paidFixedExpenseTotals: data.paidFixedExpenseTotals,
                             yearMonth: viewModel.yearMonth,
                             currencyCode: appState.defaultCurrency,
                             widestAmountBody: widestDashboardAmountBody(
@@ -79,6 +81,9 @@ struct DashboardView: View {
         if let data = viewModel.data {
             maxAbs = max(maxAbs, data.budgets.map { abs($0.effectiveAmount) }.max() ?? 0)
             maxAbs = max(maxAbs, data.fixedExpenses.map { abs($0.amount) }.max() ?? 0)
+            // Paid fixed expenses display the actual amount paid, which can exceed
+            // the plan — size the shared column to those too so nothing clips.
+            maxAbs = max(maxAbs, data.paidFixedExpenseTotals.values.map { abs($0) }.max() ?? 0)
             maxAbs = max(maxAbs, data.unplanned.map { abs($0.total) }.max() ?? 0)
         }
         return CurrencyUtils.numberBody(maxAbs, currency: appState.defaultCurrency)
