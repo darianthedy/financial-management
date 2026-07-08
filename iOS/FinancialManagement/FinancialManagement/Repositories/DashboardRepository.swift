@@ -8,7 +8,10 @@ struct DashboardData: Sendable {
     var budgets: [BudgetProgress]           // Verdict banner + Planned budget bars (v_budget_progress)
     var accounts: [DashboardAccount]        // Accounts card
     var fixedExpenses: [FixedExpense]       // Planned fixed expenses for the month
-    var paidFixedExpenseIds: Set<UUID>      // derived from linked transactions.fixed_expense_id
+    // Actual amount paid per fixed expense — Σ of the linked transactions, keyed
+    // by `fixed_expense_id`. A key's presence means the expense is "paid"; its
+    // value is what really moved (which may differ from the planned amount).
+    var paidFixedExpenseTotals: [UUID: Int64]
     var unplanned: [UnplannedGroup]         // confirmed budget-less / fixed-less expenses, by category
 }
 
@@ -44,12 +47,12 @@ actor DashboardRepository {
         async let fixed = fetchFixedExpenses(yearMonth: yearMonth)
         async let unplanned = fetchUnplanned(yearMonth: yearMonth)
 
-        let (fixedExpenses, paidIds) = try await fixed
+        let (fixedExpenses, paidTotals) = try await fixed
         return DashboardData(
             budgets: try await budgets,
             accounts: try await accounts,
             fixedExpenses: fixedExpenses,
-            paidFixedExpenseIds: paidIds,
+            paidFixedExpenseTotals: paidTotals,
             unplanned: try await unplanned
         )
     }
@@ -111,7 +114,7 @@ actor DashboardRepository {
 
     // MARK: - Planned fixed expenses
 
-    private func fetchFixedExpenses(yearMonth: String) async throws -> ([FixedExpense], Set<UUID>) {
+    private func fetchFixedExpenses(yearMonth: String) async throws -> ([FixedExpense], [UUID: Int64]) {
         let expenses: [FixedExpense] = try await client
             .from("fixed_expenses")
             .select()
@@ -120,25 +123,32 @@ actor DashboardRepository {
             .execute()
             .value
 
-        let paid = try await paidFixedExpenseIds(expenses.map(\.id))
-        return (expenses, paid)
+        let paidTotals = try await paidFixedExpenseTotals(expenses.map(\.id))
+        return (expenses, paidTotals)
     }
 
-    /// The subset of the given fixed-expense ids referenced by at least one
-    /// transaction via `fixed_expense_id` — i.e. the paid ones.
-    private func paidFixedExpenseIds(_ ids: [UUID]) async throws -> Set<UUID> {
-        guard !ids.isEmpty else { return [] }
+    /// For the given fixed-expense ids, the actual amount paid — the sum of the
+    /// transactions referencing each id via `fixed_expense_id`. Only ids with at
+    /// least one linked transaction appear (their presence marks them "paid");
+    /// the summed value is what really moved, which may differ from the plan.
+    private func paidFixedExpenseTotals(_ ids: [UUID]) async throws -> [UUID: Int64] {
+        guard !ids.isEmpty else { return [:] }
 
-        struct Row: Decodable { let fixed_expense_id: UUID }
+        struct Row: Decodable {
+            let fixed_expense_id: UUID
+            let amount: Int64
+        }
 
         let rows: [Row] = try await client
             .from("transactions")
-            .select("fixed_expense_id")
+            .select("fixed_expense_id, amount")
             .in("fixed_expense_id", values: ids.map(\.uuidString))
             .execute()
             .value
 
-        return Set(rows.map(\.fixed_expense_id))
+        return rows.reduce(into: [:]) { totals, row in
+            totals[row.fixed_expense_id, default: 0] += row.amount
+        }
     }
 
     // MARK: - Unplanned expenses

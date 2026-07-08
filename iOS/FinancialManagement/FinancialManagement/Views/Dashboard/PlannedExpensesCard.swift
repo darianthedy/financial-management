@@ -12,7 +12,9 @@ import SwiftUI
 struct PlannedExpensesCard: View {
     let budgets: [BudgetProgress]
     let fixedExpenses: [FixedExpense]
-    let paidFixedExpenseIds: Set<UUID>
+    /// Actual amount paid per fixed expense (Σ linked transactions), keyed by id.
+    /// A key's presence marks the expense as "paid".
+    let paidFixedExpenseTotals: [UUID: Int64]
     let yearMonth: String
     let currencyCode: String
     let widestAmountBody: String
@@ -40,12 +42,18 @@ struct PlannedExpensesCard: View {
     }
 
     private var unpaid: [FixedExpense] {
-        fixedExpenses.filter { !paidFixedExpenseIds.contains($0.id) }
+        fixedExpenses.filter { paidFixedExpenseTotals[$0.id] == nil }
             .sorted { $0.amount > $1.amount }
     }
     private var paid: [FixedExpense] {
-        fixedExpenses.filter { paidFixedExpenseIds.contains($0.id) }
+        fixedExpenses.filter { paidFixedExpenseTotals[$0.id] != nil }
             .sorted { $0.amount > $1.amount }
+    }
+
+    /// What was actually paid for a fixed expense — the summed linked
+    /// transactions, falling back to the plan if (unexpectedly) none are linked.
+    private func paidTotal(for expense: FixedExpense) -> Int64 {
+        paidFixedExpenseTotals[expense.id] ?? expense.amount
     }
 
     private var isEmpty: Bool { budgets.isEmpty && fixedExpenses.isEmpty }
@@ -106,7 +114,8 @@ struct PlannedExpensesCard: View {
                                     title: "Unpaid",
                                     icon: "clock",
                                     items: unpaid,
-                                    accent: nil
+                                    accent: nil,
+                                    isPaid: false
                                 )
                             }
                             if !paid.isEmpty {
@@ -114,7 +123,8 @@ struct PlannedExpensesCard: View {
                                     title: "Paid",
                                     icon: "checkmark.circle",
                                     items: paid,
-                                    accent: Color.appSuccess
+                                    accent: Color.appSuccess,
+                                    isPaid: true
                                 )
                             }
                         }
@@ -204,13 +214,17 @@ struct PlannedExpensesCard: View {
 
     // MARK: - Fixed expenses (Unpaid / Paid with subtotals)
 
+    /// A fixed-expense subsection (Unpaid / Paid). The Paid subtotal and rows use
+    /// the **actual** amount paid (Σ linked transactions); Unpaid uses the plan.
     private func fixedSection(
         title: String,
         icon: String,
         items: [FixedExpense],
-        accent: Color?
+        accent: Color?,
+        isPaid: Bool
     ) -> some View {
-        let subtotal = items.reduce(Int64(0)) { $0 + $1.amount }
+        let amount: (FixedExpense) -> Int64 = { isPaid ? paidTotal(for: $0) : $0.amount }
+        let subtotal = items.reduce(Int64(0)) { $0 + amount($1) }
         let labelColor = accent ?? Color.appMutedForeground
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -228,23 +242,117 @@ struct PlannedExpensesCard: View {
             }
 
             ForEach(items) { item in
-                HStack {
-                    Text(item.name)
-                        .font(.subheadline.weight(accent == nil ? .regular : .medium))
-                        .lineLimit(1)
-                    Spacer()
-                    AmountColumnView(
-                        minorUnits: item.amount,
+                if isPaid {
+                    PaidFixedExpenseRow(
+                        name: item.name,
+                        planned: item.amount,
+                        paid: paidTotal(for: item),
                         currencyCode: currencyCode,
-                        widestNumber: widestAmountBody
+                        widestAmountBody: widestAmountBody
                     )
-                        .font(.subheadline)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    .padding(.leading, 20)
+                } else {
+                    HStack {
+                        Text(item.name)
+                            .font(.subheadline)
+                            .lineLimit(1)
+                        Spacer()
+                        AmountColumnView(
+                            minorUnits: item.amount,
+                            currencyCode: currencyCode,
+                            widestNumber: widestAmountBody
+                        )
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(Color.appMutedForeground)
+                    .padding(.leading, 20)
                 }
-                .foregroundStyle(accent == nil ? Color.appMutedForeground : Color.appCardForeground)
-                .padding(.leading, 20)
             }
         }
+    }
+}
+
+/// One row in the Paid fixed-expenses list. Shows the **actual** amount paid, and
+/// when that diverges from the plan, a warning affordance that opens a compact
+/// popover breaking down the planned amount and the (color-coded) difference.
+private struct PaidFixedExpenseRow: View {
+    let name: String
+    let planned: Int64
+    let paid: Int64
+    let currencyCode: String
+    let widestAmountBody: String
+
+    @State private var showingDiff = false
+
+    /// Signed gap between what was paid and what was planned. Positive means paid
+    /// over plan (danger), negative means under (success).
+    private var diff: Int64 { paid - planned }
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 4) {
+                Text(name)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+
+                if diff != 0 {
+                    Button { showingDiff = true } label: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Color.appWarning)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Paid amount differs from planned for \(name)")
+                    .accessibilityHint("Shows the planned amount and the difference")
+                    .popover(isPresented: $showingDiff,
+                             attachmentAnchor: .rect(.bounds),
+                             arrowEdge: .top) { diffPopover }
+                }
+            }
+
+            Spacer()
+
+            AmountColumnView(
+                minorUnits: paid,
+                currencyCode: currencyCode,
+                widestNumber: widestAmountBody
+            )
+                .font(.subheadline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .foregroundStyle(Color.appCardForeground)
+    }
+
+    private var diffPopover: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 24) {
+                Text("Planned")
+                    .foregroundStyle(Color.appMutedForeground)
+                Spacer()
+                Text(planned.asCurrency(code: currencyCode))
+                    .monospacedDigit()
+            }
+            HStack(spacing: 24) {
+                Text("Difference")
+                    .foregroundStyle(Color.appMutedForeground)
+                Spacer()
+                // Color carries direction (red = over plan, green = under), so no
+                // +/− sign is needed.
+                Text(abs(diff).asCurrency(code: currencyCode))
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(diff > 0 ? Color.appDanger : Color.appSuccess)
+            }
+        }
+        .font(.subheadline)
+        .padding(12)
+        // Keep it a compact popover on iPhone rather than a full-screen sheet
+        // (iOS 16.4+; project targets newer).
+        .presentationCompactAdaptation(.popover)
     }
 }
