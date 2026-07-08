@@ -74,7 +74,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <VerdictBanner budgets={budgetProgress} />
+            <VerdictBanner budgets={budgetProgress} fixedExpenses={fixedExpenses} />
           </div>
           <div className="md:col-span-2">
             <AccountsCard accounts={accounts} />

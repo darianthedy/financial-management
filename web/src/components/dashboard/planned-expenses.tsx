@@ -1,8 +1,9 @@
-import { CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/misc";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AmountColumn } from "@/components/shared/amount-column";
-import { widestCurrencyNumber } from "@/lib/utils/currency";
+import { formatCurrency, widestCurrencyNumber } from "@/lib/utils/currency";
 import { monthElapsedFraction } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
 import type { BudgetProgress } from "@/lib/types/database";
@@ -42,7 +43,10 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
     .filter((f) => f.paid)
     .sort((a, b) => b.amount - a.amount);
   const unpaidTotal = unpaidFx.reduce((s, f) => s + f.amount, 0);
-  const paidTotal = paidFx.reduce((s, f) => s + f.amount, 0);
+  // The paid figure reflects what was ACTUALLY paid (the sum of the linked
+  // transactions) rather than the planned fixed-expense amount, so the total
+  // matches money that really moved.
+  const paidTotal = paidFx.reduce((s, f) => s + f.paid_total, 0);
 
   // One shared width for every single-amount figure in this card so their
   // currency symbols and digits line up into a tidy column.
@@ -51,6 +55,7 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
     unpaidTotal,
     paidTotal,
     ...fixedExpenses.map((f) => f.amount),
+    ...paidFx.map((f) => f.paid_total),
   ]);
 
   // The budgets list shows a "spent / total" pair per row. Size both sides to
@@ -198,19 +203,66 @@ export function PlannedExpensesCard({ budgets, fixedExpenses, yearMonth }: Props
                         className="text-nowrap text-sm font-semibold text-[var(--color-success)]"
                       />
                     </div>
-                    {paidFx.map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center justify-between gap-2 pl-5 text-sm"
-                      >
-                        <span className="truncate font-medium">{f.name}</span>
-                        <AmountColumn
-                          minorUnits={f.amount}
-                          widestNumber={widestAmount}
-                          className="text-nowrap"
-                        />
-                      </div>
-                    ))}
+                    {paidFx.map((f) => {
+                      const diff = f.paid_total - f.amount;
+                      return (
+                        <div
+                          key={f.id}
+                          className="flex items-center justify-between gap-2 pl-5 text-sm"
+                        >
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span className="truncate font-medium">{f.name}</span>
+                            {diff !== 0 && (
+                              <Popover>
+                                {/* Flags that what was actually paid differs from
+                                    the planned fixed-expense amount. */}
+                                <PopoverTrigger
+                                  className="-my-1 shrink-0 rounded-full p-1 text-[var(--color-warning)] hover:bg-[var(--color-muted)]"
+                                >
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  <span className="sr-only">
+                                    Paid amount differs from planned
+                                  </span>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align="center"
+                                  className="flex w-auto flex-col gap-1 p-2.5 text-sm"
+                                >
+                                  <div className="flex items-baseline justify-between gap-6">
+                                    <span className="text-[var(--color-muted-foreground)]">
+                                      Planned
+                                    </span>
+                                    <span className="tabular-nums">
+                                      {formatCurrency(f.amount)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-baseline justify-between gap-6">
+                                    <span className="text-[var(--color-muted-foreground)]">
+                                      Difference
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "font-semibold tabular-nums",
+                                        diff > 0
+                                          ? "text-[var(--color-danger)]"
+                                          : "text-[var(--color-success)]",
+                                      )}
+                                    >
+                                      {formatCurrency(Math.abs(diff))}
+                                    </span>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                          </span>
+                          <AmountColumn
+                            minorUnits={f.paid_total}
+                            widestNumber={widestAmount}
+                            className="text-nowrap"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
