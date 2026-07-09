@@ -40,7 +40,7 @@ struct BudgetVerdictBanner: View {
         let id = UUID()
         let tone: Tone
         let label: String
-        let detail: String
+        let detail: String?
     }
 
     // MARK: - Derivations
@@ -63,30 +63,28 @@ struct BudgetVerdictBanner: View {
 
         if !budgets.isEmpty {
             if overBudgets.isEmpty {
-                let plural = budgets.count == 1 ? "" : "s"
                 rows.append(StatusRow(
                     tone: .success,
                     label: "Budgets on track",
-                    detail: "all \(budgets.count) budget\(plural) within target"
+                    detail: "all \(budgets.count) within target"
                 ))
             } else {
                 let plural = overBudgets.count == 1 ? "" : "s"
                 rows.append(StatusRow(
                     tone: .danger,
                     label: "Overspending in \(overBudgets.count) budget\(plural)",
-                    detail: "−\(totalOverage.asCurrency(code: currencyCode)) over"
+                    detail: "\(totalOverage.asCurrency(code: currencyCode)) over"
                 ))
             }
         }
 
         if !paidOffPlan.isEmpty {
             let plural = paidOffPlan.count == 1 ? "" : "s"
-            let detail: String
+            let detail: String?
             if netDiff == 0 {
-                detail = "amounts differ"
+                detail = nil
             } else {
-                let sign = netDiff > 0 ? "+" : "−"
-                detail = "net \(sign)\(abs(netDiff).asCurrency(code: currencyCode))"
+                detail = "\(abs(netDiff).asCurrency(code: currencyCode)) \(netDiff > 0 ? "over" : "under")"
             }
             rows.append(StatusRow(
                 tone: .warning,
@@ -121,9 +119,11 @@ struct BudgetVerdictBanner: View {
                         (Text(row.label)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(row.tone.color)
-                         + Text(" · \(row.detail)")
-                            .font(.subheadline)
-                            .foregroundColor(Color.appMutedForeground))
+                         + (row.detail.map { detail in
+                             Text(" · \(detail)")
+                                 .font(.subheadline)
+                                 .foregroundColor(Color.appMutedForeground)
+                         } ?? Text("")))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
 
