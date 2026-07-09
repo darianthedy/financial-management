@@ -8,6 +8,23 @@ import { monthDateRange } from "@/lib/utils/date";
 export type AccountMonthBalance = Account & { balance: number };
 
 /**
+ * Money in vs money out for the selected month, from `v_monthly_cashflow`
+ * (confirmed transactions only; transfers excluded). A month with no
+ * transactions has no view row, so it collapses to all-zeros.
+ */
+export type MonthCashflow = {
+  total_income: number;
+  total_expense: number;
+  net: number;
+};
+
+const ZERO_CASHFLOW: MonthCashflow = {
+  total_income: 0,
+  total_expense: 0,
+  net: 0,
+};
+
+/**
  * One category's unplanned spend for the month: confirmed expenses NOT tied to a
  * budget and NOT linked to a fixed expense. Spend with no category is collapsed
  * into a single null-id "Uncategorized" row.
@@ -35,6 +52,7 @@ export function useDashboard(yearMonth: string) {
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpenseWithStatus[]>([]);
   const [budgetProgress, setBudgetProgress] = useState<BudgetProgress[]>([]);
   const [accounts, setAccounts] = useState<AccountMonthBalance[]>([]);
+  const [cashflow, setCashflow] = useState<MonthCashflow>(ZERO_CASHFLOW);
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
@@ -46,6 +64,7 @@ export function useDashboard(yearMonth: string) {
       { data: unplannedRows },
       { data: accountRows },
       { data: balanceRows },
+      { data: cashflowRow },
     ] = await Promise.all([
       supabase
         .from("v_budget_progress")
@@ -77,6 +96,13 @@ export function useDashboard(yearMonth: string) {
       // empty months), so the payload is one row per account regardless of how
       // far back we navigate.
       supabase.rpc("fn_account_balances_at", { p_year_month: yearMonth }),
+      // Money in vs out for the month. Returns at most one row; a month with no
+      // confirmed transactions returns none, which we treat as all-zeros.
+      supabase
+        .from("v_monthly_cashflow")
+        .select("total_income, total_expense, net")
+        .eq("year_month", yearMonth)
+        .maybeSingle(),
     ]);
 
     // Aggregate unplanned spend by category; a null category -> "Uncategorized".
@@ -172,6 +198,16 @@ export function useDashboard(yearMonth: string) {
       })),
     );
 
+    setCashflow(
+      cashflowRow
+        ? {
+            total_income: cashflowRow.total_income,
+            total_expense: cashflowRow.total_expense,
+            net: cashflowRow.net,
+          }
+        : ZERO_CASHFLOW,
+    );
+
     setLoading(false);
   }, [yearMonth]);
 
@@ -188,5 +224,5 @@ export function useDashboard(yearMonth: string) {
     return () => { supabase.removeChannel(channel); };
   }, [fetch]);
 
-  return { unplannedExpenses, fixedExpenses, budgetProgress, accounts, loading, refetch: fetch };
+  return { unplannedExpenses, fixedExpenses, budgetProgress, accounts, cashflow, loading, refetch: fetch };
 }
