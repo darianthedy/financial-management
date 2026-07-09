@@ -30,6 +30,11 @@ struct DashboardView: View {
                             currencyCode: appState.defaultCurrency
                         )
 
+                        CashflowCard(
+                            cashflow: data.cashflow,
+                            currencyCode: appState.defaultCurrency
+                        )
+
                         AccountsCard(
                             accounts: data.accounts,
                             currencyCode: appState.defaultCurrency,

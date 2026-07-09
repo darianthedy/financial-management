@@ -5,20 +5,45 @@ import SwiftUI
 /// title at the top, 20pt to the content, all on the tokenized card surface with
 /// `p-5` (20pt) padding. Used by the Accounts, Planned, and Unplanned widgets so
 /// they share web's exact card chrome.
-struct DashboardCard<Content: View>: View {
+struct DashboardCard<Content: View, Accessory: View>: View {
     let title: String
+    @ViewBuilder var accessory: Accessory
     @ViewBuilder var content: Content
+
+    init(
+        title: String,
+        @ViewBuilder accessory: () -> Accessory,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.accessory = accessory()
+        self.content = content()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(Color.appCardForeground)
+            // Title row mirrors web's `CardHeader` flex row: the title on the
+            // left with an optional trailing accessory (e.g. a status chip).
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Color.appCardForeground)
+                Spacer(minLength: 8)
+                accessory
+            }
             content
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCardSurface()
+    }
+}
+
+extension DashboardCard where Accessory == EmptyView {
+    /// Accessory-less card: just a title and content, as used by the Accounts,
+    /// Planned, and Unplanned widgets.
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.init(title: title, accessory: { EmptyView() }, content: content)
     }
 }
 
