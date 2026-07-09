@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/misc";
 import { VerdictBanner } from "@/components/dashboard/verdict-banner";
+import { CashflowCard } from "@/components/dashboard/cashflow-card";
 import { AccountsCard } from "@/components/dashboard/accounts-card";
 import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
 import { UnplannedExpensesCard } from "@/components/dashboard/unplanned-expenses";
@@ -30,6 +31,7 @@ export default function DashboardPage() {
     fixedExpenses,
     budgetProgress,
     accounts,
+    cashflow,
     loading,
   } = useDashboard(yearMonth);
 
@@ -76,9 +78,9 @@ export default function DashboardPage() {
           <div className="md:col-span-2">
             <VerdictBanner budgets={budgetProgress} fixedExpenses={fixedExpenses} />
           </div>
-          <div className="md:col-span-2">
-            <AccountsCard accounts={accounts} />
-          </div>
+          {/* Cashflow (money in vs out) sits beside Accounts (how much I have). */}
+          <CashflowCard cashflow={cashflow} />
+          <AccountsCard accounts={accounts} />
           <PlannedExpensesCard
             budgets={budgetProgress}
             fixedExpenses={fixedExpenses}
