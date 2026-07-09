@@ -13,6 +13,18 @@ struct DashboardData: Sendable {
     // value is what really moved (which may differ from the planned amount).
     var paidFixedExpenseTotals: [UUID: Int64]
     var unplanned: [UnplannedGroup]         // confirmed budget-less / fixed-less expenses, by category
+    var cashflow: MonthCashflow             // money in vs out for the month (v_monthly_cashflow)
+}
+
+/// Money in vs money out for the selected month, from `v_monthly_cashflow`
+/// (confirmed transactions only; transfers excluded). The view returns at most
+/// one row for a `year_month`; a month with no confirmed transactions has no
+/// row, which collapses to all-zeros. Amounts are in minor units. Mirrors web's
+/// `MonthCashflow` (`use-dashboard.ts`).
+struct MonthCashflow: Sendable {
+    var income: Int64 = 0
+    var expense: Int64 = 0
+    var net: Int64 = 0
 }
 
 /// One account on the dashboard with its balance **as of** the selected month —
@@ -46,6 +58,7 @@ actor DashboardRepository {
         async let accounts = fetchAccounts(yearMonth: yearMonth)
         async let fixed = fetchFixedExpenses(yearMonth: yearMonth)
         async let unplanned = fetchUnplanned(yearMonth: yearMonth)
+        async let cashflow = fetchCashflow(yearMonth: yearMonth)
 
         let (fixedExpenses, paidTotals) = try await fixed
         return DashboardData(
@@ -53,8 +66,38 @@ actor DashboardRepository {
             accounts: try await accounts,
             fixedExpenses: fixedExpenses,
             paidFixedExpenseTotals: paidTotals,
-            unplanned: try await unplanned
+            unplanned: try await unplanned,
+            cashflow: try await cashflow
         )
+    }
+
+    // MARK: - Cashflow
+
+    /// Money in vs out for `yearMonth` from `v_monthly_cashflow` (confirmed
+    /// transactions only, transfers excluded). The view yields at most one row;
+    /// an empty result means no activity, which maps to all-zeros.
+    private func fetchCashflow(yearMonth: String) async throws -> MonthCashflow {
+        struct Row: Decodable {
+            let income: Int64
+            let expense: Int64
+            let net: Int64
+
+            enum CodingKeys: String, CodingKey {
+                case income = "total_income"
+                case expense = "total_expense"
+                case net
+            }
+        }
+
+        let rows: [Row] = try await client
+            .from("v_monthly_cashflow")
+            .select("total_income, total_expense, net")
+            .eq("year_month", value: yearMonth)
+            .execute()
+            .value
+
+        guard let row = rows.first else { return MonthCashflow() }
+        return MonthCashflow(income: row.income, expense: row.expense, net: row.net)
     }
 
     // MARK: - Budget Verdict + Planned budgets
