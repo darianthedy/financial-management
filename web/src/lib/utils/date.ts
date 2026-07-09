@@ -23,6 +23,12 @@ export function yearMonthOf(isoDate: string): string {
   return isoDate.slice(0, 7);
 }
 
+/** Abbreviated month label for a 'YYYY-MM', e.g. "Jul" (for compact axes). */
+export function formatYearMonthShort(yearMonth: string): string {
+  const date = parse(yearMonth, "yyyy-MM", new Date());
+  return isValid(date) ? format(date, "MMM") : "";
+}
+
 export function formatDate(isoDate: string): string {
   // Same guard as formatYearMonth: an incomplete/typed date can parse to an
   // Invalid Date, which format() throws on.

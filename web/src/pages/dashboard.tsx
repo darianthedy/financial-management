@@ -8,7 +8,9 @@ import { CashflowCard } from "@/components/dashboard/cashflow-card";
 import { AccountsCard } from "@/components/dashboard/accounts-card";
 import { PlannedExpensesCard } from "@/components/dashboard/planned-expenses";
 import { UnplannedExpensesCard } from "@/components/dashboard/unplanned-expenses";
+import { SpendingTrendCard } from "@/components/dashboard/spending-trend";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
+import { useCashflowTrend } from "@/lib/hooks/use-cashflow-trend";
 import {
   getCurrentYearMonth,
   navigateMonth,
@@ -34,6 +36,7 @@ export default function DashboardPage() {
     cashflow,
     loading,
   } = useDashboard(yearMonth);
+  const { trend } = useCashflowTrend(yearMonth);
 
   return (
     <div className="space-y-6">
@@ -81,6 +84,13 @@ export default function DashboardPage() {
           {/* Cashflow (money in vs out) sits beside Accounts (how much I have). */}
           <CashflowCard cashflow={cashflow} />
           <AccountsCard accounts={accounts} />
+          <div className="md:col-span-2">
+            <SpendingTrendCard
+              trend={trend}
+              selectedYearMonth={yearMonth}
+              onSelectMonth={setYearMonth}
+            />
+          </div>
           <PlannedExpensesCard
             budgets={budgetProgress}
             fixedExpenses={fixedExpenses}
