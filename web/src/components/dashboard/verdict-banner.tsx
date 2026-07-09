@@ -27,7 +27,7 @@ const TONE_BORDER: Record<Tone, string> = {
 interface StatusRow {
   tone: Tone;
   label: string;
-  detail: string;
+  detail?: string;
 }
 
 /**
@@ -57,7 +57,7 @@ export function VerdictBanner({ budgets, fixedExpenses }: Props) {
         ? {
             tone: "danger",
             label: `Overspending in ${overspent.length} budget${overspent.length === 1 ? "" : "s"}`,
-            detail: `−${formatCurrency(overage)} over`,
+            detail: `${formatCurrency(overage)} over`,
           }
         : {
             tone: "success",
@@ -73,8 +73,8 @@ export function VerdictBanner({ budgets, fixedExpenses }: Props) {
       label: `${paidWithDiff.length} fixed expense${paidWithDiff.length === 1 ? "" : "s"} off plan`,
       detail:
         netDiff === 0
-          ? "amounts differ"
-          : `net ${netDiff > 0 ? "+" : "−"}${formatCurrency(Math.abs(netDiff))}`,
+          ? undefined
+          : `${formatCurrency(Math.abs(netDiff))} ${netDiff > 0 ? "over" : "under"}`,
     });
   }
 
@@ -105,10 +105,12 @@ export function VerdictBanner({ budgets, fixedExpenses }: Props) {
               <span className={cn("font-semibold", TONE_TEXT[row.tone])}>
                 {row.label}
               </span>
-              <span className="text-[var(--color-muted-foreground)]">
-                {" · "}
-                {row.detail}
-              </span>
+              {row.detail && (
+                <span className="text-[var(--color-muted-foreground)]">
+                  {" · "}
+                  {row.detail}
+                </span>
+              )}
             </p>
           </div>
         ))}
