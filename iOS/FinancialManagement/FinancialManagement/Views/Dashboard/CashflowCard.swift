@@ -112,6 +112,10 @@ struct CashflowCard: View {
             Spacer()
             AmountColumnView(
                 minorUnits: amount,
+                // Rows normally read as magnitude (the icon conveys direction),
+                // but a value that flips sign — e.g. expenses net-negative from
+                // refunds — must show its "-" so it isn't mistaken for spending.
+                sign: amount < 0 ? "-" : "",
                 currencyCode: currencyCode,
                 widestNumber: widestAmountBody
             )
