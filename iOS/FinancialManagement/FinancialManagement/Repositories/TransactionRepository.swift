@@ -67,6 +67,28 @@ actor TransactionRepository {
         return (response.value, response.count ?? response.value.count)
     }
 
+    /// Exact number of rows matching `filters`, without hydrating any row data —
+    /// backs the filter sheet's live "Show N Results" button. Shares the list's
+    /// `applyFilters`, so the preview count can't drift from what Apply will load;
+    /// a short-circuited (matches-nothing) filter set returns `0` without a
+    /// round-trip.
+    func count(filters: TransactionFilters) async throws -> Int {
+        struct CountRow: Decodable { let id: UUID }
+
+        let base = client
+            .from("v_transactions")
+            .select("id", count: .exact)
+        guard let filtered = try await applyFilters(filters, to: base, client: client) else {
+            return 0
+        }
+        // `count: .exact` returns the full total regardless of the window, so we
+        // fetch the smallest possible page (one id) purely to carry the header.
+        let response: PostgrestResponse<[CountRow]> = try await filtered
+            .range(from: 0, to: 0)
+            .execute()
+        return response.count ?? response.value.count
+    }
+
     /// Every row matching `filters` (all pages), selecting only the money /
     /// grouping columns the Summary needs. Used by `TransactionSummarySheet`.
     func fetchAll(filters: TransactionFilters) async throws -> [VTransactionRow] {

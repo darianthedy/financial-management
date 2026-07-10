@@ -62,6 +62,15 @@ struct TransactionFilterSheet: View {
     @State private var budgetNames: [String] = []
     @State private var fixedNames: [String] = []
 
+    /// Live preview of how many transactions the current (unapplied) filters match,
+    /// shown on the Apply button. `nil` until the first count resolves.
+    @State private var matchCount: Int?
+    @State private var isCounting = false
+    /// The in-flight debounced count, cancelled whenever the filters change again.
+    @State private var countTask: Task<Void, Never>?
+
+    private let repository = TransactionRepository()
+
     init(initial: TransactionFilters, onApply: @escaping (TransactionFilters) -> Void) {
         self.initial = initial
         self.onApply = onApply
@@ -109,10 +118,8 @@ struct TransactionFilterSheet: View {
                         if hasChanges { showDiscardConfirm = true } else { dismiss() }
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") { apply() }
-                }
             }
+            .safeAreaInset(edge: .bottom) { applyButton }
             .interactiveDismissDisabled(hasChanges)
             .confirmationDialog(
                 "Discard filter changes?",
@@ -125,10 +132,71 @@ struct TransactionFilterSheet: View {
             .task { await loadOptions() }
             .onChange(of: working.dateFrom) { Task { await loadNameOptions() } }
             .onChange(of: working.dateTo) { Task { await loadNameOptions() } }
+            .onChange(of: working) { scheduleCount() }
+            .onChange(of: minAmount) { scheduleCount() }
+            .onChange(of: maxAmount) { scheduleCount() }
+            .onDisappear { countTask?.cancel() }
         }
         .onAppear {
             minAmount = Self.amountText(initial.amountMin, decimalPlaces: appState.decimalPlaces)
             maxAmount = Self.amountText(initial.amountMax, decimalPlaces: appState.decimalPlaces)
+            scheduleCount()
+        }
+    }
+
+    /// Full-width primary action pinned to the bottom of the sheet. Its label is a
+    /// live preview of the result set — "Show N Results" — so the user never
+    /// commits a filter blind; a zero match reads "No Matching Transactions".
+    private var applyButton: some View {
+        Button(action: apply) {
+            Group {
+                if isCounting && matchCount == nil {
+                    ProgressView()
+                } else {
+                    Text(applyLabel)
+                }
+            }
+            .font(.headline)
+            .frame(maxWidth: .infinity, minHeight: 26)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    private var applyLabel: String {
+        guard let matchCount else { return "Apply" }
+        switch matchCount {
+        case 0:  return "No Matching Transactions"
+        case 1:  return "Show 1 Result"
+        default: return "Show \(matchCount.formatted()) Results"
+        }
+    }
+
+    /// The working facets with the staged amount text folded in, so the preview
+    /// count (and Apply) reflect exactly the filters that will be applied.
+    private var stagedFilters: TransactionFilters {
+        var f = working
+        f.amountMin = Self.parseAmount(minAmount, decimalPlaces: appState.decimalPlaces)
+        f.amountMax = Self.parseAmount(maxAmount, decimalPlaces: appState.decimalPlaces)
+        return f
+    }
+
+    /// Debounced live count: cancels any in-flight request, waits out rapid edits,
+    /// then refreshes `matchCount` for the Apply button.
+    private func scheduleCount() {
+        countTask?.cancel()
+        let filters = stagedFilters
+        isCounting = true
+        countTask = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            let n = try? await repository.count(filters: filters)
+            guard !Task.isCancelled else { return }
+            matchCount = n
+            isCounting = false
         }
     }
 
@@ -291,9 +359,7 @@ struct TransactionFilterSheet: View {
     }
 
     private func apply() {
-        var f = working
-        f.amountMin = Self.parseAmount(minAmount, decimalPlaces: appState.decimalPlaces)
-        f.amountMax = Self.parseAmount(maxAmount, decimalPlaces: appState.decimalPlaces)
+        var f = stagedFilters
         if let s = f.search, s.trimmingCharacters(in: .whitespaces).isEmpty { f.search = nil }
         onApply(f)
         dismiss()
