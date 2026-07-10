@@ -14,6 +14,20 @@ struct DashboardData: Sendable {
     var paidFixedExpenseTotals: [UUID: Int64]
     var unplanned: [UnplannedGroup]         // confirmed budget-less / fixed-less expenses, by category
     var cashflow: MonthCashflow             // money in vs out for the month (v_monthly_cashflow)
+    var trend: [CashflowTrendPoint]         // trailing 6 months of cashflow ending at the month (Spending Trend)
+}
+
+/// One month's cashflow within a trailing trend window, from `v_monthly_cashflow`
+/// (confirmed transactions only; transfers excluded). Amounts are in minor units.
+/// Months with no confirmed activity have no row in the view, so the repository
+/// gap-fills them to zero — a gap renders as a real zero column instead of
+/// collapsing the axis. Mirrors web's `CashflowTrendPoint` (`use-cashflow-trend.ts`).
+struct CashflowTrendPoint: Identifiable, Sendable {
+    let yearMonth: String
+    let income: Int64
+    let expense: Int64
+    let net: Int64
+    var id: String { yearMonth }
 }
 
 /// Money in vs money out for the selected month, from `v_monthly_cashflow`
@@ -59,6 +73,7 @@ actor DashboardRepository {
         async let fixed = fetchFixedExpenses(yearMonth: yearMonth)
         async let unplanned = fetchUnplanned(yearMonth: yearMonth)
         async let cashflow = fetchCashflow(yearMonth: yearMonth)
+        async let trend = fetchCashflowTrend(yearMonth: yearMonth)
 
         let (fixedExpenses, paidTotals) = try await fixed
         return DashboardData(
@@ -67,8 +82,63 @@ actor DashboardRepository {
             fixedExpenses: fixedExpenses,
             paidFixedExpenseTotals: paidTotals,
             unplanned: try await unplanned,
-            cashflow: try await cashflow
+            cashflow: try await cashflow,
+            trend: try await trend
         )
+    }
+
+    // MARK: - Spending Trend
+
+    /// How many months the trend window spans, including the selected month.
+    private static let trendMonths = 6
+
+    /// The trailing `trendMonths` months of cashflow ending at (and including)
+    /// `yearMonth`, from `v_monthly_cashflow`. Months with no activity are absent
+    /// from the view, so we build the full window of month keys via `DateUtils`,
+    /// index the returned rows by `year_month`, and default the gaps to zero — a
+    /// missing month renders as a real zero column instead of collapsing the axis.
+    /// Mirrors web's `useCashflowTrend`.
+    private func fetchCashflowTrend(yearMonth: String) async throws -> [CashflowTrendPoint] {
+        struct Row: Decodable {
+            let yearMonth: String
+            let income: Int64
+            let expense: Int64
+            let net: Int64
+
+            enum CodingKeys: String, CodingKey {
+                case yearMonth = "year_month"
+                case income = "total_income"
+                case expense = "total_expense"
+                case net
+            }
+        }
+
+        // The window's first month. `year_month` is 'YYYY-MM' text, so lexical
+        // bounds order the same as dates.
+        let start = DateUtils.navigate(yearMonth, by: -(Self.trendMonths - 1))
+
+        let rows: [Row] = try await client
+            .from("v_monthly_cashflow")
+            .select("year_month, total_income, total_expense, net")
+            .gte("year_month", value: start)
+            .lte("year_month", value: yearMonth)
+            .execute()
+            .value
+
+        // The view yields at most one row per month, so keys are unique.
+        let byMonth = Dictionary(uniqueKeysWithValues: rows.map { ($0.yearMonth, $0) })
+
+        // Rebuild the ordered month keys and gap-fill missing months to zeros.
+        return (0..<Self.trendMonths).map { index in
+            let ym = DateUtils.navigate(yearMonth, by: index - (Self.trendMonths - 1))
+            let row = byMonth[ym]
+            return CashflowTrendPoint(
+                yearMonth: ym,
+                income: row?.income ?? 0,
+                expense: row?.expense ?? 0,
+                net: row?.net ?? 0
+            )
+        }
     }
 
     // MARK: - Cashflow
