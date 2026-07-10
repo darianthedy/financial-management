@@ -43,12 +43,20 @@ final class DashboardViewModel {
     }
 
     func navigateMonth(by offset: Int) {
-        navigationDirection = offset > 0 ? .trailing : .leading
-        let newMonth = DateUtils.navigate(yearMonth, by: offset)
+        navigate(to: DateUtils.navigate(yearMonth, by: offset))
+    }
 
-        let cached = cache[newMonth]
+    /// Jump the whole dashboard to `month` — used by the MonthNavigator and by
+    /// tapping a Spending Trend column. Shows any cached data instantly, animates
+    /// in the direction of travel, then reloads. A no-op when already there.
+    /// `year_month` is 'YYYY-MM' text, so lexical order matches chronological.
+    func navigate(to month: String) {
+        guard month != yearMonth else { return }
+        navigationDirection = month > yearMonth ? .trailing : .leading
+
+        let cached = cache[month]
         withAnimation(.easeInOut(duration: 0.3)) {
-            yearMonth = newMonth
+            yearMonth = month
             data = cached
             isLoading = cached == nil
         }

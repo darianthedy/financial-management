@@ -19,6 +19,12 @@ enum DateUtils {
         return f
     }()
 
+    private static let shortMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        return f
+    }()
+
     /// `YYYY-MM-DD` for writing a Postgres `date` column (no time component).
     static func yearMonthDay(from date: Date) -> String {
         yearMonthDayFormatter.string(from: date)
@@ -42,6 +48,14 @@ enum DateUtils {
     static func formatYearMonth(_ yearMonth: String) -> String {
         guard let date = yearMonthFormatter.date(from: yearMonth) else { return yearMonth }
         return displayFormatter.string(from: date)
+    }
+
+    /// Short month label ("MMM", e.g. "Jul") for compact axes like the Spending
+    /// Trend chart, where `formatYearMonth`'s full "MMMM yyyy" name is too wide.
+    /// Mirrors web's `formatYearMonthShort`.
+    static func formatYearMonthShort(_ yearMonth: String) -> String {
+        guard let date = yearMonthFormatter.date(from: yearMonth) else { return yearMonth }
+        return shortMonthFormatter.string(from: date)
     }
 
     /// Inclusive first/last calendar day of a `YYYY-MM` month — used to turn the
