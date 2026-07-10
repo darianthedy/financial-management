@@ -1,9 +1,10 @@
 import SwiftUI
 import Supabase
 
-/// Quick date-range presets (§8.3.1). `allTime` clears the bounds.
+/// Quick date-range presets (§8.3.1). Clearing back to "all dates" is a dedicated
+/// menu action, not a preset.
 private enum DatePreset: String, CaseIterable, Identifiable {
-    case thisMonth, lastMonth, last3Months, thisYear, allTime
+    case thisMonth, lastMonth, last3Months, thisYear
     var id: String { rawValue }
 
     var label: String {
@@ -12,7 +13,6 @@ private enum DatePreset: String, CaseIterable, Identifiable {
         case .lastMonth:   return "Last month"
         case .last3Months: return "Last 3 months"
         case .thisYear:    return "This year"
-        case .allTime:     return "All time"
         }
     }
 
@@ -20,8 +20,6 @@ private enum DatePreset: String, CaseIterable, Identifiable {
     func range() -> (from: Date?, to: Date?) {
         let current = DateUtils.currentYearMonth()
         switch self {
-        case .allTime:
-            return (nil, nil)
         case .thisMonth:
             let r = DateUtils.monthDateRange(current)
             return (r?.start, r?.end)
@@ -222,35 +220,41 @@ struct TransactionFilterSheet: View {
         )
     }
 
-    /// Web's Date field: a row of quick-range preset chips plus From/To pickers.
-    /// "All time" appears (as on web) only while a range is set, to clear it back
-    /// to all dates.
+    /// Date field: a native preset menu plus (once a range is active) From/To
+    /// pickers. The presets pick a range in one tap; "All dates" clears back to
+    /// unbounded; "Custom range…" opens the pickers so arbitrary bounds are
+    /// reachable without first landing on a preset. Editing either picker drops
+    /// the menu into "Custom" automatically.
     private var dateSection: some View {
         Section("Date") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(visiblePresets) { preset in
-                        Button { applyPreset(preset) } label: {
+            Menu {
+                ForEach(DatePreset.allCases) { preset in
+                    Button { applyPreset(preset) } label: {
+                        if activePreset == preset {
+                            Label(preset.label, systemImage: "checkmark")
+                        } else {
                             Text(preset.label)
-                                .font(.caption.weight(.medium))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    activePreset == preset ? Color.appPrimary : Color.appMuted,
-                                    in: Capsule()
-                                )
-                                .foregroundStyle(
-                                    activePreset == preset ? Color.appPrimaryForeground : Color.appForeground
-                                )
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 4)
+                Divider()
+                Button("Custom range…") { enterCustomRange() }
+                if hasDateRange {
+                    Button("All dates", role: .destructive) { clearDateRange() }
+                }
+            } label: {
+                HStack {
+                    Text("Range").foregroundStyle(Color.appForeground)
+                    Spacer()
+                    Text(rangeLabel).foregroundStyle(Color.appMutedForeground)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(Color.appMutedForeground)
+                }
+                .contentShape(Rectangle())
             }
-            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
 
-            if working.dateFrom != nil || working.dateTo != nil {
+            if hasDateRange {
                 DatePicker("From", selection: Binding(
                     get: { working.dateFrom ?? Date() },
                     set: { working.dateFrom = $0 }
@@ -259,30 +263,41 @@ struct TransactionFilterSheet: View {
                     get: { working.dateTo ?? Date() },
                     set: { working.dateTo = $0 }
                 ), displayedComponents: .date)
-            } else {
-                Button("Custom range") {
-                    let r = DateUtils.monthDateRange(DateUtils.currentYearMonth())
-                    working.dateFrom = r?.start
-                    working.dateTo = r?.end
-                }
             }
         }
     }
 
-    /// The 4 quick presets, plus "All time" only while a range is active.
-    private var visiblePresets: [DatePreset] {
-        let base: [DatePreset] = [.thisMonth, .lastMonth, .last3Months, .thisYear]
-        return (working.dateFrom != nil || working.dateTo != nil) ? base + [.allTime] : base
+    private var hasDateRange: Bool { working.dateFrom != nil || working.dateTo != nil }
+
+    /// The collapsed menu value: the matching preset, else "Custom" when arbitrary
+    /// bounds are set, else "All dates".
+    private var rangeLabel: String {
+        if let activePreset { return activePreset.label }
+        return hasDateRange ? "Custom" : "All dates"
     }
 
-    /// The preset whose range matches the working bounds (day-precision), so it
-    /// can be highlighted like web.
+    /// The preset whose range matches the working bounds (day-precision), so the
+    /// menu can check it.
     private var activePreset: DatePreset? {
         DatePreset.allCases.first { preset in
-            guard preset != .allTime else { return false }
             let r = preset.range()
             return sameDay(r.from, working.dateFrom) && sameDay(r.to, working.dateTo)
         }
+    }
+
+    /// Reveal the From/To pickers for arbitrary bounds. Seeds the current month
+    /// only when no range exists yet; if a preset/custom range is already active
+    /// the pickers are shown, so we leave the user's bounds untouched.
+    private func enterCustomRange() {
+        guard !hasDateRange else { return }
+        let r = DateUtils.monthDateRange(DateUtils.currentYearMonth())
+        working.dateFrom = r?.start
+        working.dateTo = r?.end
+    }
+
+    private func clearDateRange() {
+        working.dateFrom = nil
+        working.dateTo = nil
     }
 
     private func sameDay(_ a: Date?, _ b: Date?) -> Bool {
