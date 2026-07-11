@@ -57,11 +57,18 @@ struct MultiSelectFacet<Value: Hashable & Codable>: View {
                     }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 8) {
+                    // A fixed-width leading dot (transparent when inactive) marks
+                    // facets that are actually constraining the query, so the
+                    // active ones stand out from the "All" rows without shifting
+                    // the title alignment between states.
+                    Circle()
+                        .fill(isActive ? Color.appPrimary : .clear)
+                        .frame(width: 7, height: 7)
                     Text(title)
                     Spacer()
                     Text(summary)
-                        .foregroundStyle(Color.appMutedForeground)
+                        .foregroundStyle(isActive ? Color.appPrimary : Color.appMutedForeground)
                         .lineLimit(1)
                 }
             }
@@ -69,6 +76,10 @@ struct MultiSelectFacet<Value: Hashable & Codable>: View {
     }
 
     // MARK: - Derived state
+
+    /// The facet is constraining the query (i.e. not the absent "All" state) —
+    /// drives the collapsed row's active indicator.
+    private var isActive: Bool { facet != nil }
 
     /// Present but empty (and no blanks) — the "None" state that matches no rows.
     private var isNone: Bool {
