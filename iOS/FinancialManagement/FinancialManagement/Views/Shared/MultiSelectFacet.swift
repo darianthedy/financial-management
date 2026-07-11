@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// Fixed-width leading status dot shared by every row of the transaction filter
+/// sheet. Reserving the same gutter on all rows — facet rows, the date Range row,
+/// and the plain From/To / Min/Max rows — keeps their labels aligned in one
+/// column whether or not a given row shows an active dot.
+struct FilterRowDot: View {
+    var isActive: Bool
+
+    var body: some View {
+        Circle()
+            .fill(isActive ? Color.appPrimary : .clear)
+            .frame(width: 7, height: 7)
+    }
+}
+
 /// One selectable option in a `MultiSelectFacet`.
 struct FacetOption<Value: Hashable>: Identifiable {
     let value: Value
@@ -58,13 +72,9 @@ struct MultiSelectFacet<Value: Hashable & Codable>: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    // A fixed-width leading dot (transparent when inactive) marks
-                    // facets that are actually constraining the query, so the
-                    // active ones stand out from the "All" rows without shifting
-                    // the title alignment between states.
-                    Circle()
-                        .fill(isActive ? Color.appPrimary : .clear)
-                        .frame(width: 7, height: 7)
+                    // Leading dot marks facets that are actually constraining the
+                    // query, so the active ones stand out from the "All" rows.
+                    FilterRowDot(isActive: isActive)
                     Text(title)
                     Spacer()
                     Text(summary)
