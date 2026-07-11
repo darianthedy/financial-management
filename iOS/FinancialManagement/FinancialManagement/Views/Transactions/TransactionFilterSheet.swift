@@ -259,9 +259,7 @@ struct TransactionFilterSheet: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(hasDateRange ? Color.appPrimary : .clear)
-                        .frame(width: 7, height: 7)
+                    FilterRowDot(isActive: hasDateRange)
                     Text("Range").foregroundStyle(Color.appForeground)
                     Spacer()
                     Text(rangeLabel)
@@ -274,14 +272,20 @@ struct TransactionFilterSheet: View {
             }
 
             if hasDateRange {
-                DatePicker("From", selection: Binding(
-                    get: { working.dateFrom ?? Date() },
-                    set: { working.dateFrom = $0 }
-                ), displayedComponents: .date)
-                DatePicker("To", selection: Binding(
-                    get: { working.dateTo ?? Date() },
-                    set: { working.dateTo = $0 }
-                ), displayedComponents: .date)
+                HStack(spacing: 8) {
+                    FilterRowDot(isActive: false)
+                    DatePicker("From", selection: Binding(
+                        get: { working.dateFrom ?? Date() },
+                        set: { working.dateFrom = $0 }
+                    ), displayedComponents: .date)
+                }
+                HStack(spacing: 8) {
+                    FilterRowDot(isActive: false)
+                    DatePicker("To", selection: Binding(
+                        get: { working.dateTo ?? Date() },
+                        set: { working.dateTo = $0 }
+                    ), displayedComponents: .date)
+                }
             }
         }
     }
@@ -329,8 +333,14 @@ struct TransactionFilterSheet: View {
 
     private var amountSection: some View {
         Section {
-            CurrencyField(label: "Min", value: $minAmount, decimals: appState.decimalPlaces)
-            CurrencyField(label: "Max", value: $maxAmount, decimals: appState.decimalPlaces)
+            HStack(spacing: 8) {
+                FilterRowDot(isActive: !minAmount.isEmpty)
+                CurrencyField(label: "Min", value: $minAmount, decimals: appState.decimalPlaces)
+            }
+            HStack(spacing: 8) {
+                FilterRowDot(isActive: !maxAmount.isEmpty)
+                CurrencyField(label: "Max", value: $maxAmount, decimals: appState.decimalPlaces)
+            }
         } header: {
             Text("Amount (\(appState.defaultCurrency))")
         } footer: {
