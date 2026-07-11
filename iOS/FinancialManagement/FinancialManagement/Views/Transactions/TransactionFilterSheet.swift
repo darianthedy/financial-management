@@ -84,6 +84,21 @@ struct TransactionFilterSheet: View {
             || maxAmount != Self.amountText(initial.amountMax, decimalPlaces: appState.decimalPlaces)
     }
 
+    /// No facet, amount, or date constraint is set — disables Reset.
+    private var isFilterEmpty: Bool {
+        working.isEmpty && minAmount.isEmpty && maxAmount.isEmpty
+    }
+
+    /// Both amount bounds are set and the minimum exceeds the maximum — an
+    /// impossible range that would silently match nothing.
+    private var isAmountRangeInvalid: Bool {
+        guard
+            let lo = Self.parseAmount(minAmount, decimalPlaces: appState.decimalPlaces),
+            let hi = Self.parseAmount(maxAmount, decimalPlaces: appState.decimalPlaces)
+        else { return false }
+        return lo > hi
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -101,12 +116,6 @@ struct TransactionFilterSheet: View {
                 categorySection
                 fixedSection
                 tagSection
-
-                Section {
-                    Button("Reset All Filters", role: .destructive) { reset() }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .disabled(working.isEmpty && minAmount.isEmpty && maxAmount.isEmpty)
-                }
             }
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
@@ -115,6 +124,12 @@ struct TransactionFilterSheet: View {
                     Button("Cancel") {
                         if hasChanges { showDiscardConfirm = true } else { dismiss() }
                     }
+                }
+                // Reset lives in the nav bar (the standard iOS filter-sheet spot)
+                // rather than buried below every section.
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Reset") { reset() }
+                        .disabled(isFilterEmpty)
                 }
             }
             .safeAreaInset(edge: .bottom) { applyButton }
@@ -243,10 +258,14 @@ struct TransactionFilterSheet: View {
                     Button("All dates", role: .destructive) { clearDateRange() }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(hasDateRange ? Color.appPrimary : .clear)
+                        .frame(width: 7, height: 7)
                     Text("Range").foregroundStyle(Color.appForeground)
                     Spacer()
-                    Text(rangeLabel).foregroundStyle(Color.appMutedForeground)
+                    Text(rangeLabel)
+                        .foregroundStyle(hasDateRange ? Color.appPrimary : Color.appMutedForeground)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
                         .foregroundStyle(Color.appMutedForeground)
@@ -309,9 +328,17 @@ struct TransactionFilterSheet: View {
     }
 
     private var amountSection: some View {
-        Section("Amount (\(appState.defaultCurrency))") {
+        Section {
             CurrencyField(label: "Min", value: $minAmount, decimals: appState.decimalPlaces)
             CurrencyField(label: "Max", value: $maxAmount, decimals: appState.decimalPlaces)
+        } header: {
+            Text("Amount (\(appState.defaultCurrency))")
+        } footer: {
+            if isAmountRangeInvalid {
+                Label("Minimum is above maximum — no transactions will match.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color.appDanger)
+            }
         }
     }
 
