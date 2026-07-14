@@ -38,8 +38,7 @@ struct DashboardView: View {
                         CashflowTrendCard(
                             trend: data.trend,
                             selectedYearMonth: viewModel.yearMonth,
-                            currencyCode: appState.defaultCurrency,
-                            onSelectMonth: { viewModel.navigate(to: $0) }
+                            currencyCode: appState.defaultCurrency
                         )
 
                         AccountsCard(
