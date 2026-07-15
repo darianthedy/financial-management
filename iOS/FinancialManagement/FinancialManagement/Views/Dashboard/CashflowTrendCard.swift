@@ -7,8 +7,12 @@ import SwiftUI
 /// and its swing off the average of the preceding months, and a dashed rule draws
 /// that same average across the bars so the claim is checkable by eye. The focused
 /// month's columns are at full strength while the rest are dimmed.
-/// The chart is read-only: touching a column scrubs its income/expense/net
-/// detail but never navigates — month changes belong to the month navigator
+/// The expense column is stacked into the two kinds of spend the app already
+/// tracks — planned (budgeted or fixed) at the base, unplanned riding on top —
+/// so the shape of a month's spending reads at a glance without losing the
+/// income-vs-total comparison or the average rule (both quoted off the total).
+/// The chart is read-only: touching a column scrubs its income / planned /
+/// unplanned / net detail but never navigates — month changes belong to the navigator
 /// above, where they're deliberate. Confirmed transactions only, transfers excluded
 /// (see `v_monthly_cashflow`); a window with no activity shows an empty state
 /// (iOS Tech Plan §8.1, System Design §4.6).
@@ -27,10 +31,17 @@ struct CashflowTrendCard: View {
     @State private var activeYearMonth: String?
 
     // Identity colors follow the app's semantic language (matching the Cashflow
-    // card): income = success, expense = danger. Carried into the chart as a
-    // manual foreground-style scale so the legend and bars stay in lock-step.
+    // card): income = success. Expense is split into two stacked kinds — planned
+    // (expected, tied to a budget or fixed expense) reads as warning/amber, while
+    // unplanned (the spend to watch) keeps the full danger/red. Carried into the
+    // chart as a manual foreground-style scale so the legend and bars stay in
+    // lock-step. Identity = legend + fixed stack order, never color alone.
     private let incomeLabel = "Income"
-    private let expenseLabel = "Expenses"
+    private let plannedLabel = "Planned"
+    private let unplannedLabel = "Unplanned"
+    /// Position value shared by both expense segments so they stack into a single
+    /// column that sits beside the income column (rather than grouping apart).
+    private let expenseGroup = "Expenses"
 
     /// Resolve the active currency's scale so touch-detail amounts don't fall
     /// back to `format`'s two-decimal default.
@@ -96,13 +107,16 @@ struct CashflowTrendCard: View {
     private var chart: some View {
         Chart {
             ForEach(trend) { point in
-                bar(for: point, label: incomeLabel, amount: point.income)
-                bar(for: point, label: expenseLabel, amount: point.expense)
+                bar(for: point, series: incomeLabel, group: incomeLabel, amount: point.income)
+                // Planned first, then unplanned, so the stack reads planned at the
+                // base with the spend-to-watch riding on top.
+                bar(for: point, series: plannedLabel, group: expenseGroup, amount: point.plannedExpense)
+                bar(for: point, series: unplannedLabel, group: expenseGroup, amount: point.unplannedExpense)
             }
             // The yardstick the headline delta is quoted against, drawn so the
             // claim is visible in the bars rather than taken on faith. Styled
             // directly (not via `foregroundStyle(by:)`) so it stays out of the
-            // two-series color scale and reads as chrome, not a third series.
+            // series color scale and reads as chrome, not a fourth series.
             if let baseline = baselineExpense {
                 RuleMark(
                     y: .value(
@@ -123,7 +137,8 @@ struct CashflowTrendCard: View {
         // identity; the built-in legend is hidden in favor of the title-row one.
         .chartForegroundStyleScale([
             incomeLabel: Color.appSuccess,
-            expenseLabel: Color.appDanger,
+            plannedLabel: Color.appWarning,
+            unplannedLabel: Color.appDanger,
         ])
         .chartLegend(.hidden)
         .chartYAxis(.hidden)
@@ -161,13 +176,16 @@ struct CashflowTrendCard: View {
 
     /// One month/series column. The focused month is emphasized while the rest
     /// recede, keeping the chart anchored to the month navigator above it.
-    private func bar(for point: CashflowTrendPoint, label: String, amount: Int64) -> some ChartContent {
+    private func bar(for point: CashflowTrendPoint, series: String, group: String, amount: Int64) -> some ChartContent {
         BarMark(
             x: .value("Month", DateUtils.formatYearMonthShort(point.yearMonth)),
             y: .value("Amount", CurrencyUtils.toDisplayAmount(amount, currency: currencyCode))
         )
-        .foregroundStyle(by: .value("Type", label))
-        .position(by: .value("Type", label))
+        // Color carries series identity (Income / Planned / Unplanned); position
+        // groups the two expense series into one shared column so they stack,
+        // while income sits in its own column beside them.
+        .foregroundStyle(by: .value("Type", series))
+        .position(by: .value("Group", group))
         .opacity(point.yearMonth == selectedYearMonth ? 1 : 0.4)
         .cornerRadius(3)
     }
@@ -238,12 +256,14 @@ struct CashflowTrendCard: View {
 
     // MARK: - Legend (always present)
 
-    /// The two-series legend, mirroring web's title-row swatches. Identity =
-    /// legend + fixed in-group order, so the chart never leans on color alone.
+    /// The three-series legend, so the stacked expense column never leans on
+    /// color alone. Identity = legend + fixed stack order (planned base, unplanned
+    /// on top).
     private var legend: some View {
         HStack(spacing: 12) {
             swatch(label: incomeLabel, color: .appSuccess)
-            swatch(label: expenseLabel, color: .appDanger)
+            swatch(label: plannedLabel, color: .appWarning)
+            swatch(label: unplannedLabel, color: .appDanger)
         }
     }
 
@@ -270,7 +290,8 @@ struct CashflowTrendCard: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Color.appCardForeground)
                 detailRow(label: incomeLabel, color: .appSuccess, amount: point.income)
-                detailRow(label: expenseLabel, color: .appDanger, amount: point.expense)
+                detailRow(label: plannedLabel, color: .appWarning, amount: point.plannedExpense)
+                detailRow(label: unplannedLabel, color: .appDanger, amount: point.unplannedExpense)
                 Divider()
                 HStack(spacing: 16) {
                     Text("Net")
