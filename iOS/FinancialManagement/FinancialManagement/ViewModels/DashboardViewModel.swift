@@ -46,9 +46,9 @@ final class DashboardViewModel {
         navigate(to: DateUtils.navigate(yearMonth, by: offset))
     }
 
-    /// Jump the whole dashboard to `month` — used by the MonthNavigator and by
-    /// tapping a Spending Trend column. Shows any cached data instantly, animates
-    /// in the direction of travel, then reloads. A no-op when already there.
+    /// Jump the whole dashboard to `month` — driven by the MonthNavigator. Shows
+    /// any cached data instantly, animates in the direction of travel, then
+    /// reloads. A no-op when already there.
     /// `year_month` is 'YYYY-MM' text, so lexical order matches chronological.
     func navigate(to month: String) {
         guard month != yearMonth else { return }

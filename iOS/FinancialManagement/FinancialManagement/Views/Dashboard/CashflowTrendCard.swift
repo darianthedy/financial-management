@@ -3,9 +3,13 @@ import SwiftUI
 
 /// Dashboard Spending Trend card: income vs expenses across the trailing six
 /// months, so the selected month reads in context ("is this month unusual?").
-/// The focused month's columns are at full strength while the rest are dimmed,
-/// and tapping any month navigates the whole dashboard there. Net is surfaced
-/// while a column is touched. Confirmed transactions only, transfers excluded
+/// The card answers that question up front — a headline states the month's spend
+/// and its swing off the average of the preceding months, and a dashed rule draws
+/// that same average across the bars so the claim is checkable by eye. The focused
+/// month's columns are at full strength while the rest are dimmed.
+/// The chart is read-only: touching a column scrubs its income/expense/net
+/// detail but never navigates — month changes belong to the month navigator
+/// above, where they're deliberate. Confirmed transactions only, transfers excluded
 /// (see `v_monthly_cashflow`); a window with no activity shows an empty state
 /// (iOS Tech Plan §8.1, System Design §4.6).
 ///
@@ -18,8 +22,6 @@ struct CashflowTrendCard: View {
     /// The month the dashboard is focused on — emphasized in the chart.
     let selectedYearMonth: String
     let currencyCode: String
-    /// Jump the whole dashboard to a month when its column is tapped.
-    let onSelectMonth: (String) -> Void
 
     /// The month currently under the finger (`year_month`), for the touch detail.
     @State private var activeYearMonth: String?
@@ -46,20 +48,76 @@ struct CashflowTrendCard: View {
                     message: "Income and expenses will chart here as you add transactions."
                 )
             } else {
-                chart
-                    .frame(height: 180)
-                    .overlay(alignment: .top) { touchDetail }
+                VStack(alignment: .leading, spacing: 16) {
+                    summary
+                    chart
+                        .frame(height: 180)
+                        .overlay(alignment: .top) { touchDetail }
+                }
             }
         }
         .accessibilityElement(children: .contain)
     }
 
+    // MARK: - Baseline (the months preceding the selected one)
+
+    /// The window is the six months *ending* at the selected month, so everything
+    /// before it is the recent history the selected month is judged against.
+    /// Comparing against a baseline that includes the selected month would let a
+    /// spike drag its own yardstick up and mute the very signal we're surfacing.
+    private var priorMonths: [CashflowTrendPoint] {
+        trend.filter { $0.yearMonth < selectedYearMonth }
+    }
+
+    /// Mean expense across the prior months, or `nil` when there's no usable
+    /// baseline (no prior months, or none of them had any spending) — in which
+    /// case there is nothing honest to compare against and we show no delta.
+    private var baselineExpense: Int64? {
+        let months = priorMonths
+        guard !months.isEmpty else { return nil }
+        let total = months.reduce(Int64(0)) { $0 + $1.expense }
+        guard total > 0 else { return nil }
+        return total / Int64(months.count)
+    }
+
+    private var selectedExpense: Int64? {
+        trend.first { $0.yearMonth == selectedYearMonth }?.expense
+    }
+
+    /// Selected month's expenses as a percentage swing off the baseline.
+    private var expenseDeltaPercent: Int? {
+        guard let baseline = baselineExpense, let current = selectedExpense else { return nil }
+        let delta = Double(current - baseline) / Double(baseline) * 100
+        return Int(delta.rounded())
+    }
+
     // MARK: - Chart
 
     private var chart: some View {
-        Chart(trend) { point in
-            bar(for: point, label: incomeLabel, amount: point.income)
-            bar(for: point, label: expenseLabel, amount: point.expense)
+        Chart {
+            ForEach(trend) { point in
+                bar(for: point, label: incomeLabel, amount: point.income)
+                bar(for: point, label: expenseLabel, amount: point.expense)
+            }
+            // The yardstick the headline delta is quoted against, drawn so the
+            // claim is visible in the bars rather than taken on faith. Styled
+            // directly (not via `foregroundStyle(by:)`) so it stays out of the
+            // two-series color scale and reads as chrome, not a third series.
+            if let baseline = baselineExpense {
+                RuleMark(
+                    y: .value(
+                        "Average expenses",
+                        CurrencyUtils.toDisplayAmount(baseline, currency: currencyCode)
+                    )
+                )
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                .foregroundStyle(Color.appMutedForeground)
+                .annotation(position: .top, alignment: .trailing, spacing: 2) {
+                    Text("Avg expenses")
+                        .font(.caption2)
+                        .foregroundStyle(Color.appMutedForeground)
+                }
+            }
         }
         // Manual scale pins each series to its semantic color and drives series
         // identity; the built-in legend is hidden in favor of the title-row one.
@@ -84,17 +142,16 @@ struct CashflowTrendCard: View {
                 Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
-                    // A zero-distance drag doubles as a tap that also tracks the
-                    // touched column so the detail can follow the finger.
+                    // Scrub-only: a zero-distance drag tracks the touched column
+                    // so the detail follows the finger, and lifting simply
+                    // dismisses it. Nothing here changes the dashboard's month —
+                    // a graze of the chart used to teleport the whole screen.
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
                                 activeYearMonth = month(at: value.location, proxy: proxy, geo: geo)
                             }
-                            .onEnded { value in
-                                if let ym = month(at: value.location, proxy: proxy, geo: geo) {
-                                    onSelectMonth(ym)
-                                }
+                            .onEnded { _ in
                                 activeYearMonth = nil
                             }
                     )
@@ -121,6 +178,62 @@ struct CashflowTrendCard: View {
         let relativeX = location.x - geo[plotFrame].origin.x
         guard let label = proxy.value(atX: relativeX, as: String.self) else { return nil }
         return trend.first { DateUtils.formatYearMonthShort($0.yearMonth) == label }?.yearMonth
+    }
+
+    // MARK: - Headline (what the chart is trying to say, in words)
+
+    /// The selected month's spend and how it sits against recent history, so the
+    /// card answers "is this month unusual?" without anyone having to touch it or
+    /// eyeball six columns. Direction is carried by an arrow glyph as well as
+    /// color, since "over budget" must not be a red-only signal.
+    @ViewBuilder
+    private var summary: some View {
+        if let current = selectedExpense {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Expenses in \(DateUtils.formatYearMonthShort(selectedYearMonth))")
+                    .font(.caption)
+                    .foregroundStyle(Color.appMutedForeground)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(CurrencyUtils.format(current, currency: currencyCode, decimalPlaces: fractionDigits))
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.appCardForeground)
+                        .contentTransition(.numericText())
+                    deltaChip
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Spending *more* than usual is the bad direction, so an increase is danger
+    /// and a decrease is success — the inverse of a portfolio chart, and the one
+    /// place in the app where "up" is not good news.
+    @ViewBuilder
+    private var deltaChip: some View {
+        if let delta = expenseDeltaPercent {
+            let rising = delta > 0
+            let flat = delta == 0
+            let color: Color = flat ? .appMutedForeground : (rising ? .appDanger : .appSuccess)
+            let symbol = flat ? "equal" : (rising ? "arrow.up.right" : "arrow.down.right")
+            let phrase = flat ? "in line with" : (rising ? "above" : "below")
+
+            HStack(spacing: 3) {
+                Image(systemName: symbol)
+                    .font(.caption2.weight(.bold))
+                if !flat {
+                    Text("\(abs(delta))%")
+                        .font(.caption.weight(.semibold))
+                }
+                Text("vs \(priorMonths.count)-mo avg")
+                    .font(.caption)
+            }
+            .foregroundStyle(color)
+            .accessibilityLabel(
+                flat
+                    ? "In line with the prior \(priorMonths.count) month average"
+                    : "\(abs(delta)) percent \(phrase) the prior \(priorMonths.count) month average"
+            )
+        }
     }
 
     // MARK: - Legend (always present)
