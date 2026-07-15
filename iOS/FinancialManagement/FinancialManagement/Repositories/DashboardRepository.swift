@@ -26,6 +26,13 @@ struct CashflowTrendPoint: Identifiable, Sendable {
     let yearMonth: String
     let income: Int64
     let expense: Int64
+    /// Expense split into the two "kinds" the app already models, so the trend's
+    /// expense column can stack them: `planned` is spend tied to a budget or a
+    /// fixed expense, `unplanned` is confirmed spend with neither link. The two
+    /// always sum to `expense` (the view's `total_expense`), so the average rule
+    /// and headline delta — both quoted off the total — stay unchanged.
+    let plannedExpense: Int64
+    let unplannedExpense: Int64
     let net: Int64
     var id: String { yearMonth }
 }
@@ -117,13 +124,26 @@ actor DashboardRepository {
         // bounds order the same as dates.
         let start = DateUtils.navigate(yearMonth, by: -(Self.trendMonths - 1))
 
-        let rows: [Row] = try await client
+        async let cashflowRows: [Row] = client
             .from("v_monthly_cashflow")
             .select("year_month, total_income, total_expense, net")
             .gte("year_month", value: start)
             .lte("year_month", value: yearMonth)
             .execute()
             .value
+
+        // Unplanned spend per month across the same window. The view only carries
+        // the aggregate `total_expense`, so the planned/unplanned split is derived
+        // here: sum the confirmed expense transactions that link to *neither* a
+        // budget nor a fixed expense (same rule the Unplanned card uses), then
+        // planned = total − unplanned. `expense` type already excludes transfers.
+        async let unplannedByMonth = fetchUnplannedExpenseByMonth(
+            start: start,
+            endExclusive: DateUtils.navigate(yearMonth, by: 1)
+        )
+
+        let rows = try await cashflowRows
+        let unplanned = try await unplannedByMonth
 
         // The view yields at most one row per month, so keys are unique.
         let byMonth = Dictionary(uniqueKeysWithValues: rows.map { ($0.yearMonth, $0) })
@@ -132,12 +152,50 @@ actor DashboardRepository {
         return (0..<Self.trendMonths).map { index in
             let ym = DateUtils.navigate(yearMonth, by: index - (Self.trendMonths - 1))
             let row = byMonth[ym]
+            let total = row?.expense ?? 0
+            // Clamp so the segments never contradict the total: the unplanned sum
+            // is a subset of `total_expense`, but guard against any view/table
+            // drift so `planned` can't go negative and the stack always sums up.
+            let unplannedAmount = min(max(unplanned[ym] ?? 0, 0), total)
             return CashflowTrendPoint(
                 yearMonth: ym,
                 income: row?.income ?? 0,
-                expense: row?.expense ?? 0,
+                expense: total,
+                plannedExpense: total - unplannedAmount,
+                unplannedExpense: unplannedAmount,
                 net: row?.net ?? 0
             )
+        }
+    }
+
+    /// Confirmed, budget-less **and** fixed-less expense summed per `year_month`
+    /// over `[start, endExclusive)` (both 'YYYY-MM' keys) — the "unplanned" slice
+    /// of the Spending Trend's stacked expense column. Grouped client-side by the
+    /// transaction date's month prefix; months with no such spend are simply
+    /// absent (the caller defaults them to zero).
+    private func fetchUnplannedExpenseByMonth(
+        start: String,
+        endExclusive: String
+    ) async throws -> [String: Int64] {
+        struct Row: Decodable {
+            let date: String
+            let amount: Int64
+        }
+
+        let rows: [Row] = try await client
+            .from("transactions")
+            .select("date, amount")
+            .eq("type", value: TransactionType.expense.rawValue)
+            .eq("status", value: TransactionStatus.confirmed.rawValue)
+            .is("budget_id", value: nil)
+            .is("fixed_expense_id", value: nil)
+            .gte("date", value: "\(start)-01")
+            .lt("date", value: "\(endExclusive)-01")
+            .execute()
+            .value
+
+        return rows.reduce(into: [:]) { totals, row in
+            totals[String(row.date.prefix(7)), default: 0] += row.amount
         }
     }
 
