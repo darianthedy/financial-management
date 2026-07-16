@@ -299,29 +299,38 @@ struct CashflowTrendCard: View {
         if let ym = activeYearMonth,
            let point = trend.first(where: { $0.yearMonth == ym }) {
             let positiveNet = point.net >= 0
-            VStack(alignment: .leading, spacing: 10) {
-                Text(DateUtils.formatYearMonth(point.yearMonth))
-                    .font(.headline)
-                    .foregroundStyle(Color.appCardForeground)
+            // A Grid rather than HStack+Spacer rows: the label and amount columns
+            // each size to their widest cell, so a long label ("Unplanned") can't
+            // be squeezed into truncation by a long amount the way a Spacer-driven
+            // row allows. Keeps the amounts aligned in a single trailing column.
+            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
+                GridRow {
+                    Text(DateUtils.formatYearMonth(point.yearMonth))
+                        .font(.headline)
+                        .foregroundStyle(Color.appCardForeground)
+                        .gridCellColumns(2)
+                }
                 detailRow(label: incomeLabel, color: .appSuccess, amount: point.income)
                 detailRow(label: plannedLabel, color: .appWarning, amount: point.plannedExpense)
                 detailRow(label: unplannedLabel, color: .appDanger, amount: point.unplannedExpense)
+                // A non-GridRow child automatically spans every column.
                 Divider()
-                HStack(spacing: 20) {
+                GridRow {
                     Text("Net")
                         .font(.subheadline)
                         .foregroundStyle(Color.appMutedForeground)
-                    Spacer()
+                        .fixedSize()
                     Text("\(positiveNet ? "+" : "-")\(CurrencyUtils.format(abs(point.net), currency: currencyCode, decimalPlaces: fractionDigits))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(positiveNet ? Color.appSuccess : Color.appDanger)
+                        .gridColumnAlignment(.trailing)
+                        .fixedSize()
                 }
             }
             .padding()
-            // Size to the content's intrinsic width so labels like "Unplanned"
-            // never truncate, with a floor so short months still read as a card.
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(minWidth: 240)
+            // Floor so short months still read as a card; the Grid grows past this
+            // on its own when the content (or a large Dynamic Type size) needs it.
+            .frame(minWidth: 240, alignment: .leading)
             // Keep it a popover in compact size classes (iPhone) rather than
             // degrading to a full-screen sheet. Requires iOS 16.4+; the app
             // targets iOS 26.1+.
@@ -329,8 +338,11 @@ struct CashflowTrendCard: View {
         }
     }
 
+    /// One `series — amount` row of the detail grid. Both cells are `.fixedSize`
+    /// so they always render at full intrinsic width: the label is never clipped
+    /// to "Unplann…", and the grid column simply widens instead.
     private func detailRow(label: String, color: Color, amount: Int64) -> some View {
-        HStack(spacing: 20) {
+        GridRow {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(color)
@@ -339,10 +351,12 @@ struct CashflowTrendCard: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.appMutedForeground)
             }
-            Spacer()
+            .fixedSize()
             Text(CurrencyUtils.format(amount, currency: currencyCode, decimalPlaces: fractionDigits))
                 .font(.subheadline)
                 .foregroundStyle(Color.appCardForeground)
+                .gridColumnAlignment(.trailing)
+                .fixedSize()
         }
     }
 }
