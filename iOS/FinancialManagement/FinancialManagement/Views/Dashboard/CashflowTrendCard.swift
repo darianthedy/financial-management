@@ -318,9 +318,10 @@ struct CashflowTrendCard: View {
                 }
             }
             .padding()
-            // Cap width so the popover stays readable on iPhone; the native
-            // popover chrome constrains it on iPad. Mirrors the budget card.
-            .frame(minWidth: 240, maxWidth: 320)
+            // Size to the content's intrinsic width so labels like "Unplanned"
+            // never truncate, with a floor so short months still read as a card.
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: 240)
             // Keep it a popover in compact size classes (iPhone) rather than
             // degrading to a full-screen sheet. Requires iOS 16.4+; the app
             // targets iOS 26.1+.
