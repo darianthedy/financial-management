@@ -11,8 +11,9 @@ import SwiftUI
 /// tracks — planned (budgeted or fixed) at the base, unplanned riding on top —
 /// so the shape of a month's spending reads at a glance without losing the
 /// income-vs-total comparison or the average rule (both quoted off the total).
-/// The chart is read-only: touching a column scrubs its income / planned /
-/// unplanned / net detail but never navigates — month changes belong to the navigator
+/// The chart is read-only: tapping a column opens a popover with its income /
+/// planned / unplanned / net detail (dismissed by tapping outside) but never
+/// navigates — month changes belong to the navigator
 /// above, where they're deliberate. Confirmed transactions only, transfers excluded
 /// (see `v_monthly_cashflow`); a window with no activity shows an empty state
 /// (iOS Tech Plan §8.1, System Design §4.6).
@@ -27,8 +28,13 @@ struct CashflowTrendCard: View {
     let selectedYearMonth: String
     let currencyCode: String
 
-    /// The month currently under the finger (`year_month`), for the touch detail.
+    /// The month whose detail popover is open (`year_month`), or `nil` when none.
+    /// Set on tap and cleared when the popover is dismissed by tapping outside.
     @State private var activeYearMonth: String?
+
+    /// Anchor rect (in the chart's coordinate space) for the detail popover, set
+    /// to the tapped column so the popover points at the bar the user touched.
+    @State private var popoverAnchor: CGRect = .zero
 
     // Identity colors follow the app's semantic language (matching the Cashflow
     // card): income = success. Expense is split into two stacked kinds — planned
@@ -63,7 +69,6 @@ struct CashflowTrendCard: View {
                     summary
                     chart
                         .frame(height: 180)
-                        .overlay(alignment: .top) { touchDetail }
                 }
             }
         }
@@ -157,21 +162,30 @@ struct CashflowTrendCard: View {
                 Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
-                    // Scrub-only: a zero-distance drag tracks the touched column
-                    // so the detail follows the finger, and lifting simply
-                    // dismisses it. Nothing here changes the dashboard's month —
-                    // a graze of the chart used to teleport the whole screen.
+                    // Tap-to-open: tapping a column pins its detail popover, which
+                    // then stays put and only dismisses when the user taps outside
+                    // it (system-managed, matching the budget card's info popover).
+                    // Nothing here changes the dashboard's month — a graze of the
+                    // chart used to teleport the whole screen.
                     .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                activeYearMonth = month(at: value.location, proxy: proxy, geo: geo)
-                            }
-                            .onEnded { _ in
-                                activeYearMonth = nil
+                        SpatialTapGesture()
+                            .onEnded { value in
+                                if let ym = month(at: value.location, proxy: proxy, geo: geo) {
+                                    popoverAnchor = CGRect(origin: value.location, size: CGSize(width: 1, height: 1))
+                                    activeYearMonth = ym
+                                }
                             }
                     )
             }
         }
+        .popover(
+            isPresented: Binding(
+                get: { activeYearMonth != nil },
+                set: { if !$0 { activeYearMonth = nil } }
+            ),
+            attachmentAnchor: .rect(.rect(popoverAnchor)),
+            arrowEdge: .top
+        ) { touchDetail }
     }
 
     /// One month/series column. The focused month is emphasized while the rest
@@ -285,49 +299,48 @@ struct CashflowTrendCard: View {
         if let ym = activeYearMonth,
            let point = trend.first(where: { $0.yearMonth == ym }) {
             let positiveNet = point.net >= 0
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(DateUtils.formatYearMonth(point.yearMonth))
-                    .font(.caption.weight(.medium))
+                    .font(.headline)
                     .foregroundStyle(Color.appCardForeground)
                 detailRow(label: incomeLabel, color: .appSuccess, amount: point.income)
                 detailRow(label: plannedLabel, color: .appWarning, amount: point.plannedExpense)
                 detailRow(label: unplannedLabel, color: .appDanger, amount: point.unplannedExpense)
                 Divider()
-                HStack(spacing: 16) {
+                HStack(spacing: 20) {
                     Text("Net")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(Color.appMutedForeground)
                     Spacer()
                     Text("\(positiveNet ? "+" : "-")\(CurrencyUtils.format(abs(point.net), currency: currencyCode, decimalPlaces: fractionDigits))")
-                        .font(.caption.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(positiveNet ? Color.appSuccess : Color.appDanger)
                 }
             }
-            .padding(10)
-            .background(Color.appCard, in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                    .strokeBorder(Color.appBorder, lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-            .fixedSize()
-            .allowsHitTesting(false)
+            .padding()
+            // Cap width so the popover stays readable on iPhone; the native
+            // popover chrome constrains it on iPad. Mirrors the budget card.
+            .frame(minWidth: 240, maxWidth: 320)
+            // Keep it a popover in compact size classes (iPhone) rather than
+            // degrading to a full-screen sheet. Requires iOS 16.4+; the app
+            // targets iOS 26.1+.
+            .presentationCompactAdaptation(.popover)
         }
     }
 
     private func detailRow(label: String, color: Color, amount: Int64) -> some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 6) {
+        HStack(spacing: 20) {
+            HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(color)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
                 Text(label)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(Color.appMutedForeground)
             }
             Spacer()
             Text(CurrencyUtils.format(amount, currency: currencyCode, decimalPlaces: fractionDigits))
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(Color.appCardForeground)
         }
     }
