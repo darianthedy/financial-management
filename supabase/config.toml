@@ -380,6 +380,13 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Called by the Gmail Apps Script (integrations/gmail-apps-script), which is a
+# Google-hosted script with no Supabase session, so it cannot present a JWT.
+# The platform's JWT gate would reject it before the handler runs. The function
+# authenticates itself with the X-Ingest-Secret shared secret instead.
+[functions.ingest-bank-email]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
