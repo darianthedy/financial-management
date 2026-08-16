@@ -75,11 +75,16 @@ personal standalone script; choose **Advanced → Go to \<project\> (unsafe)**.
   "from": "BCA <noreply@bca.co.id>",
   "to": "you@gmail.com",
   "subject": "Notifikasi Transaksi",
-  "receivedAt": "2026-08-16T03:14:07.000Z",
+  "receivedAt": "2026-08-16T05:51:06.000Z",
   "bodyTruncated": false,
-  "body": "..."
+  "htmlBody": "<html>...",
+  "plainBody": "-"
 }
 ```
+
+Note `plainBody`: BCA's alerts ship a `text/plain` part containing a single
+hyphen and put every field in the HTML table, so the endpoint must parse
+`htmlBody`. `plainBody` is sent only for senders that populate it properly.
 
 Authenticated with an `X-Ingest-Secret` header. If you later want replay
 protection, swap it for an HMAC over the body using

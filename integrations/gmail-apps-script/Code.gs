@@ -18,8 +18,10 @@
 // ---------------------------------------------------------------------------
 
 var DEFAULTS = {
-  // Gmail search fragment identifying bank notification mail.
-  SENDER_QUERY: 'from:(noreply@bca.co.id OR bca@bca.co.id)',
+  // Gmail search fragment identifying bank notification mail. This is the
+  // sender BCA credit card alerts actually come from (verified against real
+  // samples); it is NOT the same as BCA's other notification senders.
+  SENDER_QUERY: 'from:(KartuKreditBCA@klikbca.com)',
   // How far back to look. Bounds both the search and the retry window: a
   // message older than this is never retried, so one permanently-failing email
   // cannot spam the endpoint forever.
@@ -31,8 +33,9 @@ var DEFAULTS = {
   MAX_ATTEMPTS: '3',
   // Cap per run to stay well inside the Apps Script execution time limit.
   MAX_MESSAGES_PER_RUN: '25',
-  // Bank emails are short; guard against a giant HTML newsletter.
-  MAX_BODY_CHARS: '20000',
+  // Real BCA alerts are ~26k chars of HTML (inline styles + tracking markup),
+  // so this must stay comfortably above that or the payload loses the fields.
+  MAX_BODY_CHARS: '100000',
   TRIGGER_MINUTES: '5',
 };
 
@@ -173,7 +176,13 @@ function getOrCreateLabel_(name) {
 
 function buildPayload_(message) {
   var maxBody = intConfig_('MAX_BODY_CHARS');
-  var body = message.getPlainBody() || '';
+  // The HTML part is the only one worth sending: BCA's alerts ship a
+  // text/plain part containing a single "-" and put every field (merchant,
+  // amount, timestamp) in the HTML table. getPlainBody() returns that "-", so
+  // parsing it would silently yield nothing. plainBody is included anyway, for
+  // senders that do populate it.
+  var htmlBody = message.getBody() || '';
+  var plainBody = message.getPlainBody() || '';
 
   return {
     source: 'gmail-apps-script',
@@ -186,8 +195,9 @@ function buildPayload_(message) {
     to: message.getTo(),
     subject: message.getSubject(),
     receivedAt: message.getDate().toISOString(),
-    bodyTruncated: body.length > maxBody,
-    body: body.slice(0, maxBody),
+    bodyTruncated: htmlBody.length > maxBody,
+    htmlBody: htmlBody.slice(0, maxBody),
+    plainBody: plainBody.slice(0, maxBody),
   };
 }
 
