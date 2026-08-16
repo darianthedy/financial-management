@@ -15,3 +15,6 @@ iOS/FinancialManagement/vendor/bundle/
 
 # iOS environment config (per-machine Supabase URL + anon key)
 iOS/**/Config/*.xcconfig
+
+# clasp project binding (contains the personal Apps Script project id)
+integrations/gmail-apps-script/.clasp.json
