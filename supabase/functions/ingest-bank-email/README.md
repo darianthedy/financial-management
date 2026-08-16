@@ -61,5 +61,12 @@ position.
 
 - `201 {"created": true, ...}` — transaction created
 - `200 {"duplicate": true, ...}` — already ingested
+- `200 {"ignored": true, ...}` — not a transaction notification (statement,
+  payment confirmation, promo from the same sender)
 - `422` — could not parse; Apps Script retries then labels `fm-ingest-failed`
 - `401` — bad or missing `X-Ingest-Secret`
+
+`ignored` and `422` are kept distinct on purpose. An email whose subject says
+"Transaction Notification" but whose fields cannot be found is a real template
+change and must fail loudly; folding it into "ignored" would drop genuine
+transactions in silence.

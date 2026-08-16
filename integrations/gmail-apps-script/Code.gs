@@ -22,6 +22,14 @@ var DEFAULTS = {
   // sender BCA credit card alerts actually come from (verified against real
   // samples); it is NOT the same as BCA's other notification senders.
   SENDER_QUERY: 'from:(KartuKreditBCA@klikbca.com)',
+  // The same sender also mails statements, payment confirmations and promos,
+  // which carry no transaction table and 422'd on every run. Both templates we
+  // do want share this exact phrase:
+  //   "Credit Card Transaction Notification"
+  //   "Credit Card Reversal/Void Transaction Notification"
+  // Kept separate from SENDER_QUERY so overriding one does not silently drop
+  // the other.
+  SUBJECT_QUERY: 'subject:("Transaction Notification")',
   // How far back to look. Bounds both the search and the retry window: a
   // message older than this is never retried, so one permanently-failing email
   // cannot spam the endpoint forever.
@@ -127,6 +135,7 @@ function ingestBankEmails() {
 function buildQuery_() {
   return [
     config_('SENDER_QUERY'),
+    config_('SUBJECT_QUERY'),
     'newer_than:' + intConfig_('LOOKBACK_DAYS') + 'd',
   ].join(' ');
 }

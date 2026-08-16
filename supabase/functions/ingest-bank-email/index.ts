@@ -14,7 +14,11 @@
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { BankEmailParseError, parseBcaCreditCardEmail } from "./parser.ts";
+import {
+  BankEmailParseError,
+  isTransactionNotification,
+  parseBcaCreditCardEmail,
+} from "./parser.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -115,6 +119,19 @@ Deno.serve(async (req: Request) => {
       .eq("gmail_message_id", gmailMessageId);
     return json({ error: message }, status);
   };
+
+  // -- Ignore non-transaction mail from the same sender ----------------------
+  // Statements, payment confirmations and promos carry no transaction table.
+  // They are recorded and acknowledged with 200 so the Apps Script stops
+  // retrying them, but they are NOT treated as parse failures.
+  if (!isTransactionNotification(subject)) {
+    await supabase
+      .from("bank_email_ingests")
+      .update({ status: "ignored", error: null })
+      .eq("gmail_message_id", gmailMessageId);
+
+    return json({ ignored: true, reason: "Not a transaction notification" }, 200);
+  }
 
   // -- Parse -----------------------------------------------------------------
   let parsed;

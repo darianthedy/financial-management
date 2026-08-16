@@ -18,6 +18,7 @@ import {
   findField,
   htmlToLines,
   isReversal,
+  isTransactionNotification,
   parseBcaCreditCardEmail,
   parseIndonesianAmount,
   parseIndonesianDate,
@@ -192,6 +193,34 @@ test("detects a reversal from the body when the subject is unhelpful", () => {
 
 test("a purchase is never signed negative", () => {
   assert.ok(parseBcaCreditCardEmail(SUBJECT_PURCHASE, PURCHASE_HTML).amount > 0);
+});
+
+// ---------------------------------------------------------------------------
+// Subject gate: which emails are transactions at all
+// ---------------------------------------------------------------------------
+
+test("accepts both real transaction subjects", () => {
+  assert.equal(isTransactionNotification(SUBJECT_PURCHASE), true);
+  assert.equal(isTransactionNotification(SUBJECT_REVERSAL), true);
+});
+
+test("rejects the other mail the same sender produces", () => {
+  // These 422'd on every run before the subject gate existed.
+  assert.equal(isTransactionNotification("Your BCA Credit Card e-Statement"), false);
+  assert.equal(isTransactionNotification("Konfirmasi Pembayaran Kartu Kredit"), false);
+  assert.equal(isTransactionNotification("Promo Spesial Kartu Kredit BCA"), false);
+  assert.equal(isTransactionNotification(""), false);
+});
+
+test("a transaction subject with unparseable fields is NOT ignorable", () => {
+  // The dangerous failure mode: if a genuine template change were treated as
+  // "not a transaction email", real purchases would vanish silently. The
+  // subject gate must still admit it, so the parser can fail loudly.
+  assert.equal(isTransactionNotification(SUBJECT_PURCHASE), true);
+  assert.throws(
+    () => parseBcaCreditCardEmail(SUBJECT_PURCHASE, "<p>totally new layout</p>"),
+    BankEmailParseError,
+  );
 });
 
 // ---------------------------------------------------------------------------

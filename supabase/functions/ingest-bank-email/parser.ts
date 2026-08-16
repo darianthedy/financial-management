@@ -194,6 +194,25 @@ export function parseIndonesianDate(raw: string): string {
   return `${year}-${mm}-${dd}`;
 }
 
+/**
+ * Whether a subject line is one of the two templates that carry a transaction.
+ *
+ *   "Credit Card Transaction Notification"               -> purchase
+ *   "Credit Card Reversal/Void Transaction Notification" -> reversal
+ *
+ * The same sender also mails statements, payment confirmations and promos.
+ * Those have no transaction table, so they are ignored rather than reported as
+ * parse failures.
+ *
+ * This is deliberately a subject check and NOT a fallback for a missing-field
+ * error: an email whose subject says "Transaction Notification" but whose
+ * fields cannot be found is a real template change and must still fail loudly,
+ * or genuine transactions would be dropped in silence.
+ */
+export function isTransactionNotification(subject: string): boolean {
+  return /transaction\s+notification/i.test(subject ?? "");
+}
+
 export function isReversal(subject: string, lines: string[]): boolean {
   if (/reversal|void/i.test(subject)) return true;
   // Fallback for a changed/missing subject: the body says so too.

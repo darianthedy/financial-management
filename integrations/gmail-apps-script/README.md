@@ -47,7 +47,8 @@ outcomes are visible in the Gmail UI. Nothing depends on them.
    | --- | --- | --- |
    | `INGEST_URL` | yes | `https://<ref>.supabase.co/functions/v1/ingest-bank-email` |
    | `INGEST_SECRET` | yes | long random string, also set on the edge function |
-   | `SENDER_QUERY` | no | `from:(noreply@bca.co.id)` |
+   | `SENDER_QUERY` | no | `from:(KartuKreditBCA@klikbca.com)` |
+   | `SUBJECT_QUERY` | no | `subject:("Transaction Notification")` |
    | `LOOKBACK_DAYS` | no | `3` |
    | `TRIGGER_MINUTES` | no | `5` |
    | `MAX_ATTEMPTS` | no | `3` |
@@ -72,9 +73,9 @@ personal standalone script; choose **Advanced → Go to \<project\> (unsafe)**.
   "version": 1,
   "messageId": "18f2a1c0d9e8b7a6",
   "threadId": "18f2a1c0d9e8b7a6",
-  "from": "BCA <noreply@bca.co.id>",
+  "from": "BCA <KartuKreditBCA@klikbca.com>",
   "to": "you@gmail.com",
-  "subject": "Notifikasi Transaksi",
+  "subject": "Credit Card Transaction Notification",
   "receivedAt": "2026-08-16T05:51:06.000Z",
   "bodyTruncated": false,
   "htmlBody": "<html>...",
