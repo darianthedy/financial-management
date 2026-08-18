@@ -107,7 +107,9 @@ struct TransactionFormView: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
+                // Editing a pending transaction: saving also confirms it, so the
+                // label says so (§8.3).
+                Button(viewModel.saveButtonTitle) {
                     Task {
                         await viewModel.save()
                         if viewModel.didSave {

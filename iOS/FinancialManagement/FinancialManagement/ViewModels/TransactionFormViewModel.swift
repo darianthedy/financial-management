@@ -73,6 +73,17 @@ final class TransactionFormViewModel {
         currentSnapshot != initialSnapshot || selectedTags != initialTags
     }
 
+    /// Editing a pending transaction (e.g. one ingested from a bank email):
+    /// saving doubles as confirming it (§8.3), so the save action is labelled
+    /// "Save and Confirm" and the update also flips `status` to confirmed.
+    var confirmsPending: Bool {
+        editingTransaction?.status == .pending
+    }
+
+    var saveButtonTitle: String {
+        confirmsPending ? "Save and Confirm" : "Save"
+    }
+
     init(
         editing transaction: Transaction? = nil,
         defaultAccountId: UUID? = nil,
@@ -169,7 +180,7 @@ final class TransactionFormViewModel {
         do {
             let transactionId: UUID
             if let existing = editingTransaction {
-                try await repository.update(id: existing.id, fields: [
+                var fields: [String: AnyJSON] = [
                     "type": .string(type.rawValue),
                     "amount": .double(Double(minorUnits)),
                     "account_id": .string(accountId.uuidString),
@@ -179,7 +190,13 @@ final class TransactionFormViewModel {
                     "category_id": effectiveCategoryId.map { .string($0.uuidString) } ?? .null,
                     "budget_id": effectiveBudgetId.map { .string($0.uuidString) } ?? .null,
                     "fixed_expense_id": effectiveFixedExpenseId.map { .string($0.uuidString) } ?? .null
-                ])
+                ]
+                // Saving a pending transaction confirms it in the same write, so
+                // the row leaves the pending state without a second round trip.
+                if confirmsPending {
+                    fields["status"] = .string(TransactionStatus.confirmed.rawValue)
+                }
+                try await repository.update(id: existing.id, fields: fields)
                 transactionId = existing.id
             } else {
                 let created = try await repository.create(
