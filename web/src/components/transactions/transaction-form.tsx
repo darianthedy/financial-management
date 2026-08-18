@@ -191,6 +191,10 @@ export function TransactionForm({
 
   const decimals = decimalsFor(defaultCurrency);
 
+  // Editing a pending transaction: saving doubles as confirming it, so the
+  // submit button says so up front (mirrors iOS's "Save and Confirm").
+  const confirmsPending = transaction?.status === "pending";
+
   // True once the user edits the date field. The form first renders at the
   // default date (today) and then settles to the edited transaction's date,
   // which shifts budgetMonth; this flag keeps that initial settle from being
@@ -321,7 +325,9 @@ export function TransactionForm({
   async function onSubmit(values: TransactionFormValues) {
     try {
       if (transaction) {
-        await updateTransaction(transaction.id, values, decimals);
+        await updateTransaction(transaction.id, values, decimals, {
+          confirm: confirmsPending,
+        });
       } else {
         await createTransaction(values, decimals);
       }
@@ -686,9 +692,11 @@ export function TransactionForm({
         <Button type="submit" disabled={isSubmitting} className="flex-1">
           {isSubmitting
             ? "Saving…"
-            : transaction
-              ? "Update transaction"
-              : "Add transaction"}
+            : confirmsPending
+              ? "Save and Confirm"
+              : transaction
+                ? "Update transaction"
+                : "Add transaction"}
         </Button>
       </div>
     </form>
