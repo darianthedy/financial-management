@@ -616,9 +616,17 @@ export async function createTransaction(values: TransactionFormValues, decimalPl
   await writeTagRows(data.id, values.tag_ids ?? []);
 }
 
-export async function updateTransaction(id: string, values: TransactionFormValues, decimalPlaces = 2) {
+export async function updateTransaction(
+  id: string,
+  values: TransactionFormValues,
+  decimalPlaces = 2,
+  // Saving a pending transaction (e.g. one ingested from a bank email) also
+  // confirms it, folded into this same write so it can't half-apply.
+  options: { confirm?: boolean } = {},
+) {
   const { error } = await supabase.from("transactions").update({
     account_id: values.account_id,
+    ...(options.confirm ? { status: "confirmed" as const } : {}),
     transfer_account_id: values.type === "transfer" ? (values.transfer_account_id ?? null) : null,
     type: values.type,
     amount: toMinorUnits(values.amount, decimalPlaces),
