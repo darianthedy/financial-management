@@ -18,18 +18,25 @@
 // ---------------------------------------------------------------------------
 
 var DEFAULTS = {
-  // Gmail search fragment identifying bank notification mail. This is the
-  // sender BCA credit card alerts actually come from (verified against real
-  // samples); it is NOT the same as BCA's other notification senders.
-  SENDER_QUERY: 'from:(KartuKreditBCA@klikbca.com)',
-  // The same sender also mails statements, payment confirmations and promos,
-  // which carry no transaction table and 422'd on every run. Both templates we
-  // do want share this exact phrase:
-  //   "Credit Card Transaction Notification"
-  //   "Credit Card Reversal/Void Transaction Notification"
-  // Kept separate from SENDER_QUERY so overriding one does not silently drop
-  // the other.
-  SUBJECT_QUERY: 'subject:("Transaction Notification")',
+  // Gmail search identifying bank mail worth sending to the endpoint.
+  //
+  // Two unrelated BCA products, each with its own sender AND its own subject,
+  // so the pairs are ORed rather than the senders and subjects being crossed:
+  // crossing them would match a credit card statement or a myBCA promo.
+  //
+  //   KartuKreditBCA@klikbca.com -- BCA VISA credit card. Both templates we
+  //   want share the phrase "Transaction Notification":
+  //     "Credit Card Transaction Notification"               -> purchase
+  //     "Credit Card Reversal/Void Transaction Notification" -> reversal
+  //   The same sender also mails statements, payment confirmations and promos,
+  //   which carry no transaction table and 422'd on every run.
+  //
+  //   bca@bca.co.id -- myBCA debit account. One subject, "Internet Transaction
+  //   Journal", covering eight different body layouts (QRIS, transfers,
+  //   virtual accounts, credit card payments). Note this says JOURNAL, not
+  //   NOTIFICATION, so the credit card subject filter cannot match it.
+  MESSAGE_QUERY: '(from:(KartuKreditBCA@klikbca.com) subject:("Transaction Notification"))' +
+    ' OR (from:(bca@bca.co.id) subject:("Internet Transaction Journal"))',
   // How far back to look. Bounds both the search and the retry window: a
   // message older than this is never retried, so one permanently-failing email
   // cannot spam the endpoint forever.
@@ -133,11 +140,36 @@ function ingestBankEmails() {
 // ---------------------------------------------------------------------------
 
 function buildQuery_() {
-  return [
-    config_('SENDER_QUERY'),
-    config_('SUBJECT_QUERY'),
-    'newer_than:' + intConfig_('LOOKBACK_DAYS') + 'd',
-  ].join(' ');
+  warnAboutLegacyQueryProperties_();
+  // The lookback is ANDed across the whole OR group, hence the parentheses --
+  // without them Gmail would apply newer_than: to the last clause only.
+  return '(' + config_('MESSAGE_QUERY') + ') newer_than:' +
+    intConfig_('LOOKBACK_DAYS') + 'd';
+}
+
+/**
+ * SENDER_QUERY and SUBJECT_QUERY were replaced by the single MESSAGE_QUERY when
+ * the myBCA debit template was added, because the two products need their own
+ * sender/subject pairing rather than one sender ANDed with one subject.
+ *
+ * An existing deployment may still have the old properties set. They are now
+ * ignored, which would silently narrow or widen what gets ingested, so say so
+ * loudly instead of letting it look like the filter still applies.
+ */
+function warnAboutLegacyQueryProperties_() {
+  var props = PropertiesService.getScriptProperties();
+  var legacy = ['SENDER_QUERY', 'SUBJECT_QUERY'].filter(function (key) {
+    var value = props.getProperty(key);
+    return value !== null && value !== '';
+  });
+
+  if (legacy.length > 0) {
+    console.warn(
+      'Ignoring obsolete Script Propert' + (legacy.length > 1 ? 'ies' : 'y') +
+      ' ' + legacy.join(', ') + '. These were replaced by MESSAGE_QUERY. ' +
+      'Delete them, and set MESSAGE_QUERY if you need a custom filter.'
+    );
+  }
 }
 
 /**

@@ -20,12 +20,16 @@
  * budget/category totals, without ever touching income.
  */
 
-export class BankEmailParseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "BankEmailParseError";
-  }
-}
+import {
+  BankEmailParseError,
+  findFieldIn,
+  htmlToLines,
+  labelSet,
+} from "./html.ts";
+
+// Re-exported so existing importers (index.ts, parser.test.ts) are unaffected
+// by the move of these helpers into html.ts.
+export { BankEmailParseError, htmlToLines };
 
 export interface ParsedBankEmail {
   kind: "transaction" | "reversal";
@@ -47,93 +51,26 @@ const FIELD_DATETIME = "Pada Tanggal";
 const FIELD_AMOUNT = "Sejumlah";
 const FIELD_KIND = "Jenis Transaksi";
 
-/**
- * Strips HTML to a list of non-empty trimmed lines.
- *
- * Every tag becomes a line break rather than being deleted, so adjacent table
- * cells cannot be glued into one token ("Merchant / ATM:M TIX").
- */
-export function htmlToLines(html: string): string[] {
-  const withoutInvisible = html
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ");
-
-  const text = decodeEntities(withoutInvisible.replace(/<[^>]*>/g, "\n"));
-
-  return text
-    .split("\n")
-    // NBSP is whitespace for our purposes but not matched by \s in older engines.
-    .map((line) => line.replace(/ /g, " ").trim())
-    .filter((line) => line.length > 0);
-}
-
-function decodeEntities(input: string): string {
-  return input
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&(?:apos|#0*39|#x0*27);/gi, "'")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => safeFromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => safeFromCodePoint(parseInt(dec, 10)));
-}
-
-function safeFromCodePoint(code: number): string {
-  if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return "";
-  try {
-    return String.fromCodePoint(code);
-  } catch {
-    return "";
-  }
-}
-
-function normalizeLabel(value: string): string {
-  return value.replace(/\s+/g, " ").trim().toLowerCase();
-}
+const KNOWN_LABELS = labelSet([
+  FIELD_MERCHANT,
+  FIELD_DATETIME,
+  FIELD_AMOUNT,
+  FIELD_KIND,
+  "Nomor Customer",
+  "Nomor Kartu",
+  "Otentikasi",
+]);
 
 /**
  * Finds the value following a label line.
  *
- * The rendered layout is three lines: label, ":", value. The separator is
- * skipped, and the search stops after a couple of lines so that a template
- * where the field is absent yields null instead of silently picking up the
- * next field's label as a value. That matters because the reversal template
- * omits "Otentikasi" while the purchase template includes it.
+ * The rendered layout is three lines: label, ":", value. See findFieldIn in
+ * html.ts for why the separator is skipped and the scan is bounded; here the
+ * case that depends on it is the reversal template omitting "Otentikasi" where
+ * the purchase template includes it.
  */
 export function findField(lines: string[], label: string): string | null {
-  const target = normalizeLabel(label);
-
-  for (let i = 0; i < lines.length; i++) {
-    if (normalizeLabel(lines[i]) !== target) continue;
-
-    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-      const candidate = lines[j].replace(/^:\s*/, "").trim();
-      if (candidate.length === 0) continue;
-      // Hitting another known label means this field had no value.
-      if (isKnownLabel(candidate)) return null;
-      return candidate;
-    }
-    return null;
-  }
-
-  return null;
-}
-
-const KNOWN_LABELS = new Set(
-  [
-    FIELD_MERCHANT,
-    FIELD_DATETIME,
-    FIELD_AMOUNT,
-    FIELD_KIND,
-    "Nomor Customer",
-    "Nomor Kartu",
-    "Otentikasi",
-  ].map(normalizeLabel),
-);
-
-function isKnownLabel(value: string): boolean {
-  return KNOWN_LABELS.has(normalizeLabel(value));
+  return findFieldIn(lines, label, KNOWN_LABELS);
 }
 
 /**
