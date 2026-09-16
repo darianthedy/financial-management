@@ -15,6 +15,11 @@ They share nothing but the label/`:`/value table shape — different date format
 and, importantly, **opposite number formats** (`Rp102.000,00` vs
 `IDR 102,000.00`) — so each has its own parser server side.
 
+One myBCA layout crosses between them: paying the BCA card bill from the debit
+account is recorded as a **transfer** from the debit account to the card
+account, not as an expense. As an expense it would double-count, since the
+card's own purchase alerts are already ingested as expenses.
+
 ## Design
 
 The script is **transport only** — it does not parse amounts or merchants.

@@ -53,6 +53,16 @@ export interface ParsedMyBcaEmail {
   amountSource: string;
   /** "Successful", etc. Only successful transactions are ingested. */
   status: string | null;
+  /**
+   * True when this journal settles a BCA credit card bill.
+   *
+   * Money moves between two accounts the user owns rather than leaving the
+   * ledger, so the caller books it as a `transfer` to the card account instead
+   * of an expense. Booking it as an expense would double-count: the card's own
+   * purchase alerts are already ingested as expenses, so the bill payment would
+   * charge the same spending to the budget a second time.
+   */
+  settlesCreditCard: boolean;
 }
 
 /**
@@ -253,6 +263,27 @@ function resolveMerchant(lines: string[]): string {
   );
 }
 
+/**
+ * Whether the journal settles a BCA credit card bill (layout 2).
+ *
+ * Two signals are required, because acting on this reroutes the money to a
+ * different account and a false positive is worse than a miss:
+ *
+ *   - the transaction type names a credit card ("Credit Card & Paylater - BCA")
+ *   - the layout carries "Card No. / Customer No.", which only that layout has
+ *
+ * A miss is safe: the caller falls back to booking an expense, and every
+ * ingested transaction is pending for the user to review anyway.
+ *
+ * The transaction type is matched loosely rather than compared to the exact
+ * observed string, so a renamed menu item does not silently turn these back
+ * into expenses.
+ */
+function detectCreditCardPayment(lines: string[], transactionKind: string | null): boolean {
+  return /credit\s*card/i.test(transactionKind ?? "") &&
+    field(lines, "Card No. / Customer No.") !== null;
+}
+
 export function parseMyBcaEmail(htmlBody: string): ParsedMyBcaEmail {
   const lines = htmlToLines(htmlBody ?? "");
 
@@ -269,9 +300,12 @@ export function parseMyBcaEmail(htmlBody: string): ParsedMyBcaEmail {
     throw new BankEmailParseError(`Amount must be positive, got ${amount} from "${raw}"`);
   }
 
+  const transactionKind = field(lines, "Transaction Type") ??
+    field(lines, "Transfer Type");
+
   return {
     kind: "mybca",
-    transactionKind: field(lines, "Transaction Type") ?? field(lines, "Transfer Type"),
+    transactionKind,
     merchant: resolveMerchant(lines),
     date: parseMyBcaDate(rawDateTime),
     rawDateTime,
@@ -279,6 +313,7 @@ export function parseMyBcaEmail(htmlBody: string): ParsedMyBcaEmail {
     rawAmount: raw,
     amountSource: source,
     status: field(lines, "Status"),
+    settlesCreditCard: detectCreditCardPayment(lines, transactionKind),
   };
 }
 

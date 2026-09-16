@@ -194,6 +194,46 @@ test("credit card payment: amount paid, not the bill; masked name is not used", 
   assert.notEqual(parsed.merchant, "***IAN **EDY");
 });
 
+test("credit card payment is flagged as settling a card, so it books as a transfer", () => {
+  // Booking it as an expense would double-count: the card's own purchase
+  // alerts are already ingested as expenses.
+  assert.equal(parseMyBcaEmail(CARD_PAYMENT).settlesCreditCard, true);
+});
+
+test("a renamed credit card menu item is still detected", () => {
+  const renamed = CARD_PAYMENT.replace(
+    "Credit Card & Paylater - BCA",
+    "BCA Credit Card Bill Payment",
+  );
+  assert.equal(parseMyBcaEmail(renamed).settlesCreditCard, true);
+});
+
+test("no other layout is mistaken for a credit card payment", () => {
+  for (const [name, html] of Object.entries({ QRIS, VIRTUAL_ACCOUNT, INTERBANK })) {
+    assert.equal(
+      parseMyBcaEmail(html).settlesCreditCard,
+      false,
+      `${name} must not be booked as a transfer to the card account`,
+    );
+  }
+  assert.equal(parseMyBcaEmail(bcaTransfer()).settlesCreditCard, false);
+});
+
+test("credit card detection needs both signals, not just the transaction type", () => {
+  // A QRIS purchase AT a card-shaped merchant name must stay an expense: it
+  // lacks the "Card No. / Customer No." row that only the payment layout has.
+  const cardNamedMerchant = journal("Hello", [
+    ["Status", "Successful"],
+    ["Transaction Date", "11 Sep 2026 08:50:59"],
+    ["Transaction Type", "QRIS Payment"],
+    ["Payment to", "CREDIT CARD REPAIR SHOP"],
+    ["Source of Fund", "TAHAPAN - 5271****31"],
+    ["Total Payment", "IDR 10,000.00"],
+    ["Reference No.", "X"],
+  ]);
+  assert.equal(parseMyBcaEmail(cardNamedMerchant).settlesCreditCard, false);
+});
+
 // --- Layout 6: itemised bill with merchant-supplied rows -------------------
 
 test("merchant-supplied bill rows do not become the amount", () => {

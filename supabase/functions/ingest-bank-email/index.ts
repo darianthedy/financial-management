@@ -158,6 +158,9 @@ Deno.serve(async (req: Request) => {
   // they must go through their own parsers or amounts land 1000x off.
   let parsed;
   let accountId: string;
+  // Set only for a credit card bill payment: money moving between two accounts
+  // the user owns, which is a transfer rather than an expense. See below.
+  let transferAccountId: string | null = null;
   try {
     if (isCreditCard) {
       parsed = parseBcaCreditCardEmail(subject, htmlBody);
@@ -171,6 +174,20 @@ Deno.serve(async (req: Request) => {
       }
       parsed = journal;
       accountId = MYBCA_ACCOUNT_ID;
+
+      // Paying the BCA card bill from the BCA debit account moves money between
+      // two accounts we already track, so it is booked as a transfer out of the
+      // debit account and into the card account. As an expense it would
+      // double-count: the card's own purchase alerts are ingested as expenses,
+      // so the bill payment would charge that spending to the budget again.
+      //
+      // Guarded on the two ids differing: if both env vars point at the same
+      // account the balance trigger would apply -amount and +amount to it and
+      // net to zero, silently losing the transaction. Falling back to an
+      // expense keeps it visible for review.
+      if (journal.settlesCreditCard && CREDIT_CARD_ACCOUNT_ID !== MYBCA_ACCOUNT_ID) {
+        transferAccountId = CREDIT_CARD_ACCOUNT_ID;
+      }
     }
   } catch (err) {
     const message = err instanceof BankEmailParseError
@@ -193,12 +210,16 @@ Deno.serve(async (req: Request) => {
   }
 
   // -- Create the pending transaction ---------------------------------------
+  // chk_transfer_account requires transfer_account_id to be set for a transfer
+  // and NULL for anything else, so the two cases are built together.
+  const isTransfer = transferAccountId !== null;
   const { data: transaction, error: insertError } = await supabase
     .from("transactions")
     .insert({
       user_id: account.user_id,
       account_id: account.id,
-      type: "expense",
+      type: isTransfer ? "transfer" : "expense",
+      transfer_account_id: transferAccountId,
       status: "pending",
       amount: parsed.amount,
       description: parsed.merchant,
@@ -226,6 +247,9 @@ Deno.serve(async (req: Request) => {
     created: true,
     transactionId: transaction.id,
     kind: parsed.kind,
+    type: isTransfer ? "transfer" : "expense",
+    accountId: account.id,
+    transferAccountId,
     amount: parsed.amount,
     date: parsed.date,
     description: parsed.merchant,
