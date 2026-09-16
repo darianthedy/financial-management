@@ -4,6 +4,17 @@ Polls Gmail every few minutes for bank notification emails and POSTs them to the
 `ingest-bank-email` Supabase edge function, which parses them and creates a
 pending transaction.
 
+Two BCA email families are ingested, each mapping to its own account:
+
+| Sender | Subject | Account |
+| --- | --- | --- |
+| `KartuKreditBCA@klikbca.com` | `... Transaction Notification` | BCA VISA credit card |
+| `bca@bca.co.id` | `Internet Transaction Journal` | BCA debit (myBCA) |
+
+They share nothing but the label/`:`/value table shape — different date formats
+and, importantly, **opposite number formats** (`Rp102.000,00` vs
+`IDR 102,000.00`) — so each has its own parser server side.
+
 ## Design
 
 The script is **transport only** — it does not parse amounts or merchants.
@@ -47,17 +58,30 @@ outcomes are visible in the Gmail UI. Nothing depends on them.
    | --- | --- | --- |
    | `INGEST_URL` | yes | `https://<ref>.supabase.co/functions/v1/ingest-bank-email` |
    | `INGEST_SECRET` | yes | long random string, also set on the edge function |
-   | `SENDER_QUERY` | no | `from:(KartuKreditBCA@klikbca.com)` |
-   | `SUBJECT_QUERY` | no | `subject:("Transaction Notification")` |
+   | `MESSAGE_QUERY` | no | see below; defaults to both BCA families |
    | `LOOKBACK_DAYS` | no | `3` |
    | `TRIGGER_MINUTES` | no | `5` |
    | `MAX_ATTEMPTS` | no | `3` |
 
    Generate the secret with `openssl rand -hex 32`. Never commit it — this file
    is in git, Script Properties are not.
+
+   `MESSAGE_QUERY` ORs one sender/subject pair per email family:
+
+   ```
+   (from:(KartuKreditBCA@klikbca.com) subject:("Transaction Notification"))
+     OR (from:(bca@bca.co.id) subject:("Internet Transaction Journal"))
+   ```
+
+   The pairs are ORed rather than the senders and subjects being crossed —
+   crossing them would match a credit card statement or a myBCA promo.
+
+   > **Upgrading:** `MESSAGE_QUERY` replaces the old `SENDER_QUERY` and
+   > `SUBJECT_QUERY`, which are now ignored. Delete them; the script logs a
+   > warning while they are still set.
 4. Run `dryRun` from the editor and approve the OAuth consent screen. It logs
    the query and the exact payloads without sending or labelling anything. Fix
-   `SENDER_QUERY` until it matches only your bank's alerts.
+   `MESSAGE_QUERY` until it matches only your bank's alerts.
 5. Run `sendMostRecentForTesting` once the endpoint is deployed to verify auth
    and parsing end to end.
 6. Run `installTrigger` to start the schedule. `removeTrigger` stops it.
@@ -100,5 +124,10 @@ protection, swap it for an HMAC over the body using
 - To reprocess emails, run `resetState` (clears message state, keeps config).
   The endpoint will still reject them as duplicates unless you also clear its
   own record — that is the backstop working as intended.
-- Changing `SENDER_QUERY` does not retroactively pick up old mail beyond
-  `LOOKBACK_DAYS`. Backfill by widening `LOOKBACK_DAYS` for one run.
+- Changing `MESSAGE_QUERY` does not retroactively pick up old mail beyond
+  `LOOKBACK_DAYS`. Backfill by widening `LOOKBACK_DAYS` for one run — which is
+  what you want after adding a new email family, since existing messages were
+  never matched before.
+- myBCA journals failed and pending attempts under the same subject as
+  successful ones. Those are recorded as `ignored`, not `failed`: they moved no
+  money, so creating a pending transaction for them would be wrong.

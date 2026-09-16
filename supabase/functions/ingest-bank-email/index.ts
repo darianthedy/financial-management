@@ -19,18 +19,31 @@ import {
   isTransactionNotification,
   parseBcaCreditCardEmail,
 } from "./parser.ts";
+import {
+  isInternetTransactionJournal,
+  isSuccessful,
+  parseMyBcaEmail,
+} from "./mybca.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ingestSecret = Deno.env.get("INGEST_SECRET") ?? "";
 
 /**
- * Every BCA credit card alert belongs to this account (the BCA VISA card).
- * Hardcoded on purpose for now: the email's "Nomor Kartu" is deliberately
- * ignored. Override with INGEST_ACCOUNT_ID without redeploying.
+ * Which account an email belongs to is decided by its template, because the two
+ * templates come from different BCA products and therefore different accounts:
+ *
+ *   KartuKreditBCA@klikbca.com "... Transaction Notification"  -> BCA VISA card
+ *   bca@bca.co.id "Internet Transaction Journal"               -> BCA debit
+ *
+ * Hardcoded on purpose: the card/account number in the email is masked
+ * ("5271xxxx31") and deliberately ignored. Each is overridable by env var so
+ * the account can be repointed without redeploying.
  */
-const DEFAULT_ACCOUNT_ID = "2f940480-5908-4c11-9fa1-9ff7a58c65c9";
-const accountId = Deno.env.get("INGEST_ACCOUNT_ID") ?? DEFAULT_ACCOUNT_ID;
+const CREDIT_CARD_ACCOUNT_ID = Deno.env.get("INGEST_ACCOUNT_ID") ??
+  "2f940480-5908-4c11-9fa1-9ff7a58c65c9";
+const MYBCA_ACCOUNT_ID = Deno.env.get("INGEST_MYBCA_ACCOUNT_ID") ??
+  "bfc92cd3-0eb3-497d-a7c2-7e7eb669e2ae";
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -120,23 +133,45 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, status);
   };
 
-  // -- Ignore non-transaction mail from the same sender ----------------------
-  // Statements, payment confirmations and promos carry no transaction table.
-  // They are recorded and acknowledged with 200 so the Apps Script stops
-  // retrying them, but they are NOT treated as parse failures.
-  if (!isTransactionNotification(subject)) {
+  const ignore = async (reason: string) => {
     await supabase
       .from("bank_email_ingests")
       .update({ status: "ignored", error: null })
       .eq("gmail_message_id", gmailMessageId);
+    return json({ ignored: true, reason }, 200);
+  };
 
-    return json({ ignored: true, reason: "Not a transaction notification" }, 200);
+  // -- Ignore non-transaction mail from the same senders ----------------------
+  // Statements, payment confirmations and promos carry no transaction table.
+  // They are recorded and acknowledged with 200 so the Apps Script stops
+  // retrying them, but they are NOT treated as parse failures.
+  const isCreditCard = isTransactionNotification(subject);
+  const isMyBca = isInternetTransactionJournal(subject);
+
+  if (!isCreditCard && !isMyBca) {
+    return await ignore("Not a recognised transaction email");
   }
 
   // -- Parse -----------------------------------------------------------------
+  // The two templates share nothing but the label/":"/value shape: the myBCA
+  // journal uses "IDR 102,000.00" where the card alert uses "Rp102.000,00", so
+  // they must go through their own parsers or amounts land 1000x off.
   let parsed;
+  let accountId: string;
   try {
-    parsed = parseBcaCreditCardEmail(subject, htmlBody);
+    if (isCreditCard) {
+      parsed = parseBcaCreditCardEmail(subject, htmlBody);
+      accountId = CREDIT_CARD_ACCOUNT_ID;
+    } else {
+      const journal = parseMyBcaEmail(htmlBody);
+      // myBCA journals failed and pending attempts under the same subject.
+      // Those moved no money, so they must not become a pending transaction.
+      if (!isSuccessful(journal.status)) {
+        return await ignore(`Transaction status is "${journal.status ?? "unknown"}"`);
+      }
+      parsed = journal;
+      accountId = MYBCA_ACCOUNT_ID;
+    }
   } catch (err) {
     const message = err instanceof BankEmailParseError
       ? err.message
