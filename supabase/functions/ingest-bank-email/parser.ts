@@ -4,8 +4,8 @@
  * Deliberately dependency-free and free of Deno APIs so it can be unit tested
  * with plain `node --test` (see parser.test.ts).
  *
- * BCA sends two relevant templates from KartuKreditBCA@klikbca.com, told apart
- * by the subject line:
+ * BCA sends two relevant templates from kartukreditbca@bca.co.id (until
+ * 2026-09-22, KartuKreditBCA@klikbca.com), told apart by the subject line:
  *
  *   "Credit Card Transaction Notification"                -> a purchase
  *   "Credit Card Reversal/Void Transaction Notification"  -> a reversal/void

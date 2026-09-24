@@ -8,8 +8,13 @@ Two BCA email families are ingested, each mapping to its own account:
 
 | Sender | Subject | Account |
 | --- | --- | --- |
-| `KartuKreditBCA@klikbca.com` | `... Transaction Notification` | BCA VISA credit card |
+| `kartukreditbca@bca.co.id` | `... Transaction Notification` | BCA VISA credit card |
 | `bca@bca.co.id` | `Internet Transaction Journal` | BCA debit (myBCA) |
+
+The card sender was `KartuKreditBCA@klikbca.com` until 2026-09-22, when BCA moved
+it to `bca.co.id`. Both addresses are still matched. Both products now share a
+domain, so only the **subject** distinguishes them — which is also what the edge
+function routes on when choosing the account to book against.
 
 They share nothing but the label/`:`/value table shape — different date formats
 and, importantly, **opposite number formats** (`Rp102.000,00` vs
@@ -74,7 +79,8 @@ outcomes are visible in the Gmail UI. Nothing depends on them.
    `MESSAGE_QUERY` ORs one sender/subject pair per email family:
 
    ```
-   (from:(KartuKreditBCA@klikbca.com) subject:("Transaction Notification"))
+   (from:(kartukreditbca@bca.co.id OR KartuKreditBCA@klikbca.com)
+      subject:("Transaction Notification"))
      OR (from:(bca@bca.co.id) subject:("Internet Transaction Journal"))
    ```
 
@@ -102,7 +108,7 @@ personal standalone script; choose **Advanced → Go to \<project\> (unsafe)**.
   "version": 1,
   "messageId": "18f2a1c0d9e8b7a6",
   "threadId": "18f2a1c0d9e8b7a6",
-  "from": "BCA <KartuKreditBCA@klikbca.com>",
+  "from": "BCA <kartukreditbca@bca.co.id>",
   "to": "you@gmail.com",
   "subject": "Credit Card Transaction Notification",
   "receivedAt": "2026-08-16T05:51:06.000Z",

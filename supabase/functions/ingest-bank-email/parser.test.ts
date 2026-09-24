@@ -241,3 +241,67 @@ test("throws on the text/plain body BCA actually sends", () => {
     BankEmailParseError,
   );
 });
+
+// ---------------------------------------------------------------------------
+// The 2026-09-22 sender cutover
+// ---------------------------------------------------------------------------
+
+/**
+ * Verbatim row markup from a real post-cutover email (22-09-2026, Rp5.000,00),
+ * with only the repeated inline styles shortened.
+ *
+ * When BCA moved the sender from KartuKreditBCA@klikbca.com to
+ * kartukreditbca@bca.co.id they also re-cut the HTML: it is now an ESP-built
+ * layout where the label sits directly in the <td> instead of a <span>, and --
+ * the part worth pinning -- every value <span> is left UNCLOSED, running
+ * straight into </td>. That is exactly the kind of malformed markup a naive
+ * tag-matching parser would swallow the value on.
+ *
+ * The labels and the "Rp5.000,00" formatting survived the redesign, which is
+ * why only MESSAGE_QUERY needed changing and this parser did not.
+ */
+const POST_CUTOVER_HTML = `<div>
+  <p>Yth. Pemegang Kartu Kredit BCA,</p>
+  <p>Terima kasih telah bertransaksi menggunakan Kartu Kredit BCA:</p>
+  <table cellpadding="0" cellspacing="0" width="100%">
+    <tr class="b"><td style="font-size:18px;line-height:36px">Nomor Customer</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>0000000017061161</td></tr>
+    <tr class="b"><td style="font-size:18px;line-height:36px">Nomor Kartu</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>431657XXXX8075</td></tr>
+    <tr class="b"><td style="font-size:18px;line-height:36px">Merchant / ATM</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>Grab* A-9S86P6DWW7JPAV</td></tr>
+    <tr class="b"><td style="font-size:18px;line-height:36px">Jenis Transaksi</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>E-COMMERCE</td></tr>
+    <tr class="b"><td style="font-size:18px;line-height:36px">Otentikasi</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>TRANSAKSI TANPA OTP</td></tr>
+    <tr class="b"><td style="font-size:18px;line-height:36px">Pada Tanggal</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>22-09-2026 18:02:29 WIB</td></tr>
+    <tr class="b"><td style="font-size:18px;line-height:36px">Sejumlah</td>
+      <td style="font-size:18px">:</td>
+      <td style="font-size:18px"><span>Rp5.000,00</td></tr>
+  </table>
+</div>`;
+
+test("parses the redesigned template sent after the 2026-09-22 sender cutover", () => {
+  const parsed = parseBcaCreditCardEmail(SUBJECT_PURCHASE, POST_CUTOVER_HTML);
+
+  assert.equal(parsed.kind, "transaction");
+  assert.equal(parsed.merchant, "Grab* A-9S86P6DWW7JPAV");
+  assert.equal(parsed.transactionKind, "E-COMMERCE");
+  assert.equal(parsed.date, "2026-09-22");
+  assert.equal(parsed.amount, 5000);
+  assert.equal(parsed.rawAmount, "Rp5.000,00");
+});
+
+test("the cutover did not change the subject, only the sender", () => {
+  // The missed emails all still said "Credit Card Transaction Notification",
+  // so the subject half of MESSAGE_QUERY was never the problem -- and the edge
+  // function, which routes on subject alone, needed no change either.
+  assert.equal(isTransactionNotification(SUBJECT_PURCHASE), true);
+});

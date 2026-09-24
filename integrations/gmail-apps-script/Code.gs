@@ -24,18 +24,32 @@ var DEFAULTS = {
   // so the pairs are ORed rather than the senders and subjects being crossed:
   // crossing them would match a credit card statement or a myBCA promo.
   //
-  //   KartuKreditBCA@klikbca.com -- BCA VISA credit card. Both templates we
+  //   kartukreditbca@bca.co.id -- BCA VISA credit card. Both templates we
   //   want share the phrase "Transaction Notification":
   //     "Credit Card Transaction Notification"               -> purchase
   //     "Credit Card Reversal/Void Transaction Notification" -> reversal
   //   The same sender also mails statements, payment confirmations and promos,
   //   which carry no transaction table and 422'd on every run.
   //
+  //   On 2026-09-22 BCA moved this sender off klikbca.com onto bca.co.id,
+  //   keeping the local part but changing the domain. The old address is still
+  //   listed so that mail predating the cutover, or a partial rollback, is not
+  //   dropped; it costs nothing once klikbca.com stops sending. The body
+  //   template is unchanged -- same Indonesian label/":"/value rows, same
+  //   "Rp5.000,00" formatting -- so parser.ts needed no edit.
+  //
   //   bca@bca.co.id -- myBCA debit account. One subject, "Internet Transaction
   //   Journal", covering eight different body layouts (QRIS, transfers,
   //   virtual accounts, credit card payments). Note this says JOURNAL, not
   //   NOTIFICATION, so the credit card subject filter cannot match it.
-  MESSAGE_QUERY: '(from:(KartuKreditBCA@klikbca.com) subject:("Transaction Notification"))' +
+  //
+  // Both products now sit on bca.co.id, so the sender alone no longer tells
+  // them apart -- but the subjects still do, and the subjects are also what the
+  // edge function routes on when picking the account to book against. Keeping
+  // each sender paired with its own subject means a widened `from:` match
+  // cannot send a card alert down the debit path.
+  MESSAGE_QUERY: '(from:(kartukreditbca@bca.co.id OR KartuKreditBCA@klikbca.com)' +
+    ' subject:("Transaction Notification"))' +
     ' OR (from:(bca@bca.co.id) subject:("Internet Transaction Journal"))',
   // How far back to look. Bounds both the search and the retry window: a
   // message older than this is never retried, so one permanently-failing email
