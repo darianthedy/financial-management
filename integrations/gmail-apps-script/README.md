@@ -126,6 +126,14 @@ protection, swap it for an HMAC over the body using
   keeps you far from the Apps Script daily quota.
 - Failures are visible three ways: the `fm-ingest-failed` label in Gmail,
   **Executions** in the Apps Script editor, and Google's automatic failure email.
+- A transaction missing from the app with **no label at all** on its thread means
+  `MESSAGE_QUERY` never matched it: labels are only applied after a POST, so a
+  message the query misses gets neither `fm-ingested` nor `fm-ingest-failed`.
+  Run `diagnoseRecent` — it searches the bank domains alone, ignoring the
+  subject and the address local part, and prints each message's real `from=` and
+  `subject=` beside a matched/not-matched verdict. Casing is never the cause;
+  Gmail search is case-insensitive, and nothing in this script or the edge
+  function compares the sender in code.
 - To reprocess emails, run `resetState` (clears message state, keeps config).
   The endpoint will still reject them as duplicates unless you also clear its
   own record — that is the backstop working as intended.
