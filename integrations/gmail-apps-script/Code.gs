@@ -24,18 +24,32 @@ var DEFAULTS = {
   // so the pairs are ORed rather than the senders and subjects being crossed:
   // crossing them would match a credit card statement or a myBCA promo.
   //
-  //   KartuKreditBCA@klikbca.com -- BCA VISA credit card. Both templates we
+  //   kartukreditbca@bca.co.id -- BCA VISA credit card. Both templates we
   //   want share the phrase "Transaction Notification":
   //     "Credit Card Transaction Notification"               -> purchase
   //     "Credit Card Reversal/Void Transaction Notification" -> reversal
   //   The same sender also mails statements, payment confirmations and promos,
   //   which carry no transaction table and 422'd on every run.
   //
+  //   On 2026-09-22 BCA moved this sender off klikbca.com onto bca.co.id,
+  //   keeping the local part but changing the domain. The old address is still
+  //   listed so that mail predating the cutover, or a partial rollback, is not
+  //   dropped; it costs nothing once klikbca.com stops sending. The body
+  //   template is unchanged -- same Indonesian label/":"/value rows, same
+  //   "Rp5.000,00" formatting -- so parser.ts needed no edit.
+  //
   //   bca@bca.co.id -- myBCA debit account. One subject, "Internet Transaction
   //   Journal", covering eight different body layouts (QRIS, transfers,
   //   virtual accounts, credit card payments). Note this says JOURNAL, not
   //   NOTIFICATION, so the credit card subject filter cannot match it.
-  MESSAGE_QUERY: '(from:(KartuKreditBCA@klikbca.com) subject:("Transaction Notification"))' +
+  //
+  // Both products now sit on bca.co.id, so the sender alone no longer tells
+  // them apart -- but the subjects still do, and the subjects are also what the
+  // edge function routes on when picking the account to book against. Keeping
+  // each sender paired with its own subject means a widened `from:` match
+  // cannot send a card alert down the debit path.
+  MESSAGE_QUERY: '(from:(kartukreditbca@bca.co.id OR KartuKreditBCA@klikbca.com)' +
+    ' subject:("Transaction Notification"))' +
     ' OR (from:(bca@bca.co.id) subject:("Internet Transaction Journal"))',
   // How far back to look. Bounds both the search and the retry window: a
   // message older than this is never retried, so one permanently-failing email
@@ -348,7 +362,9 @@ function removeTrigger() {
 
 /**
  * Logs what would be sent without POSTing, labelling or recording state.
- * Use this to sanity-check SENDER_QUERY before installing the trigger.
+ * Use this to sanity-check MESSAGE_QUERY before installing the trigger. It only
+ * lists messages the query already matched -- to find out why a message is
+ * missing, use diagnoseRecent() instead.
  */
 function dryRun() {
   console.log('Query: ' + buildQuery_());
@@ -356,6 +372,87 @@ function dryRun() {
   console.log('Matched ' + messages.length + ' unprocessed message(s).');
   for (var i = 0; i < messages.length; i++) {
     console.log(JSON.stringify(buildPayload_(messages[i]), null, 2));
+  }
+}
+
+/**
+ * Explains why recent bank mail was or was not ingested.
+ *
+ * Run this when a transaction is missing from the app. MESSAGE_QUERY pins both
+ * the sender address and the subject, and a message it does not match is never
+ * seen by the script at all: no POST, no state entry, and -- because labels are
+ * only applied after a POST -- no fm-ingested AND no fm-ingest-failed either.
+ * "Missing with no label at all" is therefore the signature of a query miss,
+ * which dryRun() cannot show you because it only lists what already matched.
+ *
+ * So this searches on the bank DOMAINS alone, deliberately dropping the subject
+ * and the local part of the address, and prints the real From and Subject of
+ * everything it finds next to the verdict. Compare the two columns against
+ * MESSAGE_QUERY to see which half drifted.
+ */
+function diagnoseRecent() {
+  var days = intConfig_('LOOKBACK_DAYS') * 4; // Reach past the retry window.
+  var wide = 'from:(klikbca.com OR bca.co.id) newer_than:' + days + 'd';
+
+  console.log('Ingest query : ' + buildQuery_());
+  console.log('Diagnostic   : ' + wide);
+
+  // Ids the real query returns, so each message can be marked matched or not.
+  var matched = {};
+  var hits = GmailApp.search(buildQuery_(), 0, 100);
+  for (var h = 0; h < hits.length; h++) {
+    var hitMessages = hits[h].getMessages();
+    for (var hm = 0; hm < hitMessages.length; hm++) {
+      matched[hitMessages[hm].getId()] = true;
+    }
+  }
+
+  var threads = GmailApp.search(wide, 0, 100);
+  var rows = [];
+  for (var t = 0; t < threads.length; t++) {
+    var labels = threads[t].getLabels().map(function (l) { return l.getName(); });
+    var threadMessages = threads[t].getMessages();
+    for (var m = 0; m < threadMessages.length; m++) {
+      var message = threadMessages[m];
+      var id = message.getId();
+      var state = getState_(id);
+      rows.push({
+        date: message.getDate(),
+        id: id,
+        from: message.getFrom(),
+        subject: message.getSubject(),
+        matchesQuery: !!matched[id],
+        state: state.state || '(none)',
+        attempts: state.attempts || 0,
+        threadLabels: labels.length ? labels.join(',') : '(none)',
+      });
+    }
+  }
+
+  rows.sort(function (a, b) { return a.date - b.date; });
+  console.log('Found ' + rows.length + ' message(s) from the bank domains.');
+
+  for (var r = 0; r < rows.length; r++) {
+    var row = rows[r];
+    console.log(
+      [
+        row.date.toISOString(),
+        row.matchesQuery ? 'MATCHED' : 'NOT MATCHED BY MESSAGE_QUERY',
+        'state=' + row.state + '/' + row.attempts,
+        'labels=' + row.threadLabels,
+        'from=' + row.from,
+        'subject=' + row.subject,
+      ].join('\n    ')
+    );
+  }
+
+  var missed = rows.filter(function (row) { return !row.matchesQuery; });
+  if (missed.length > 0) {
+    console.warn(
+      missed.length + ' message(s) are invisible to the ingest. Check whether ' +
+      'their from= or subject= above still satisfies MESSAGE_QUERY; casing is ' +
+      'not the cause, Gmail search is case-insensitive.'
+    );
   }
 }
 

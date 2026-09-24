@@ -33,8 +33,12 @@ const ingestSecret = Deno.env.get("INGEST_SECRET") ?? "";
  * Which account an email belongs to is decided by its template, because the two
  * templates come from different BCA products and therefore different accounts:
  *
- *   KartuKreditBCA@klikbca.com "... Transaction Notification"  -> BCA VISA card
- *   bca@bca.co.id "Internet Transaction Journal"               -> BCA debit
+ *   kartukreditbca@bca.co.id "... Transaction Notification"  -> BCA VISA card
+ *   bca@bca.co.id "Internet Transaction Journal"             -> BCA debit
+ *
+ * Since BCA's 2026-09-22 sender move the two products share a domain, so the
+ * subject is the only thing separating them -- which is what the routing below
+ * already keyed on, and why that cutover needed no change here.
  *
  * Hardcoded on purpose: the card/account number in the email is masked
  * ("5271xxxx31") and deliberately ignored. Each is overridable by env var so

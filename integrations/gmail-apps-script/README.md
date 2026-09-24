@@ -8,8 +8,13 @@ Two BCA email families are ingested, each mapping to its own account:
 
 | Sender | Subject | Account |
 | --- | --- | --- |
-| `KartuKreditBCA@klikbca.com` | `... Transaction Notification` | BCA VISA credit card |
+| `kartukreditbca@bca.co.id` | `... Transaction Notification` | BCA VISA credit card |
 | `bca@bca.co.id` | `Internet Transaction Journal` | BCA debit (myBCA) |
+
+The card sender was `KartuKreditBCA@klikbca.com` until 2026-09-22, when BCA moved
+it to `bca.co.id`. Both addresses are still matched. Both products now share a
+domain, so only the **subject** distinguishes them — which is also what the edge
+function routes on when choosing the account to book against.
 
 They share nothing but the label/`:`/value table shape — different date formats
 and, importantly, **opposite number formats** (`Rp102.000,00` vs
@@ -74,7 +79,8 @@ outcomes are visible in the Gmail UI. Nothing depends on them.
    `MESSAGE_QUERY` ORs one sender/subject pair per email family:
 
    ```
-   (from:(KartuKreditBCA@klikbca.com) subject:("Transaction Notification"))
+   (from:(kartukreditbca@bca.co.id OR KartuKreditBCA@klikbca.com)
+      subject:("Transaction Notification"))
      OR (from:(bca@bca.co.id) subject:("Internet Transaction Journal"))
    ```
 
@@ -102,7 +108,7 @@ personal standalone script; choose **Advanced → Go to \<project\> (unsafe)**.
   "version": 1,
   "messageId": "18f2a1c0d9e8b7a6",
   "threadId": "18f2a1c0d9e8b7a6",
-  "from": "BCA <KartuKreditBCA@klikbca.com>",
+  "from": "BCA <kartukreditbca@bca.co.id>",
   "to": "you@gmail.com",
   "subject": "Credit Card Transaction Notification",
   "receivedAt": "2026-08-16T05:51:06.000Z",
@@ -126,6 +132,14 @@ protection, swap it for an HMAC over the body using
   keeps you far from the Apps Script daily quota.
 - Failures are visible three ways: the `fm-ingest-failed` label in Gmail,
   **Executions** in the Apps Script editor, and Google's automatic failure email.
+- A transaction missing from the app with **no label at all** on its thread means
+  `MESSAGE_QUERY` never matched it: labels are only applied after a POST, so a
+  message the query misses gets neither `fm-ingested` nor `fm-ingest-failed`.
+  Run `diagnoseRecent` — it searches the bank domains alone, ignoring the
+  subject and the address local part, and prints each message's real `from=` and
+  `subject=` beside a matched/not-matched verdict. Casing is never the cause;
+  Gmail search is case-insensitive, and nothing in this script or the edge
+  function compares the sender in code.
 - To reprocess emails, run `resetState` (clears message state, keeps config).
   The endpoint will still reject them as duplicates unless you also clear its
   own record — that is the backstop working as intended.
