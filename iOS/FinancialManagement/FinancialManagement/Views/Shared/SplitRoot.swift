@@ -142,6 +142,9 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @SceneStorage private var storedID: String?
     /// The stored selection is restored once per appearance, on first data.
     @State private var hasRestored = false
+    /// Both columns stay visible: without this, narrower regular widths (the
+    /// inner display in portrait) hide the list behind a button.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     init(
         selection: Binding<Item?>, items: [Item], id: @escaping (Item) -> String,
@@ -158,7 +161,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if canTile {
-                NavigationSplitView {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
                     content
                         .environment(\.canTileSplitRoot, false)
                         .environment(\.isSplitListColumn, true)

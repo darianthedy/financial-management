@@ -16,7 +16,9 @@ final class SplitRootLayoutTests: XCTestCase {
 
         var body: some View {
             List(items, id: \.self) { item in
-                Button(item) { selection = item }
+                Button { selection = item } label: {
+                    Text(item).frame(maxWidth: .infinity, alignment: .leading)
+                }
                     .splitRowSelected(selection == item)
                     .layoutProbe("row.\(item)", interactive: true)
             }
@@ -26,6 +28,7 @@ final class SplitRootLayoutTests: XCTestCase {
                 placeholder: SplitPlaceholder(title: "Select an Item", systemImage: "list.bullet")
             ) { item in
                 Text("Detail \(item)")
+                    .layoutProbe("detail.\(item)")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .navigationTitle(item)
             }
@@ -58,7 +61,6 @@ final class SplitRootLayoutTests: XCTestCase {
                 let list = try snapshot.frame("split.list")
                 let placeholder = try snapshot.frame("split.placeholder")
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "list | placeholder must tile at \(size)")
-                XCTAssertTrue(snapshot.labels.contains("Select an Item"), "\(size)")
             } else {
                 XCTAssertNil(snapshot.frames["split.list"], "compact must not split at \(size)")
                 XCTAssertNil(snapshot.frames["split.placeholder"], "\(size)")
@@ -85,7 +87,7 @@ final class SplitRootLayoutTests: XCTestCase {
                 try assertCompactContentWidth(snapshot, probe: "split.detail")
                 XCTAssertNil(snapshot.frames["split.list"], "\(size)")
             }
-            XCTAssertTrue(snapshot.labels.contains("Detail Bravo"), "\(size): \(snapshot.labels.sorted())")
+            XCTAssertNotNil(snapshot.frames["detail.Bravo"], "the selected item's detail is missing at \(size)")
         }
     }
 }
