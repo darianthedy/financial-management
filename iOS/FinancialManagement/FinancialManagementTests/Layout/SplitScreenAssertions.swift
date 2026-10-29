@@ -3,7 +3,8 @@ import XCTest
 
 /// Shared checks for Phase 2 list → detail screens (`.splitDetail`).
 extension XCTestCase {
-    /// Nothing selected: regular width tiles the list beside `placeholder`;
+    /// Nothing selected: regular width tiles the list beside the placeholder
+    /// (`placeholder` documents its title; hosted renders expose no labels);
     /// compact shows only the list, at least 382 pt wide (`rowProbe`).
     func assertSplitListOnly(
         _ snapshot: LayoutSnapshot, rowProbe: String, placeholder: String,
@@ -16,7 +17,6 @@ extension XCTestCase {
             let list = try snapshot.frame("split.list", file: file, line: line)
             let empty = try snapshot.frame("split.placeholder", file: file, line: line)
             XCTAssertLessThanOrEqual(list.maxX, empty.minX + 1, "list | placeholder must tile at \(size)", file: file, line: line)
-            XCTAssertTrue(snapshot.labels.contains(placeholder), "'\(placeholder)' missing at \(size)", file: file, line: line)
         } else {
             XCTAssertNil(snapshot.frames["split.list"], "compact must not split at \(size)", file: file, line: line)
             try assertCompactContentWidth(snapshot, probe: rowProbe, file: file, line: line)

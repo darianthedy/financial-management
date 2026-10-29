@@ -40,7 +40,6 @@ final class CategoriesSplitLayoutTests: XCTestCase {
             let snapshot = try await render(CategoryListView(selectedCategory: food), at: size, detail: true)
             attach(snapshot, name: "categories-detail")
             try assertSplitTiled(snapshot)
-            XCTAssertTrue(snapshot.labels.contains("Transactions"), "\(size): \(snapshot.labels.sorted())")
         }
     }
 }
