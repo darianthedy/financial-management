@@ -25,14 +25,14 @@ Because the open device is wider than it is tall, the inner display's **native o
 
 ### 1.2 Layout metrics we design against
 
-Apple has **not published point sizes**. The figures below are derived: the panel pixels ÷ 3, and for the inner display the App Store Connect screenshot size (2007 × 2853) ÷ 3. Use them only to draw mockups. **Never hard-code them.** At runtime, read sizes from `GeometryReader`, from `windowScene.effectiveGeometry` and from the trait collection.
+Apple has not published point sizes. The outer-display rows below are **measured** by the CI probe (§1.3). The inner-display rows come from the simulator's device profile: the inner panel is a 2007 × 2853 px framebuffer at @3, mounted at 270°, which makes it landscape-native. Use these numbers to draw mockups only. **Never hard-code them.** At runtime, read sizes from `GeometryReader`, from `windowScene.effectiveGeometry` and from the trait collection.
 
 | State | Approx. points (W × H) | Size class (H / V) | System bars |
 |---|---|---|---|
-| **O-P** Outer, portrait | ~466 × 678 | Compact / Regular | Vertical, on the side edge (status bar and camera side) |
-| **O-L** Outer, landscape (stood on its edge) | ~678 × 466 | Compact / Compact | Vertical, on the side edge |
-| **I-L** Inner, landscape, flat (native) | ~951 × 669 | Regular / Regular | Vertical in landscape; tab bar can become a sidebar |
-| **I-P** Inner, portrait, flat | ~669 × 951 | Regular / Regular | Horizontal |
+| **O-P** Outer, portrait | **466 × 678** (measured) | **Compact / Regular** (measured) | **Right edge**. Safe area is 84 pt on the right and 34 pt at the bottom; the top and left are 0. |
+| **O-L** Outer, landscape (stood on its edge) | **678 × 466** (measured) | **Compact / Compact** (measured) | **Left edge**. Safe area is 84 pt on the left and 34 pt at the bottom. The bar follows the camera side. |
+| **I-L** Inner, landscape, flat (native) | 951 × 669 (device profile) | Regular / Regular | Vertical in landscape; tab bar can become a sidebar |
+| **I-P** Inner, portrait, flat | 669 × 951 (device profile) | Regular / Regular | Horizontal |
 | **I-B** Inner, landscape, partly folded ("book") | Two regions ~475 × 669 split by a vertical fold *division* | Regular / Regular | As I-L; the system moves sheets, alerts and menus away from the fold |
 | **I-T** Inner, portrait, partly folded ("tent") | Two regions ~669 × 475 split by a horizontal fold *division* | Regular / Regular | As I-P; glanceable content goes up, controls go down |
 | **I-S** Inner, Split View multitasking | Arbitrary width, on either side | Follows the width (≈½ or ⅓ width is likely Compact) | Can appear on the leading edge |
@@ -48,12 +48,60 @@ Rules from the HIG and the Tech Talk that shape this plan:
 - Sheets are centered on the inner display and slide away from the fold. On the outer display, a sheet's bar buttons can stack vertically.
 - `UIScreen.main` must not be used. The app already passes this check: a grep found **no usages**.
 
-### 1.3 Assumptions to verify in the Xcode 27.1 Device Hub simulator
+### 1.3 Verified on the iPhone Duo simulator (CI probe)
 
-1. The derived point sizes above.
-2. Which edge carries the vertical bar on O-P and O-L. The mockups draw it on the **trailing** edge.
-3. The size class at each Split View width (I-S).
-4. The exact signatures of the iOS 27.1 APIs named in this plan: `ReservedRegion`, `ArrangementView`, `toolbarVerticalEdge`, `ToolbarItemVisibilityPriority`, and `defaultTabBarPlacement(.sidebar)`.
+The probe is the `iOS Duo probe` workflow (`.github/workflows/ios-duo-probe.yml`, `scripts/duo-probe/`, `FinancialManagementTests/DuoProbeTests.swift`). It ran on the GitHub `xcode-27` runner with Xcode 27.1 (27A9275), iOS 27.1, and the `iPhone Duo` device (`iPhone19,4`).
+
+**Settled:**
+
+1. **Displays.** The simulator exposes two integrated screens.
+   - Screen 1 is the outer display, "LCD": 1398 × 2034 px @3, 460 ppi, portrait-native.
+   - Screen 3 is the inner display, "LCD-1": 2007 × 2853 px @3, mounted at 270°. That makes it landscape-native at 951 × 669 pt.
+   - The device boots **closed**, so apps launch on the outer display.
+2. **Outer display metrics.**
+
+   | | Size | Size class (H / V) | Safe area |
+   |---|---|---|---|
+   | Portrait | 466 × 678 pt | compact / regular | right 84, bottom 34 |
+   | Landscape | 678 × 466 pt | compact / compact | left 84, bottom 34 |
+
+   - The usable content width in portrait is **382 pt**. That is narrower than any current iPhone, so it is the new narrowest layout to test.
+   - `UIView.reservedRegions(kind: .occlusion)` reports two regions in portrait. One is the 84 × 174 pt camera and status block at the top right; the other is the 37 × 37 pt Dynamic Island inside it.
+3. **System bars on the outer display.**
+   - **Tab bar:** vertical, in the same strip as the status bar. It is on the **right** in portrait and on the **left** in landscape.
+   - **Navigation bar:** stays horizontal at the top, with the large title.
+   - **Icon-only toolbar items:** move into a vertical glass capsule on that same edge, above the tab bar.
+   - **Text items stay horizontal**, matching the HIG. Examples are the detail view's "Edit" button and a sheet's "Cancel" and "Save".
+   - **Sheets:** inset 8 pt on the outer display. Their content keeps a 76 pt trailing safe area.
+4. **The vertical strip has limited room.**
+   - **Tabs:** portrait fits about 7 tab items; landscape fits 5.
+   - **Toolbar items:** whatever doesn't fit collapses into "…".
+   - **Tab overflow:** with the plan's 7-tab root, Transactions' **Add, Filter and Summary all collapse into a single "…"** in landscape. In portrait only Filter stays visible, and Add sits inside "…".
+5. **`defaultVisibility(.hidden, for: .tabBar)` does not hide tabs on compact width.** The sidebar-only Tags and Settings tabs showed up in the outer display's tab bar. **Fix:** choose tabs by `horizontalSizeClass`. On compact width show 4 tabs plus More; on regular width show the `TabSection`. With only 5 tabs, all three toolbar items fit on the rail (§3.1).
+6. **Toolbar priority works.** `ToolbarItem { … }.visibilityPriority(.high)` keeps **Add** visible while the other items overflow. In the vertical bar, `primaryAction` items are placed last, below Filter and Summary, so give Add `.high` to keep it reachable.
+7. **API names, checked against the iOS 27.1 SDK:**
+   - **SwiftUI:**
+     - `ArrangementView` with `.arrangementViewStyle(.split / .overlay / .automatic)`
+     - `GeometryProxy.reservedRegions(kind: .division | .occlusion, options: .includeInactive)`
+     - `ReservedRegion`
+     - `onHingeChange { old, new in }`, which delivers a `DeviceHingeContext`
+     - `toolbarVerticalEdge` (`HorizontalEdge?`, an environment value)
+     - `ToolbarItem.visibilityPriority(.low / .high)`
+     - `ToolbarOverflowMenu`
+     - `.defaultTabBarPlacement(.sidebar)`, taking an `AdaptableTabBarPlacement`
+   - **UIKit:**
+     - `UIView.reservedRegions(kind:options:)`
+     - `UIHingeInteraction`, where the hinge `status` reads `closed` and `angleRadians` reads 0 when closed
+     - `UIArrangementViewController`
+     - `UIBarButtonItem.visibilityPriority`
+     - `UIViewController.preferredVerticalBarBehavior` (`.automatic` / `.disabled`)
+   - **Availability:** the APIs are iOS 27.1 (`UIBarButtonItem.visibilityPriority` is iOS 27.0), so every call goes behind `#available(iOS 27.1, *)`.
+
+**Not reachable from CI. Check these on a Mac with Xcode 27.1 or on a device:**
+
+- The inner display (I-L, I-P), the book and tent postures (I-B, I-T), and the inner display's real fold division. `simctl` has no fold, posture or open control; Device Hub's open and close buttons are GUI-only. Powering the outer screen off with `simctl io … screenConfig power off` crashes SpringBoard instead of opening the device. The workflow keeps that experiment behind `DUO_TRY_INNER=1` so it can be retried on a newer image.
+- The size class at each Split View width (I-S).
+- Whether `.defaultTabBarPlacement(.sidebar)` actually shows a sidebar on the inner display. On the outer display it changes nothing, as expected.
 
 ---
 
@@ -110,20 +158,22 @@ TabView(selection: $selection) {
     Tab("Transactions", systemImage: "arrow.left.arrow.right", value: .transactions) { TransactionsRoot() }
     Tab("Budgets", systemImage: "target", value: .budgets) { BudgetsRoot() }
 
-    // Compact (outer display / narrow Split View): keep the existing More tab.
-    Tab("More", systemImage: "ellipsis", value: .more) { MoreRoot() }
-        .defaultVisibility(.hidden, for: .sidebar)
-
-    // Regular (inner display): the More destinations are promoted into the sidebar.
-    TabSection("Management") {
-        Tab("Tags", systemImage: "tag", value: .tags) { TagsRoot() }
-        Tab("Categories", systemImage: "tag", value: .categories) { CategoriesRoot() }
-        Tab("Fixed Expenses", systemImage: "receipt", value: .fixedExpenses) { FixedExpensesRoot() }
-        Tab("Scheduled", systemImage: "calendar.badge.clock", value: .scheduled) { ScheduledRoot() }
+    // Chosen by size class, not `.defaultVisibility(.hidden, for: .tabBar)`:
+    // the probe showed per-placement visibility does NOT hide tabs on compact
+    // width (§1.3 #5), and every extra tab steals room from the toolbar rail.
+    if horizontalSizeClass == .compact {
+        // Outer display / narrow Split View: keep the existing More tab.
+        Tab("More", systemImage: "ellipsis", value: .more) { MoreRoot() }
+    } else {
+        // Inner display: the More destinations are promoted into the sidebar.
+        TabSection("Management") {
+            Tab("Tags", systemImage: "tag", value: .tags) { TagsRoot() }
+            Tab("Categories", systemImage: "tag", value: .categories) { CategoriesRoot() }
+            Tab("Fixed Expenses", systemImage: "receipt", value: .fixedExpenses) { FixedExpensesRoot() }
+            Tab("Scheduled", systemImage: "calendar.badge.clock", value: .scheduled) { ScheduledRoot() }
+        }
+        Tab("Settings", systemImage: "gear", value: .settings) { NavigationStack { SettingsView() } }
     }
-    .defaultVisibility(.hidden, for: .tabBar)
-    Tab("Settings", systemImage: "gear", value: .settings) { NavigationStack { SettingsView() } }
-        .defaultVisibility(.hidden, for: .tabBar)
 }
 .tabViewStyle(.sidebarAdaptable)
 .modifier(DuoSidebarPlacement())   // .defaultTabBarPlacement(.sidebar) behind #available(iOS 27.1, *)
@@ -155,7 +205,7 @@ On compact width the current behavior stays, so the outer display has **no regre
 - **Summary (F3)** becomes an `.inspector` on Transactions. On regular width it is a trailing column. On compact width the system shows it as a sheet, the same as today.
 - **Sheets**: add `.presentationSizing(.form)` to F1–F10 so they are centered on the inner display and the system displaces them at the fold. Do not use fixed widths or `.frame(width:)`.
 - **Alerts, confirmation dialogs, context menus and swipe actions** are system components, so they adapt to the fold automatically. No code change.
-- **Toolbars**: keep the icon-only items (+, filter, summary) vertical-friendly. Give **Add** the highest visibility priority, then Filter, then Summary, so overflow drops Summary first. A badged Filter stays visible because the HIG says badged items overflow last.
+- **Toolbars**: keep the icon-only items (+, filter, summary) vertical-friendly. Give **Add** `.visibilityPriority(.high)` and Summary `.low` (iOS 27.1). The probe showed Add is otherwise the first item to fall into "…": on the vertical bar, `primaryAction` items go last. A badged Filter stays visible because the HIG says badged items overflow last. The measured rail is **84 pt** wide and sits on the camera side (right in portrait, left in landscape), so the content column on the outer display is 382 pt wide.
 - **Fold-aware custom layouts** (iOS 27.1+): the Dashboard grid, the Tags grid and Login read `ReservedRegion` of kind division. They place the gutter on the fold and switch to a top/bottom split in tent posture through `ArrangementView` with `.split`. Below 27.1 they fall back to the plain flat layout.
 
 ### 3.4 Mockup legend

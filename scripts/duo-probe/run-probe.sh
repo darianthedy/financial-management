@@ -62,9 +62,15 @@ run_phase() { # run_phase <name>
 
 run_phase outer
 
-{ screen "$outer" off; screen "$inner" on; } >"$out/inner-switch.txt"
-sleep 8
-run_phase inner
-
-{ screen "$outer" on; screen "$inner" on; } >>"$out/inner-switch.txt"
+# The inner display can't be reached from the command line: simctl has no
+# fold/posture control (Device Hub's open/close buttons are GUI-only), and
+# powering the outer screen off with `screenConfig power off` crashes
+# SpringBoard rather than "opening" the device. Set DUO_TRY_INNER=1 to retry
+# that experiment on a newer image.
+if [ "${DUO_TRY_INNER:-0}" = "1" ]; then
+  { screen "$outer" off; screen "$inner" on; } >"$out/inner-switch.txt"
+  sleep 8
+  run_phase inner
+  { screen "$outer" on; screen "$inner" on; } >>"$out/inner-switch.txt"
+fi
 exit 0

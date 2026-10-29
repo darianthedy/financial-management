@@ -60,7 +60,7 @@ jobs:
             cat "$OUT/discovery/device.txt" 2>/dev/null
             cat "$OUT/discovery/io-enumerate.txt" 2>/dev/null
             echo '```'
-            for f in "$OUT"/probe/outer/*.json "$OUT"/probe/inner/*.json; do
+            for f in "$OUT"/probe/*/*.json; do
               [ -f "$f" ] || continue
               echo "### $(basename "$(dirname "$f")")/$(basename "$f")"
               echo '```json'
