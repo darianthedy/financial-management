@@ -1,0 +1,75 @@
+name: iOS PR check
+
+# T1 of the iPhone Duo CI plan (docs/ios-iphone-duo-implementation-plan.md §1):
+# one build-for-testing, then every unit + layout test in the FinancialManagement
+# test bundle on the iPhone Duo simulator. Target: ≤ 10 min.
+#
+# - XCUITests (FinancialManagementUITests) are excluded; they run at gate G4/T3.
+# - Drafts and doc-only changes skip, and a new push cancels the stale run.
+# - Simulator only: no signing secrets, no Supabase backend.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "iOS/**"
+      - "!iOS/**/*.md"
+      - "scripts/ios-ci/**"
+      - ".github/workflows/ios-pr-check.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-pr-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
+    # Only the Xcode 27 image carries the iOS 27.1 runtime with the iPhone Duo.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: iOS/FinancialManagement
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27.1
+        run: |
+          xcode="$(ls -d /Applications/Xcode_27.1*.app | head -1)"
+          echo "Using $xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      # Cache the Swift package checkouts (Supabase and friends), keyed on the
+      # lockfile. DerivedData is deliberately not cached: it is fragile across
+      # Xcode builds.
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('iOS/FinancialManagement/FinancialManagement.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build and test
+        run: bash ../../scripts/ios-ci/pr-check.sh "$RUNNER_TEMP/pr-check"
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "## iOS PR check"
+            echo '```'
+            cat "$RUNNER_TEMP/pr-check/summary.txt" 2>/dev/null || echo "no summary"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-pr-check
+          path: |
+            ${{ runner.temp }}/pr-check/*.log
+            ${{ runner.temp }}/pr-check/*.xcresult
+          if-no-files-found: ignore

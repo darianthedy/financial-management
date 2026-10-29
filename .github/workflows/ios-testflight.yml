@@ -30,17 +30,21 @@ concurrency:
 
 jobs:
   testflight:
-    runs-on: macos-26 # carries Xcode 26 (deployment target is iOS 26.1)
+    # The Xcode 27 image carries the iOS 27.1 SDK the iPhone Duo code builds
+    # against. The deployment target stays iOS 26.1.
+    runs-on: xcode-27
     defaults:
       run:
         working-directory: iOS/FinancialManagement
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
+      - name: Select Xcode 27.1
+        run: |
+          xcode="$(ls -d /Applications/Xcode_27.1*.app | head -1)"
+          echo "Using $xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
 
       - name: Set up Ruby + fastlane
         uses: ruby/setup-ruby@v1

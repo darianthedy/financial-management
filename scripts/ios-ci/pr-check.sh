@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# T1 PR check (docs/ios-iphone-duo-implementation-plan.md §1.1): build once,
+# then run the unit + layout tests against the same DerivedData on an iPhone
+# Duo simulator (falls back to the newest iPhone if the Duo type is missing).
+#
+# Usage: pr-check.sh <output-dir>   (run from iOS/FinancialManagement)
+# Writes build.log, test.log, tests.xcresult and summary.txt to <output-dir>.
+set -euo pipefail
+
+out="$1"
+mkdir -p "$out"
+dd="${RUNNER_TEMP:-/tmp}/pr-dd"
+packages="${RUNNER_TEMP:-/tmp}/SourcePackages"
+start=$SECONDS
+
+# --- Simulator -------------------------------------------------------------
+runtime="$(xcrun simctl list -j runtimes |
+  jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version) | last | .identifier')"
+devtype="$(xcrun simctl list -j devicetypes |
+  jq -r '.devicetypes[] | select(.name | test("Duo"; "i")) | .identifier' | head -1)"
+if [ -z "$devtype" ]; then
+  devtype="$(xcrun simctl list -j devicetypes |
+    jq -r '[.devicetypes[] | select(.productFamily == "iPhone")] | last | .identifier')"
+  echo "warning: no iPhone Duo device type; using $devtype" | tee -a "$out/summary.txt"
+fi
+udid="$(xcrun simctl create PRCheck "$devtype" "$runtime")"
+# Boot in the background while the build runs.
+xcrun simctl boot "$udid" &
+echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
+
+# Config/*.xcconfig is git-ignored, so supply placeholder Supabase settings;
+# unit tests never reach the backend.
+common=(
+  -project FinancialManagement.xcodeproj
+  -scheme FinancialManagement
+  -destination "id=$udid"
+  -derivedDataPath "$dd"
+  -clonedSourcePackagesDirPath "$packages"
+  CODE_SIGNING_ALLOWED=NO
+  "SUPABASE_URL=https://pr-check.invalid"
+  SUPABASE_ANON_KEY=pr-check
+)
+
+# --- Build once ------------------------------------------------------------
+if ! xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; then
+  grep -E "error:" "$out/build.log" | sort -u | head -50
+  echo "build-for-testing FAILED after $((SECONDS - start))s" | tee -a "$out/summary.txt"
+  exit 1
+fi
+build_s=$((SECONDS - start))
+echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
+
+# --- Test twice (unit + layout; XCUITests wait for gate G4 / T3) -----------
+wait # simulator boot
+xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
+
+status=0
+xcodebuild test-without-building "${common[@]}" \
+  -only-testing:FinancialManagementTests \
+  -resultBundlePath "$out/tests.xcresult" >"$out/test.log" 2>&1 || status=$?
+
+grep -E "Test Case .*failed|error:" "$out/test.log" | head -100 || true
+{
+  grep -E "Executed [0-9]+ tests?" "$out/test.log" | tail -1 || echo "no test summary"
+  echo "test-without-building: $((SECONDS - start - build_s))s (exit $status)"
+  echo "total: $((SECONDS - start))s"
+} | tee -a "$out/summary.txt"
+
+xcrun simctl delete "$udid" >/dev/null 2>&1 || true
+exit "$status"
