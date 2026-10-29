@@ -34,7 +34,8 @@ final class CategoriesSplitLayoutTests: XCTestCase {
     }
 
     func testRegularTilesTheCategorysTransactions() async throws {
-        let food = try XCTUnwrap(try await CategoryRepository().list().first { $0.name == "Food & Drinks" })
+        let categories = try await CategoryRepository().list()
+        let food = try XCTUnwrap(categories.first { $0.name == "Food & Drinks" })
         for size in LayoutSize.all where size.horizontal == .regular {
             let snapshot = try await render(CategoryListView(selectedCategory: food), at: size, detail: true)
             attach(snapshot, name: "categories-detail")
