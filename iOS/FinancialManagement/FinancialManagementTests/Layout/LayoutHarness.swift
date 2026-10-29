@@ -62,6 +62,9 @@ struct LayoutSnapshot {
     let size: LayoutSize
     let fold: FoldContext
     let frames: [String: LayoutProbeRecorder.Record]
+    /// Accessibility labels of every visible UIKit view, e.g. system tab bar
+    /// items and sidebar rows, which `.layoutProbe` can't reach.
+    let labels: Set<String>
     let image: UIImage
 
     func frame(_ id: String, file: StaticString = #filePath, line: UInt = #line) throws -> CGRect {
@@ -127,7 +130,20 @@ enum LayoutHarness {
         let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
-        return LayoutSnapshot(size: size, fold: fold, frames: frames, image: image)
+        return LayoutSnapshot(
+            size: size, fold: fold, frames: frames, labels: labels(in: window), image: image
+        )
+    }
+
+    private static func labels(in root: UIView) -> Set<String> {
+        var out: Set<String> = []
+        func walk(_ view: UIView, depth: Int) {
+            guard depth < 60, !view.isHidden, view.alpha > 0.01 else { return }
+            if let label = view.accessibilityLabel, !label.isEmpty { out.insert(label) }
+            for sub in view.subviews { walk(sub, depth: depth + 1) }
+        }
+        walk(root, depth: 0)
+        return out
     }
 
     private static func topUp(_ wanted: UIEdgeInsets, from actual: UIEdgeInsets) -> UIEdgeInsets {
