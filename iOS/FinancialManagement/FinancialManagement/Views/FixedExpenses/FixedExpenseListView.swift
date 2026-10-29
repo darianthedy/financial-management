@@ -103,6 +103,9 @@ struct FixedExpenseListView: View {
                 }
             }
         }
+        // A month with no fixed expenses lists nothing, which `.splitDetail`
+        // treats as still loading, so drop the selection explicitly.
+        .onChange(of: viewModel.yearMonth) { selectedExpenseId = nil }
         .task { await viewModel.load() }
         // Confirm the swipe delete (HIG: confirm permanent deletes), matching the
         // other destructive swipes across the app.
