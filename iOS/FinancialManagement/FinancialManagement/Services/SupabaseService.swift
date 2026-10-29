@@ -8,10 +8,25 @@ final class SupabaseService {
     let client: SupabaseClient
 
     private init() {
+        let db = SupabaseClientOptions.DatabaseOptions(
+            encoder: Self.postgrestEncoder(), decoder: Self.postgrestDecoder()
+        )
+        var options = SupabaseClientOptions(db: db)
+        #if DEBUG
+        // Layout tests and gate screenshots: canned data + a fake signed-in
+        // session, no network (Debug/FixtureURLProtocol.swift).
+        if FixtureMode.isEnabled {
+            options = SupabaseClientOptions(
+                db: db,
+                auth: .init(storage: FixtureAuthStorage(), autoRefreshToken: false),
+                global: .init(session: FixtureMode.makeSession())
+            )
+        }
+        #endif
         client = SupabaseClient(
             supabaseURL: AppConfig.supabaseURL,
             supabaseKey: AppConfig.supabaseAnonKey,
-            options: .init(db: .init(encoder: Self.postgrestEncoder(), decoder: Self.postgrestDecoder()))
+            options: options
         )
     }
 
