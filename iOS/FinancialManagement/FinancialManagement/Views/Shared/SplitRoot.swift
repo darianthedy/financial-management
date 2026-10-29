@@ -80,6 +80,13 @@ extension View {
         modifier(SplitRowSelectedModifier(isSelected: isSelected))
     }
 
+    /// Makes a row that has no tap action on compact width select itself in a
+    /// tiled split (e.g. Fixed Expenses, Scheduled). No-op on compact, so the
+    /// row's swipe actions and context menu behave exactly as before.
+    func splitSelectOnTap(_ select: @escaping () -> Void) -> some View {
+        modifier(SplitSelectOnTapModifier(select: select))
+    }
+
     /// Outlines a card (e.g. a grid tile or a budget card) while it is the
     /// selection of a tiled split. No-op on compact width.
     func splitCardSelected(_ isSelected: Bool, cornerRadius: CGFloat = AppTheme.cornerRadius) -> some View {
@@ -247,6 +254,22 @@ private struct SplitCardSelectedModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(Color.appPrimary, lineWidth: 2)
             }
+        }
+    }
+}
+
+private struct SplitSelectOnTapModifier: ViewModifier {
+    @Environment(\.isSplitListColumn) private var isSplitListColumn
+    let select: () -> Void
+
+    func body(content: Content) -> some View {
+        if isSplitListColumn {
+            Button(action: select) {
+                content.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
         }
     }
 }
