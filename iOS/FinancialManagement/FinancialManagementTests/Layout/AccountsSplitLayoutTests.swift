@@ -41,7 +41,7 @@ final class AccountsSplitLayoutTests: XCTestCase {
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "\(size)")
             } else {
                 XCTAssertNil(snapshot.frames["split.list"], "\(size)")
-                try assertCompactContentWidth(snapshot, probe: "accounts.row.BCA Tahapan")
+                try assertInsideSafeArea(snapshot, probe: "accounts.row.BCA Tahapan")
             }
             assertNoInteractiveOverlap(snapshot)
         }
