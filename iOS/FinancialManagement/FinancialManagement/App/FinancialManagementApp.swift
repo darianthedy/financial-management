@@ -48,6 +48,10 @@ struct FinancialManagementApp: App {
                     LoginView()
                 }
             }
+            // iPhone Duo: the adaptive kill switch (compact everywhere until
+            // AdaptiveLayout is on) and the fold position for fold-aware views.
+            .adaptiveLayoutGate()
+            .readsFoldContext()
             .environment(appState)
             .environment(themeManager)
             // Applies the user's Light/Dark/System choice app-wide, the SwiftUI
