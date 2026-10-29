@@ -23,6 +23,7 @@ nonisolated enum FixtureStore {
         case "fixed_expenses": fixedExpenses
         case "transactions", "v_transactions": transactions
         case "v_monthly_cashflow": cashflow
+        case "scheduled_transactions": scheduled
         default: []
         }
     }
@@ -48,7 +49,7 @@ nonisolated enum FixtureStore {
         String(format: "0000f1c7-%04x-4000-8000-%012x", kind, n)
     }
 
-    private enum Kind: Int { case account = 1, category, tag, budget, fixed, txn }
+    private enum Kind: Int { case account = 1, category, tag, budget, fixed, txn, scheduled }
 
     private static func id(_ kind: Kind, _ n: Int) -> String { id(kind.rawValue, n) }
 
@@ -192,6 +193,25 @@ nonisolated enum FixtureStore {
             "tag_ids": n == 6 ? [id(.tag, 3)] : [],
             "created_at": created, "updated_at": created,
         ]
+    }
+
+    /// Recurring schedules: two active, one paused (Scheduled, D2.6).
+    private static var scheduled: [[String: Any]] {
+        let specs: [(Int, String, Int, Int, Int?, String?, String, Bool)] = [
+            (1, "income", 25_000_000, 1, 6, nil, "Salary", true),
+            (2, "expense", 389_000, 1, nil, "Internet", "IndiHome", true),
+            (3, "expense", 189_000, 2, 5, nil, "Streaming", false),
+        ]
+        return specs.map { n, type, amount, account, category, fixed, text, active in
+            [
+                "id": id(.scheduled, n), "user_id": userId, "account_id": id(.account, account),
+                "type": type, "amount": amount, "description": text, "recurrence": "monthly",
+                "next_due_date": day(25, 1), "is_active": active,
+                "category_id": category.map { id(.category, $0) } ?? NSNull(),
+                "budget_name": NSNull(), "fixed_expense_name": fixed ?? NSNull(),
+                "created_at": created, "updated_at": created,
+            ]
+        }
     }
 
     private static var cashflow: [[String: Any]] {

@@ -1,13 +1,34 @@
 import SwiftUI
 
+/// Scheduled (S12). Compact edits a schedule in a sheet, as before. On regular
+/// width (implementation plan D2.6) tapping a recurring row opens it in the
+/// detail column as an embedded `ScheduledFormView`; switching rows with
+/// unsaved edits asks "Discard changes?" first. Pending items still open the
+/// transaction form as a sheet.
 struct ScheduledListView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.canTileSplitRoot) private var canTile
     @State private var viewModel = ScheduledTransactionViewModel()
     @State private var editingPending: Transaction?
     @State private var showingForm = false
     @State private var editingScheduled: EnrichedScheduledTransaction?
     /// The schedule awaiting delete confirmation (HIG: confirm permanent deletes).
     @State private var pendingDelete: EnrichedScheduledTransaction?
+    /// The tiled split's selection (schedule ID), guarded against dropping edits.
+    @State private var selection: GuardedSelection<UUID>
+
+    init(selectedScheduleId: UUID? = nil) {
+        _selection = State(initialValue: GuardedSelection(selection: selectedScheduleId))
+    }
+
+    /// Edit opens the schedule in the detail column when tiled, else a sheet.
+    private func edit(_ scheduled: EnrichedScheduledTransaction) {
+        if canTile {
+            selection.request(scheduled.id)
+        } else {
+            editingScheduled = scheduled
+        }
+    }
 
     var body: some View {
         List {
@@ -30,6 +51,9 @@ struct ScheduledListView: View {
             Section("Recurring") {
                 ForEach(viewModel.scheduledTransactions) { scheduled in
                     ScheduledRow(scheduled: scheduled, currencyCode: appState.defaultCurrency)
+                        .splitSelectOnTap { selection.request(scheduled.id) }
+                        .splitRowSelected(selection.selection == scheduled.id)
+                        .layoutProbe("scheduled.row.\(scheduled.description ?? scheduled.type.rawValue)", interactive: true)
                         // Swipe: delete + edit, mirroring the other list screens.
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
@@ -38,7 +62,7 @@ struct ScheduledListView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                             Button {
-                                editingScheduled = scheduled
+                                edit(scheduled)
                             } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
@@ -58,7 +82,7 @@ struct ScheduledListView: View {
                         }
                         .contextMenu {
                             Button {
-                                editingScheduled = scheduled
+                                edit(scheduled)
                             } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
@@ -97,6 +121,33 @@ struct ScheduledListView: View {
                     systemImage: "clock.arrow.2.circlepath"
                 )
             }
+        }
+        .refreshable { await viewModel.load() }
+        .splitDetail(
+            selection: $selection.selection,
+            in: viewModel.scheduledTransactions.map(\.id),
+            id: \.uuidString,
+            storageKey: "scheduled",
+            placeholder: SplitPlaceholder(
+                title: "Select a Schedule",
+                systemImage: "calendar.badge.clock",
+                description: "Edit a recurring transaction here."
+            )
+        ) { scheduleId in
+            if let enriched = viewModel.scheduledTransactions.first(where: { $0.id == scheduleId }) {
+                ScheduledFormView(
+                    editing: enriched.base,
+                    decimalPlaces: appState.decimalPlaces,
+                    onSaved: { await viewModel.load() },
+                    onClose: { selection.close() },
+                    isDirty: $selection.isDirty
+                )
+            }
+        }
+        .discardChangesDialog(for: $selection)
+        // Nothing selected means no editor, so nothing can be dirty.
+        .onChange(of: selection.selection) { _, selected in
+            if selected == nil { selection.isDirty = false }
         }
         .sheet(item: $editingPending) { txn in
             NavigationStack {
@@ -153,7 +204,6 @@ struct ScheduledListView: View {
         .onDisappear {
             Task { await viewModel.unsubscribe() }
         }
-        .refreshable { await viewModel.load() }
     }
 }
 

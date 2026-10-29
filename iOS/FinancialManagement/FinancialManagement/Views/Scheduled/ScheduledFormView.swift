@@ -5,18 +5,26 @@ import SwiftUI
 /// description → budget → category → fixed expense → tags → active. Only income
 /// and expense are offered (scheduled transfers aren't supported) and the amount
 /// is always positive, so `CurrencyField` shows no sign toggle.
+///
+/// Presented as a sheet, or embedded in the Scheduled detail column on regular
+/// width (D2.6): there `onClose` replaces `dismiss`, and `isDirty` reports
+/// unsaved changes so the list can confirm before switching rows.
 struct ScheduledFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @State private var viewModel: ScheduledTransactionFormViewModel
     @State private var showDiscardConfirm = false
     var onSaved: (() async -> Void)?
+    private let onClose: (() -> Void)?
+    private let isDirty: Binding<Bool>?
 
     init(
         editing schedule: ScheduledTransaction? = nil,
         defaultAccountId: UUID? = nil,
         decimalPlaces: Int = 2,
-        onSaved: (() async -> Void)? = nil
+        onSaved: (() async -> Void)? = nil,
+        onClose: (() -> Void)? = nil,
+        isDirty: Binding<Bool>? = nil
     ) {
         _viewModel = State(initialValue: ScheduledTransactionFormViewModel(
             editing: schedule,
@@ -24,6 +32,13 @@ struct ScheduledFormView: View {
             decimalPlaces: decimalPlaces
         ))
         self.onSaved = onSaved
+        self.onClose = onClose
+        self.isDirty = isDirty
+    }
+
+    /// Dismisses the sheet, or hands back to the embedding split view.
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 
     var body: some View {
@@ -94,7 +109,7 @@ struct ScheduledFormView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
-                    if viewModel.hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    if viewModel.hasChanges { showDiscardConfirm = true } else { close() }
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
@@ -103,7 +118,7 @@ struct ScheduledFormView: View {
                         await viewModel.save()
                         if viewModel.didSave {
                             await onSaved?()
-                            dismiss()
+                            close()
                         }
                     }
                 }
@@ -116,8 +131,11 @@ struct ScheduledFormView: View {
             isPresented: $showDiscardConfirm,
             titleVisibility: .visible
         ) {
-            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Discard Changes", role: .destructive) { close() }
             Button("Keep Editing", role: .cancel) {}
+        }
+        .onChange(of: viewModel.hasChanges, initial: true) { _, dirty in
+            if let isDirty, isDirty.wrappedValue != dirty { isDirty.wrappedValue = dirty }
         }
         .task { await viewModel.loadTags() }
     }
