@@ -5,6 +5,11 @@ actor NotificationService {
     static let shared = NotificationService()
 
     func requestPermission() async -> Bool {
+        #if DEBUG
+        // Fixture renders (layout tests, gate screenshots) must not block on
+        // the system permission alert.
+        if FixtureMode.isEnabled { return false }
+        #endif
         do {
             return try await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .badge, .sound])
