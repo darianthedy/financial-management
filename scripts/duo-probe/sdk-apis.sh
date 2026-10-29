@@ -35,6 +35,19 @@ symbols='ReservedRegion|ArrangementView|arrangementViewStyle|overlayArrangementZ
       grep -n -B4 -E "func (defaultTabBarPlacement|visibilityPriority|onHingeChange|reservedRegions|arrangementViewStyle)|struct (ArrangementView|ReservedRegion|ToolbarOverflowMenu)<?|var toolbarVerticalEdge" "$f" |
         grep -E "available|func |struct |var " | cut -c1-240
     done
+
+  # Full member lists of the fold types, so the public geometry accessors
+  # (frame / isActive / hinge angle) can be confirmed. FoldContext reads
+  # ReservedRegion's frame by reflection until these are known.
+  echo
+  echo "=================================================================="
+  echo "== Fold type members"
+  find "$sdk/System/Library/Frameworks" -maxdepth 6 -name "arm64-apple-ios-simulator.swiftinterface" \
+    \( -path "*SwiftUI*" -o -path "*UIKit*" \) |
+    while read -r f; do
+      awk '/(struct|enum|class) (ReservedRegion|DeviceHingeContext|UIHingeInteraction)[ :<]/,/^}/' "$f" |
+        grep -v '^\s*//' | cut -c1-240 | head -200
+    done
 } >"$out" 2>&1
 
 echo "Wrote $(wc -l <"$out") lines to $out"
