@@ -5,7 +5,7 @@ import XCTest
 extension XCTestCase {
     /// Nothing selected: regular width tiles the list beside the placeholder
     /// (`placeholder` documents its title; hosted renders expose no labels);
-    /// compact shows only the list, at least 382 pt wide (`rowProbe`).
+    /// compact shows only the list, its row (`rowProbe`) inside the safe area.
     func assertSplitListOnly(
         _ snapshot: LayoutSnapshot, rowProbe: String, placeholder: String,
         file: StaticString = #filePath, line: UInt = #line
@@ -19,7 +19,7 @@ extension XCTestCase {
             XCTAssertLessThanOrEqual(list.maxX, empty.minX + 1, "list | placeholder must tile at \(size)", file: file, line: line)
         } else {
             XCTAssertNil(snapshot.frames["split.list"], "compact must not split at \(size)", file: file, line: line)
-            try assertCompactContentWidth(snapshot, probe: rowProbe, file: file, line: line)
+            try assertInsideSafeArea(snapshot, probe: rowProbe, file: file, line: line)
         }
         assertNoInteractiveOverlap(snapshot, file: file, line: line)
     }
