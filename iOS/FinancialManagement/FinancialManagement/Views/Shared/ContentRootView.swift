@@ -48,7 +48,7 @@ struct ContentRootView: View {
                 TabSection("Management") {
                     ForEach(MoreDestination.allCases, id: \.self) { destination in
                         Tab(destination.title, systemImage: destination.systemImage, value: destination.tab) {
-                            NavigationStack { destination.view }
+                            destination.sidebarTabRoot
                         }
                     }
                 }
@@ -107,6 +107,25 @@ extension MoreDestination {
         // web CalendarClock
         case .scheduled: "calendar.badge.clock"
         case .settings: "gear"
+        }
+    }
+
+    /// List → detail screens that tile on regular width (implementation plan
+    /// Phase 2). Pushed from More on compact, they still push their detail.
+    var tilesOnRegularWidth: Bool {
+        switch self {
+        case .categories: true
+        case .tags, .fixedExpenses, .scheduled, .settings: false
+        }
+    }
+
+    /// The root of this destination's sidebar tab (regular width).
+    @ViewBuilder
+    var sidebarTabRoot: some View {
+        if tilesOnRegularWidth {
+            SplitRootContainer { view }
+        } else {
+            NavigationStack { view }
         }
     }
 
