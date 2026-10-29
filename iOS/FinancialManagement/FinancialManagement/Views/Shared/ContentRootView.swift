@@ -30,7 +30,7 @@ struct ContentRootView: View {
             }
             // web Wallet
             Tab("Accounts", systemImage: "wallet.bifold", value: AppTab.accounts) {
-                NavigationStack { AccountListView() }
+                SplitRootContainer { AccountListView() }
             }
             // web ArrowLeftRight
             Tab("Transactions", systemImage: "arrow.left.arrow.right", value: AppTab.transactions) {
