@@ -251,4 +251,16 @@ extension XCTestCase {
             "'\(id)' is \(width) pt wide at \(size); needs ≥ \(expected)", file: file, line: line
         )
     }
+
+    /// A list row (inset by the list's own margins) must stay inside the
+    /// safe area: clear of the outer display's rail on either edge.
+    func assertInsideSafeArea(
+        _ snapshot: LayoutSnapshot, probe id: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        let size = snapshot.size
+        let frame = try snapshot.frame(id, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(frame.minX, size.safeArea.left - 0.5, "'\(id)' \(frame) starts in the rail at \(size)", file: file, line: line)
+        XCTAssertLessThanOrEqual(frame.maxX, size.size.width - size.safeArea.right + 0.5, "'\(id)' \(frame) runs into the rail at \(size)", file: file, line: line)
+    }
 }
