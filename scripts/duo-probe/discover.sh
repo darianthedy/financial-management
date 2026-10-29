@@ -49,13 +49,23 @@ find /Library/Developer/CoreSimulator "$dev_dir" -maxdepth 12 -iname "*Duo*.simd
 # Hunt for fold / hinge / posture / display controls in simctl and the
 # simulator frameworks; these name the commands Device Hub drives.
 pattern='fold|hinge|posture|unfold|duo|reservedregion|arrangement|innerdisplay|outerdisplay|coverdisplay'
-for bin in \
-  "$(xcrun -f simctl)" \
-  /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/CoreSimulator \
-  "$dev_dir/Applications/Simulator.app/Contents/MacOS/Simulator"; do
+find "$dev_dir/Applications" -maxdepth 1 >"$out/xcode-apps.txt" 2>&1
+{
+  xcrun -f simctl
+  echo /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/CoreSimulator
+  find "$dev_dir/Applications" "$dev_dir/Library/PrivateFrameworks" -maxdepth 5 -type f -perm -u+x \
+    \( -path "*Simulator*" -o -path "*DeviceKit*" -o -path "*Hub*" \) 2>/dev/null
+} | sort -u | while read -r bin; do
   [ -f "$bin" ] || continue
-  strings "$bin" | grep -i -E "$pattern" | sort -u | head -600 >"$out/strings-$(basename "$bin").txt"
-done
+  hits="$(strings "$bin" | grep -i -E "$pattern" | sort -u | head -600)"
+  [ -n "$hits" ] && printf '== %s\n%s\n' "$bin" "$hits"
+done >"$out/strings-fold-controls.txt"
+
+# Simulator's Device menu (where posture controls would live), if UI
+# scripting is permitted on this runner.
+open -a Simulator --args -CurrentDeviceUDID "" >/dev/null 2>&1; sleep 10
+osascript -e 'tell application "System Events" to tell process "Simulator" to get name of every menu item of menu "Device" of menu bar 1' \
+  >"$out/simulator-device-menu.txt" 2>&1
 
 # Create and boot the probe device.
 runtime="$(xcrun simctl list -j runtimes | jq -r '.runtimes[] | select(.version | startswith("27.1")) | .identifier' | head -1)"

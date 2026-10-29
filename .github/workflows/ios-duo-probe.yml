@@ -49,7 +49,7 @@ jobs:
         run: bash ../../scripts/duo-probe/sdk-apis.sh "$OUT/sdk-apis.txt"
 
       - name: Run layout probe
-        run: bash ../../scripts/duo-probe/run-probe.sh "$OUT"
+        run: bash ../../scripts/duo-probe/run-probe.sh "$OUT/probe"
 
       - name: Summarize
         if: always()
@@ -60,9 +60,9 @@ jobs:
             cat "$OUT/discovery/device.txt" 2>/dev/null
             cat "$OUT/discovery/io-enumerate.txt" 2>/dev/null
             echo '```'
-            for f in "$OUT"/probe/*.json; do
+            for f in "$OUT"/probe/outer/*.json "$OUT"/probe/inner/*.json; do
               [ -f "$f" ] || continue
-              echo "### $(basename "$f")"
+              echo "### $(basename "$(dirname "$f")")/$(basename "$f")"
               echo '```json'
               jq -c '{window, windowSafeArea, traits}' "$f" 2>/dev/null || head -c 2000 "$f"
               echo '```'

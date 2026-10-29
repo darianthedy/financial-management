@@ -49,7 +49,17 @@ final class DuoProbeTests: XCTestCase {
         try await probe("sheet", ProbeSheetHost(), settle: 3)
     }
 
-    func test5_landscape() async throws {
+    /// iOS 27.1 variants: Add with high visibility priority, the tab bar
+    /// opted into the sidebar placement, and size-class-conditional tabs.
+    func test5_variants() async throws {
+        try await probe("tabs-conditional", ProbeTabsConditional())
+        if #available(iOS 27.1, *) {
+            try await probe("tabs-priority", ProbeTabs { ProbePriorityScreen(title: $0) })
+            try await probe("tabs-sidebar-placement", ProbeTabsSidebarPlacement())
+        }
+    }
+
+    func test6_landscape() async throws {
         let scene = try activeScene()
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { error in
             print("DUOPROBE landscape request error: \(error)")
@@ -70,6 +80,8 @@ final class DuoProbeTests: XCTestCase {
         let window = UIWindow(windowScene: scene)
         window.rootViewController = UIHostingController(rootView: view)
         window.makeKeyAndVisible()
+        let hinge = HingeLog()
+        hinge.attach(to: window)
         try await Task.sleep(for: .seconds(settle))
         window.layoutIfNeeded()
 
@@ -81,12 +93,27 @@ final class DuoProbeTests: XCTestCase {
             "systemViews": systemViews(in: window),
             "labeledViews": labeledViews(in: window),
             "swiftUIFrames": ProbeFrames.shared.snapshot(),
+            "reservedRegions": reservedRegions(window),
+            "hinge": hinge.updates,
         ]
         let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         try write(name, report, image: image)
         window.isHidden = true
+    }
+
+    /// The fold (division) and inner-camera (occlusion) regions, including
+    /// inactive ones, as UIKit reports them on this window (iOS 27.1+).
+    private func reservedRegions(_ window: UIWindow) -> [String: Any] {
+        guard #available(iOS 27.1, *) else { return ["unavailable": true] }
+        var out: [String: Any] = [:]
+        for (name, kind) in [("division", UIView.ReservedRegion.Kind.division), ("occlusion", .occlusion)] {
+            out[name] = window.reservedRegions(kind: kind).map { String(describing: $0) }
+            out[name + "IncludingInactive"] = window.reservedRegions(kind: kind, options: .includeInactive)
+                .map { String(describing: $0) }
+        }
+        return out
     }
 
     private func activeScene() throws -> UIWindowScene {
@@ -229,6 +256,22 @@ final class DuoProbeTests: XCTestCase {
     }
 }
 
+/// Collects hinge updates delivered to a `UIHingeInteraction` (iOS 27.1+).
+@MainActor
+private final class HingeLog {
+    private(set) var updates: [String] = []
+
+    func attach(to view: UIView) {
+        guard #available(iOS 27.1, *) else {
+            updates = ["unavailable"]
+            return
+        }
+        view.addInteraction(UIHingeInteraction { [weak self] _, update in
+            self?.updates.append(String(describing: update))
+        })
+    }
+}
+
 // MARK: - Probe screens
 
 /// Accessibility labels used by the probe screens.
@@ -258,6 +301,15 @@ private final class ProbeFrames {
             "safeArea": ["top": s.top, "leading": s.leading, "bottom": s.bottom, "trailing": s.trailing],
             "horizontal": h.map { $0 == .compact ? "compact" : "regular" } ?? "unspecified",
             "vertical": v.map { $0 == .compact ? "compact" : "regular" } ?? "unspecified",
+            "reservedRegions": Self.regions(geo),
+        ]
+    }
+
+    private static func regions(_ geo: GeometryProxy) -> [String: [String]] {
+        guard #available(iOS 27.1, *) else { return [:] }
+        return [
+            "division": geo.reservedRegions(kind: .division, options: .includeInactive).map { String(describing: $0) },
+            "occlusion": geo.reservedRegions(kind: .occlusion, options: .includeInactive).map { String(describing: $0) },
         ]
     }
 }
@@ -309,24 +361,91 @@ private struct ProbeScreen: View {
 
 /// The plan's root (§3.1): adaptable tab bar → sidebar, with More only in the
 /// tab bar and Management/Settings only in the sidebar.
-private struct ProbeTabs: View {
+private struct ProbeTabs<Screen: View>: View {
+    var screen: (String) -> Screen
+
+    var body: some View {
+        TabView {
+            Tab("Dashboard", systemImage: "square.grid.2x2") { screen("Dashboard") }
+            Tab("Accounts", systemImage: "wallet.bifold") { screen("Accounts") }
+            Tab("Transactions", systemImage: "arrow.left.arrow.right") { screen("Transactions") }
+            Tab("Budgets", systemImage: "target") { screen("Budgets") }
+            Tab("More", systemImage: "ellipsis") { screen("More") }
+                .defaultVisibility(.hidden, for: .sidebar)
+            TabSection("Management") {
+                Tab("Tags", systemImage: "tag") { screen("Tags") }
+                    .defaultVisibility(.hidden, for: .tabBar)
+                Tab("Settings", systemImage: "gear") { screen("Settings") }
+                    .defaultVisibility(.hidden, for: .tabBar)
+            }
+        }
+        .tabViewStyle(.sidebarAdaptable)
+        .probe("tabs.root")
+    }
+}
+
+extension ProbeTabs where Screen == ProbeScreen {
+    init() { self.init { ProbeScreen(title: $0) } }
+}
+
+/// Tabs chosen by size class instead of per-placement visibility: More on
+/// compact width, Management + Settings on regular width.
+private struct ProbeTabsConditional: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     var body: some View {
         TabView {
             Tab("Dashboard", systemImage: "square.grid.2x2") { ProbeScreen(title: "Dashboard") }
             Tab("Accounts", systemImage: "wallet.bifold") { ProbeScreen(title: "Accounts") }
             Tab("Transactions", systemImage: "arrow.left.arrow.right") { ProbeScreen(title: "Transactions") }
             Tab("Budgets", systemImage: "target") { ProbeScreen(title: "Budgets") }
-            Tab("More", systemImage: "ellipsis") { ProbeScreen(title: "More") }
-                .defaultVisibility(.hidden, for: .sidebar)
-            TabSection("Management") {
-                Tab("Tags", systemImage: "tag") { ProbeScreen(title: "Tags") }
-                    .defaultVisibility(.hidden, for: .tabBar)
-                Tab("Settings", systemImage: "gear") { ProbeScreen(title: "Settings") }
-                    .defaultVisibility(.hidden, for: .tabBar)
+            if sizeClass == .compact {
+                Tab("More", systemImage: "ellipsis") { ProbeScreen(title: "More") }
+            } else {
+                TabSection("Management") {
+                    Tab("Tags", systemImage: "tag") { ProbeScreen(title: "Tags") }
+                    Tab("Settings", systemImage: "gear") { ProbeScreen(title: "Settings") }
+                }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
         .probe("tabs.root")
+    }
+}
+
+/// `ProbeScreen` with Add marked high visibility priority so it should stay
+/// on the bar while Filter / Summary overflow first.
+@available(iOS 27.1, *)
+private struct ProbePriorityScreen: View {
+    let title: String
+
+    var body: some View {
+        NavigationStack {
+            List(0..<30, id: \.self) { Text("\(title) row \($0)") }
+                .probe("\(title).content")
+                .navigationTitle(title)
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Add", systemImage: "plus") {}
+                    }
+                    .visibilityPriority(.high)
+                    ToolbarItem {
+                        Button("Filter", systemImage: "line.3.horizontal.decrease.circle") {}
+                    }
+                    ToolbarItem {
+                        Button("Summary", systemImage: "chart.bar.xaxis") {}
+                    }
+                    .visibilityPriority(.low)
+                }
+        }
+    }
+}
+
+/// The plan's opt-in sidebar placement on regular width.
+@available(iOS 27.1, *)
+private struct ProbeTabsSidebarPlacement: View {
+    var body: some View {
+        ProbeTabs().defaultTabBarPlacement(.sidebar)
     }
 }
 

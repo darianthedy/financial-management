@@ -24,6 +24,17 @@ symbols='ReservedRegion|ArrangementView|arrangementViewStyle|overlayArrangementZ
       echo "== ${f#"$sdk"/}"
       echo "$hits"
     done
+
+  # Availability of the key SwiftUI entry points (the @available lines above
+  # each declaration).
+  echo
+  echo "=================================================================="
+  echo "== SwiftUI availability context"
+  find "$sdk/System/Library/Frameworks" -maxdepth 6 -name "arm64-apple-ios-simulator.swiftinterface" -path "*SwiftUI*" |
+    while read -r f; do
+      grep -n -B4 -E "func (defaultTabBarPlacement|visibilityPriority|onHingeChange|reservedRegions|arrangementViewStyle)|struct (ArrangementView|ReservedRegion|ToolbarOverflowMenu)<?|var toolbarVerticalEdge" "$f" |
+        grep -E "available|func |struct |var " | cut -c1-240
+    done
 } >"$out" 2>&1
 
 echo "Wrote $(wc -l <"$out") lines to $out"
