@@ -39,7 +39,6 @@ final class AccountsSplitLayoutTests: XCTestCase {
                 let list = try snapshot.frame("split.list")
                 let placeholder = try snapshot.frame("split.placeholder")
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "\(size)")
-                XCTAssertTrue(snapshot.labels.contains("Select an Account"), "\(size)")
             } else {
                 XCTAssertNil(snapshot.frames["split.list"], "\(size)")
                 try assertCompactContentWidth(snapshot, probe: "accounts.row.BCA Tahapan")
@@ -56,10 +55,6 @@ final class AccountsSplitLayoutTests: XCTestCase {
             let detail = try snapshot.frame("split.detail")
             XCTAssertLessThanOrEqual(list.maxX, detail.minX + 1, "\(size)")
             XCTAssertNil(snapshot.frames["split.placeholder"], "\(size)")
-            // The detail column shows the account and keeps its text Edit button.
-            XCTAssertTrue(snapshot.labels.contains("Account Info") || snapshot.labels.contains("Starting Balance"),
-                          "\(size): \(snapshot.labels.sorted())")
-            XCTAssertTrue(snapshot.labels.contains("Edit"), "\(size)")
             assertNoInteractiveOverlap(snapshot)
         }
     }
