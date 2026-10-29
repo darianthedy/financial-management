@@ -64,7 +64,7 @@ final class SplitRootLayoutTests: XCTestCase {
             } else {
                 XCTAssertNil(snapshot.frames["split.list"], "compact must not split at \(size)")
                 XCTAssertNil(snapshot.frames["split.placeholder"], "\(size)")
-                try assertCompactContentWidth(snapshot, probe: "row.Alpha")
+                try assertInsideSafeArea(snapshot, probe: "row.Alpha")
                 XCTAssertGreaterThan(row.width, 0)
             }
             assertNoInteractiveOverlap(snapshot)

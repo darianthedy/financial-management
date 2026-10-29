@@ -57,4 +57,11 @@ final class SplitSelectionRuleTests: XCTestCase {
     func testStoredSelectionMustStillBeListed() {
         XCTAssertNil(Rule.resolve(selected: nil, stored: .init(id: "z", wasTiled: true), available: ids, restoring: true, isTiled: true))
     }
+
+    func testListColumnWidth() {
+        XCTAssertEqual(SplitColumns.listWidth(for: 669), 300)   // inner portrait
+        XCTAssertEqual(SplitColumns.listWidth(for: 951), 380)   // inner landscape
+        XCTAssertEqual(SplitColumns.listWidth(for: 1366), 420)
+        XCTAssertEqual(SplitColumns.listWidth(for: 500), 300)
+    }
 }

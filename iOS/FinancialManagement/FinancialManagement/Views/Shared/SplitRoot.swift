@@ -7,9 +7,9 @@ import SwiftUI
 // 2. Its body applies `.splitDetail(selection:…)` where it used
 //    `.navigationDestination(item:)`, after its title, toolbar and overlay.
 //
-// On regular width the container lets the modifier tile the screen as a
-// `NavigationSplitView`: list column | detail column, with a placeholder while
-// nothing is selected. Everywhere else — compact width, or the screen pushed
+// On regular width the container lets the modifier tile the screen: a list
+// column | a detail column (each its own `NavigationStack`), with a
+// placeholder while nothing is selected. Everywhere else — compact width, or the screen pushed
 // onto another stack (More › Tags on the outer display) — the modifier is the
 // same `navigationDestination(item:)` push as before, so compact is unchanged.
 //
@@ -27,7 +27,7 @@ extension EnvironmentValues {
 
 /// The tab root of a screen that uses `.splitDetail`: a `NavigationStack` on
 /// compact width (exactly as before), and on regular width no stack at all,
-/// because the screen's `NavigationSplitView` brings its own.
+/// because the screen's tiled columns bring their own.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ViewBuilder var content: Content
@@ -87,6 +87,14 @@ extension View {
     }
 }
 
+/// The tiled list column's width: 40% of the space, kept between 300 and
+/// 420 pt, so the detail column always gets the larger share.
+enum SplitColumns {
+    static func listWidth(for width: CGFloat) -> CGFloat {
+        min(420, max(300, (width * 0.4).rounded()))
+    }
+}
+
 /// The pure selection rule behind `.splitDetail`, kept apart so it is unit
 /// tested without rendering.
 enum SplitSelectionRule {
@@ -142,9 +150,6 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @SceneStorage private var storedID: String?
     /// The stored selection is restored once per appearance, on first data.
     @State private var hasRestored = false
-    /// Both columns stay visible: without this, narrower regular widths (the
-    /// inner display in portrait) hide the list behind a button.
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     init(
         selection: Binding<Item?>, items: [Item], id: @escaping (Item) -> String,
@@ -161,30 +166,39 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if canTile {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    content
-                        .environment(\.canTileSplitRoot, false)
-                        .environment(\.isSplitListColumn, true)
-                        .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 440)
-                        .layoutProbe("split.list")
-                } detail: {
-                    NavigationStack {
-                        if let selection {
-                            detail(selection)
-                                .id(id(selection))
-                                .layoutProbe("split.detail")
-                        } else {
-                            ContentUnavailableView {
-                                Label(placeholder.title, systemImage: placeholder.systemImage)
-                            } description: {
-                                if let description = placeholder.description { Text(description) }
-                            }
-                            .layoutProbe("split.placeholder")
+                // A fixed two-column layout rather than `NavigationSplitView`,
+                // which on the inner display in portrait (669 pt) overlays the
+                // list on a dimmed detail even with `.balanced` / `.all`.
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        NavigationStack {
+                            content
+                                .environment(\.canTileSplitRoot, false)
+                                .environment(\.isSplitListColumn, true)
                         }
+                        .frame(width: SplitColumns.listWidth(for: geo.size.width))
+                        .layoutProbe("split.list")
+
+                        Divider().ignoresSafeArea()
+
+                        NavigationStack {
+                            if let selection {
+                                detail(selection)
+                                    .id(id(selection))
+                                    .layoutProbe("split.detail")
+                            } else {
+                                ContentUnavailableView {
+                                    Label(placeholder.title, systemImage: placeholder.systemImage)
+                                } description: {
+                                    if let description = placeholder.description { Text(description) }
+                                }
+                                .layoutProbe("split.placeholder")
+                            }
+                        }
+                        .environment(\.canTileSplitRoot, false)
+                        .frame(maxWidth: .infinity)
                     }
-                    .environment(\.canTileSplitRoot, false)
                 }
-                .navigationSplitViewStyle(.balanced)
             } else {
                 content.navigationDestination(item: $selection) { item in
                     detail(item).layoutProbe("split.detail")
