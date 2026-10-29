@@ -114,8 +114,8 @@ extension MoreDestination {
     /// Phase 2). Pushed from More on compact, they still push their detail.
     var tilesOnRegularWidth: Bool {
         switch self {
-        case .categories: true
-        case .tags, .fixedExpenses, .scheduled, .settings: false
+        case .categories, .tags: true
+        case .fixedExpenses, .scheduled, .settings: false
         }
     }
 
