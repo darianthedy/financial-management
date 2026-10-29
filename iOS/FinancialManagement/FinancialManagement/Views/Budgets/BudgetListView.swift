@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// Budgets (S7). Tapping a budget drills down to its transactions: pushed on
+/// compact, in the detail column on regular width (implementation plan D2.5).
+/// The selection is keyed by budget name and month, and a month change
+/// clears it.
 struct BudgetListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = BudgetListViewModel()
@@ -11,6 +15,10 @@ struct BudgetListView: View {
     @State private var pendingRemove: BudgetProgress?
     /// The installment awaiting cancel confirmation (swipe-only here).
     @State private var pendingCancel: ActiveInstallment?
+
+    init(drilldown: BudgetDrilldown? = nil) {
+        _drilldown = State(initialValue: drilldown)
+    }
 
     var body: some View {
         Group {
@@ -61,11 +69,11 @@ struct BudgetListView: View {
                                 onEdit: { formMode = .edit(progress) },
                                 onRemove: { pendingRemove = progress }
                             )
+                                .splitCardSelected(drilldown == BudgetDrilldown(progress))
+                                .layoutProbe("budgets.card.\(progress.budgetName)", interactive: true)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    drilldown = BudgetDrilldown(
-                                        name: progress.budgetName, yearMonth: progress.yearMonth
-                                    )
+                                    drilldown = BudgetDrilldown(progress)
                                 }
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
@@ -135,6 +143,23 @@ struct BudgetListView: View {
                 }
             }
         }
+        .refreshable { await viewModel.load() }
+        .splitDetail(
+            selection: $drilldown,
+            in: viewModel.progress.map(BudgetDrilldown.init),
+            id: \.id,
+            storageKey: "budgets",
+            placeholder: SplitPlaceholder(
+                title: "Select a Budget",
+                systemImage: "target",
+                description: "Its transactions for the month appear here."
+            )
+        ) { link in
+            TransactionListView(initialFilters: link.filters)
+        }
+        // An empty month lists nothing, which `.splitDetail` treats as still
+        // loading, so drop the selection explicitly.
+        .onChange(of: viewModel.yearMonth) { drilldown = nil }
         .sheet(item: $formMode) { mode in
             BudgetFormSheet(mode: mode, viewModel: viewModel)
         }
@@ -149,15 +174,11 @@ struct BudgetListView: View {
                 }
             }
         }
-        .navigationDestination(item: $drilldown) { link in
-            TransactionListView(initialFilters: link.filters)
-        }
         .task {
             await viewModel.load()
             await viewModel.subscribeToChanges()
         }
         .onDisappear { Task { await viewModel.unsubscribe() } }
-        .refreshable { await viewModel.load() }
         // Shared remove confirmation for both the card ⋮ menu and the swipe action
         // (HIG: confirm permanent deletes).
         .alert(
@@ -202,6 +223,15 @@ struct BudgetDrilldown: Identifiable, Hashable {
     let yearMonth: String
 
     var id: String { "\(name)|\(yearMonth)" }
+
+    init(name: String, yearMonth: String) {
+        self.name = name
+        self.yearMonth = yearMonth
+    }
+
+    init(_ progress: BudgetProgress) {
+        self.init(name: progress.budgetName, yearMonth: progress.yearMonth)
+    }
 
     var filters: TransactionFilters {
         var f = TransactionFilters()

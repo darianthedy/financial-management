@@ -38,7 +38,7 @@ struct ContentRootView: View {
             }
             // web PiggyBank (no SF piggy-bank symbol; target reads as a budget goal)
             Tab("Budgets", systemImage: "target", value: AppTab.budgets) {
-                NavigationStack { BudgetListView() }
+                SplitRootContainer { BudgetListView() }
             }
 
             if horizontalSizeClass == .regular {
