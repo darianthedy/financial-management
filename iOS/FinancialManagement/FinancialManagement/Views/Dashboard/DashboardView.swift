@@ -17,6 +17,7 @@ struct DashboardView: View {
                     onPrevious: { viewModel.navigateMonth(by: -1) },
                     onNext: { viewModel.navigateMonth(by: 1) }
                 )
+                .layoutProbe("dashboard.monthNavigator", interactive: true)
 
                 VStack(spacing: 16) {
                     if viewModel.isLoading {
@@ -29,6 +30,7 @@ struct DashboardView: View {
                             paidFixedExpenseTotals: data.paidFixedExpenseTotals,
                             currencyCode: appState.defaultCurrency
                         )
+                        .layoutProbe("dashboard.verdict")
 
                         CashflowCard(
                             cashflow: data.cashflow,
@@ -76,6 +78,7 @@ struct DashboardView: View {
             }
             .padding()
         }
+        .layoutProbe("dashboard.scroll")
         .navigationTitle("Dashboard")
         .task {
             await viewModel.load()
