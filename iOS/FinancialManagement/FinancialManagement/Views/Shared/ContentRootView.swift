@@ -43,15 +43,14 @@ struct ContentRootView: View {
 
             if horizontalSizeClass == .regular {
                 // Inner display: More's destinations, promoted into the sidebar.
+                // Settings closes the Management section, as in the mockups:
+                // a standalone Tab would be listed above every section.
                 TabSection("Management") {
-                    ForEach(MoreDestination.managementCases, id: \.self) { destination in
+                    ForEach(MoreDestination.allCases, id: \.self) { destination in
                         Tab(destination.title, systemImage: destination.systemImage, value: destination.tab) {
                             NavigationStack { destination.view }
                         }
                     }
-                }
-                Tab(MoreDestination.settings.title, systemImage: MoreDestination.settings.systemImage, value: AppTab.settings) {
-                    NavigationStack { MoreDestination.settings.view }
                 }
             } else {
                 Tab("More", systemImage: "ellipsis", value: AppTab.more) {

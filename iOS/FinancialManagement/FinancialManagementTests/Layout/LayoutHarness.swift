@@ -65,6 +65,9 @@ struct LayoutSnapshot {
     /// Accessibility labels of every visible UIKit view, e.g. system tab bar
     /// items and sidebar rows, which `.layoutProbe` can't reach.
     let labels: Set<String>
+    /// Visible `UITab` titles in order, depth-first (a section's title, then
+    /// its tabs), from the tab bar controller SwiftUI's `TabView` is built on.
+    let tabTitles: [String]
     let image: UIImage
 
     func frame(_ id: String, file: StaticString = #filePath, line: UInt = #line) throws -> CGRect {
@@ -131,7 +134,8 @@ enum LayoutHarness {
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
         return LayoutSnapshot(
-            size: size, fold: fold, frames: frames, labels: labels(in: window), image: image
+            size: size, fold: fold, frames: frames, labels: labels(in: window),
+            tabTitles: tabTitles(in: window), image: image
         )
     }
 
@@ -163,14 +167,20 @@ enum LayoutHarness {
         }
         visit(window, depth: 0)
 
-        func tabTitles(_ tabs: [UITab]) {
+        out.formUnion(tabTitles(in: window))
+        return out
+    }
+
+    private static func tabTitles(in window: UIWindow) -> [String] {
+        var out: [String] = []
+        func walk(_ tabs: [UITab]) {
             for tab in tabs where !tab.isHidden {
-                out.insert(tab.title)
-                if let group = tab as? UITabGroup { tabTitles(group.children) }
+                out.append(tab.title)
+                if let group = tab as? UITabGroup { walk(group.children) }
             }
         }
         func controllers(_ vc: UIViewController) {
-            if let tabs = (vc as? UITabBarController)?.tabs { tabTitles(tabs) }
+            if let tabs = (vc as? UITabBarController)?.tabs { walk(tabs) }
             vc.children.forEach(controllers)
         }
         if let root = window.rootViewController { controllers(root) }

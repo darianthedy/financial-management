@@ -1,0 +1,79 @@
+name: iOS Duo gate
+
+# T2 gate run of the iPhone Duo CI plan (docs/ios-iphone-duo-implementation-plan.md
+# §1.1): the full unit + layout suite plus DuoProbeTests on the iPhone Duo
+# simulator, with every screenshot exported into one artifact so the real
+# screens can be compared against the mockups canvas at gates G1–G4.
+#
+# Run it from the Actions tab (pick the branch), or add the `duo-gate` label
+# to a PR. Simulator only: no signing secrets, no Supabase backend.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: ios-duo-gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'duo-gate'
+    runs-on: xcode-27
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: iOS/FinancialManagement
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27.1
+        run: |
+          xcode="$(ls -d /Applications/Xcode_27.1*.app | head -1)"
+          echo "Using $xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('iOS/FinancialManagement/FinancialManagement.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build, test and capture screens
+        run: GATE=1 bash ../../scripts/ios-ci/pr-check.sh "$RUNNER_TEMP/gate"
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "## iPhone Duo gate"
+            echo '```'
+            cat "$RUNNER_TEMP/gate/summary.txt" 2>/dev/null || echo "no summary"
+            echo '```'
+            echo "### Screens"
+            (cd "$RUNNER_TEMP/gate/screens" 2>/dev/null && find . -name '*.png' | sort | sed 's|^\./|- |') || echo "none"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duo-gate-screens
+          path: |
+            ${{ runner.temp }}/gate/screens
+            ${{ runner.temp }}/gate/probe
+            ${{ runner.temp }}/gate/summary.txt
+          if-no-files-found: warn
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duo-gate-logs
+          path: |
+            ${{ runner.temp }}/gate/*.log
+            ${{ runner.temp }}/gate/tests.xcresult
+          if-no-files-found: ignore

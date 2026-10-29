@@ -30,6 +30,7 @@ final class RootTabLayoutTests: XCTestCase {
             attach(snapshot, name: "root")
 
             XCTAssertTrue(primary.union(["More"]).isSubset(of: snapshot.labels), "\(size): \(snapshot.labels.sorted())")
+            XCTAssertEqual(snapshot.tabTitles, ["Dashboard", "Accounts", "Transactions", "Budgets", "More"], "\(size)")
             // Sidebar-only tabs must not leak into the compact tab bar
             // (the probe's §1.3 #5 failure). "Fixed Expenses" is also a
             // Dashboard card title, so it isn't checked here.
@@ -48,6 +49,13 @@ final class RootTabLayoutTests: XCTestCase {
             XCTAssertTrue(primary.isSubset(of: snapshot.labels), "\(size): \(snapshot.labels.sorted())")
             XCTAssertFalse(snapshot.labels.contains("More"), "More tab shown at \(size)")
             XCTAssertTrue(snapshot.labels.contains("Settings"), "Settings tab missing at \(size)")
+            // Mockup order: Settings closes the Management section.
+            XCTAssertEqual(
+                snapshot.tabTitles,
+                ["Dashboard", "Accounts", "Transactions", "Budgets",
+                 "Management", "Tags", "Categories", "Fixed Expenses", "Scheduled", "Settings"],
+                "\(size)"
+            )
             assertNoInteractiveOverlap(snapshot)
         }
     }

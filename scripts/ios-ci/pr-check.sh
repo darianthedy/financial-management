@@ -5,6 +5,9 @@
 #
 # Usage: pr-check.sh <output-dir>   (run from iOS/FinancialManagement)
 # Writes build.log, test.log, tests.xcresult and summary.txt to <output-dir>.
+#
+# GATE=1 (the T2 gate run, ios-duo-gate.yml) also runs DuoProbeTests and
+# exports every screenshot attachment to <output-dir>/screens/<Test>/.
 set -euo pipefail
 
 out="$1"
@@ -54,8 +57,14 @@ echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
 wait # simulator boot
 xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
 
+gate_env=()
+if [ "${GATE:-0}" = "1" ]; then
+  # TEST_RUNNER_-prefixed variables reach the test process without the prefix.
+  gate_env=(TEST_RUNNER_DUO_PROBE=1 "TEST_RUNNER_DUO_OUT=$out/probe")
+fi
+
 status=0
-xcodebuild test-without-building "${common[@]}" \
+env ${gate_env[@]+"${gate_env[@]}"} xcodebuild test-without-building "${common[@]}" \
   -only-testing:FinancialManagementTests \
   -resultBundlePath "$out/tests.xcresult" >"$out/test.log" 2>&1 || status=$?
 
@@ -65,6 +74,26 @@ grep -E "Test Case .*failed|error:" "$out/test.log" | head -100 || true
   echo "test-without-building: $((SECONDS - start - build_s))s (exit $status)"
   echo "total: $((SECONDS - start))s"
 } | tee -a "$out/summary.txt"
+
+if [ "${GATE:-0}" = "1" ]; then
+  raw="$out/attachments"
+  xcrun xcresulttool export attachments --path "$out/tests.xcresult" --output-path "$raw" \
+    >"$out/attachments.log" 2>&1 || true
+  # Name each file after its attachment, grouped by test class:
+  # screens/RootTabLayoutTests/root-inner-landscape.png
+  if [ -f "$raw/manifest.json" ]; then
+    jq -r '.[] | .testIdentifier as $t | .attachments[] |
+        [($t | split("/")[0]), .exportedFileName, .suggestedHumanReadableName] | @tsv' \
+      "$raw/manifest.json" |
+      while IFS=$'\t' read -r test file name; do
+        [[ "$file" == *.png ]] || continue
+        mkdir -p "$out/screens/$test"
+        clean="$(echo "$name" | sed -E 's/_[0-9]+_[0-9A-F-]{36}//')"
+        cp "$raw/$file" "$out/screens/$test/$clean"
+      done
+  fi
+  echo "screenshots: $(find "$out/screens" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')" | tee -a "$out/summary.txt"
+fi
 
 xcrun simctl delete "$udid" >/dev/null 2>&1 || true
 exit "$status"
