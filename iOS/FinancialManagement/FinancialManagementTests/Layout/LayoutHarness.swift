@@ -62,6 +62,9 @@ struct LayoutSnapshot {
     let size: LayoutSize
     let fold: FoldContext
     let frames: [String: LayoutProbeRecorder.Record]
+    /// Accessibility labels of every visible UIKit view, e.g. system tab bar
+    /// items and sidebar rows, which `.layoutProbe` can't reach.
+    let labels: Set<String>
     let image: UIImage
 
     func frame(_ id: String, file: StaticString = #filePath, line: UInt = #line) throws -> CGRect {
@@ -127,7 +130,51 @@ enum LayoutHarness {
         let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
-        return LayoutSnapshot(size: size, fold: fold, frames: frames, image: image)
+        return LayoutSnapshot(
+            size: size, fold: fold, frames: frames, labels: labels(in: window), image: image
+        )
+    }
+
+    /// Labels from three sources, because system bars aren't plain labelled
+    /// UIViews: view `accessibilityLabel`s, the accessibility element tree
+    /// (where SwiftUI and the Liquid Glass tab bar expose their items), and the
+    /// titles of the visible `UITab`s of any tab bar controller.
+    private static func labels(in window: UIWindow) -> Set<String> {
+        var out: Set<String> = []
+        var seen: Set<ObjectIdentifier> = []
+
+        func visit(_ object: NSObject, depth: Int) {
+            guard depth < 80, out.count < 2000, seen.insert(ObjectIdentifier(object)).inserted else { return }
+            if let view = object as? UIView, view.isHidden || view.alpha < 0.01 { return }
+            if let label = object.accessibilityLabel, !label.isEmpty { out.insert(label) }
+            if let elements = object.accessibilityElements {
+                for case let element as NSObject in elements { visit(element, depth: depth + 1) }
+            } else {
+                let count = object.accessibilityElementCount()
+                if count != NSNotFound, count > 0 {
+                    for i in 0..<min(count, 500) {
+                        if let element = object.accessibilityElement(at: i) as? NSObject { visit(element, depth: depth + 1) }
+                    }
+                }
+            }
+            if let view = object as? UIView {
+                for sub in view.subviews { visit(sub, depth: depth + 1) }
+            }
+        }
+        visit(window, depth: 0)
+
+        func tabTitles(_ tabs: [UITab]) {
+            for tab in tabs where !tab.isHidden {
+                out.insert(tab.title)
+                if let group = tab as? UITabGroup { tabTitles(group.children) }
+            }
+        }
+        func controllers(_ vc: UIViewController) {
+            if let tabs = (vc as? UITabBarController)?.tabs { tabTitles(tabs) }
+            vc.children.forEach(controllers)
+        }
+        if let root = window.rootViewController { controllers(root) }
+        return out
     }
 
     private static func topUp(_ wanted: UIEdgeInsets, from actual: UIEdgeInsets) -> UIEdgeInsets {
