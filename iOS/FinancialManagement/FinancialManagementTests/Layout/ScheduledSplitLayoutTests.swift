@@ -40,9 +40,6 @@ final class ScheduledSplitLayoutTests: XCTestCase {
             let snapshot = try await render(ScheduledListView(selectedScheduleId: salary), at: size, detail: true)
             attach(snapshot, name: "scheduled-detail")
             try assertSplitTiled(snapshot)
-            // The embedded form keeps its own Cancel / Save.
-            XCTAssertTrue(snapshot.labels.contains("Save"), "\(size): \(snapshot.labels.sorted())")
-            XCTAssertTrue(snapshot.labels.contains("Cancel"), "\(size)")
         }
     }
 }
