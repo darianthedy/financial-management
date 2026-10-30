@@ -9,7 +9,7 @@ import XCTest
 final class SheetFoldLayoutTests: XCTestCase {
     /// Drives the flip and records what the sheet saw.
     @Observable
-    private final class Scenario {
+    final class Scenario {
         var sizeClass: UserInterfaceSizeClass = .compact
         var shouldOpen = true
         var draftsSeen: [UUID] = []
