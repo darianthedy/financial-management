@@ -53,37 +53,17 @@ struct TagFormSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.appBackground.ignoresSafeArea()
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            cardField(title: "Name") {
-                                TextField("Name", text: $name)
-                                    .textFieldStyle(.plain)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 44)
-                                    .background(Color.appBackground)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                            .strokeBorder(Color.appInput, lineWidth: 1)
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.never)
-                            }
-
-                            if let error = errorMessage {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.appDanger)
-                            }
-                        }
-                        .padding(20)
-                        .appCardSurface()
+                if let error = errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(Color.appDanger)
                     }
-                    .padding(16)
                 }
             }
             .navigationTitle(title)
@@ -112,18 +92,6 @@ struct TagFormSheet: View {
                 Button("Discard Changes", role: .destructive) { dismiss() }
                 Button("Keep Editing", role: .cancel) {}
             }
-        }
-    }
-
-    private func cardField<Content: View>(
-        title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(Color.appForeground)
-            content()
         }
     }
 
