@@ -54,7 +54,7 @@ struct AccountListView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingAddSheet) {
+        .foldSafeSheet(isPresented: $showingAddSheet) {
             AccountFormSheet {
                 await viewModel.load()
             }

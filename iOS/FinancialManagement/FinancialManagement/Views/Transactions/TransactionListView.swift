@@ -217,7 +217,7 @@ struct TransactionListView: View {
                         .duoVisibilityPriority(TransactionsToolbar.priority(of: .add))
                 }
             }
-            .sheet(isPresented: $showingForm) {
+            .foldSafeSheet(isPresented: $showingForm) {
                 NavigationStack {
                     TransactionFormView(
                         defaultAccountId: appState.defaultAccountId,
@@ -228,7 +228,7 @@ struct TransactionListView: View {
                     }
                 }
             }
-            .sheet(item: $editingTransaction) { txn in
+            .foldSafeSheet(item: $editingTransaction) { txn in
                 NavigationStack {
                     TransactionFormView(
                         editing: txn,
@@ -239,20 +239,19 @@ struct TransactionListView: View {
                     }
                 }
             }
-            .sheet(item: $installmentSource) { source in
+            .foldSafeSheet(item: $installmentSource, sizing: .page) { source in
                 CreateInstallmentSheet(source: source) {
                     await viewModel.load()
                 }
             }
-            .sheet(isPresented: $showingFilters) {
+            .foldSafeSheet(isPresented: $showingFilters, sizing: .page) {
                 TransactionFilterSheet(initial: viewModel.filters) { newFilters in
                     viewModel.applyFilters(newFilters)
                     searchText = newFilters.search ?? ""
                 }
-                // A large centered card on the inner display; no-op on iPhone.
-                .presentationSizing(.page)
             }
             .task { await viewModel.load() }
+            .reloadsAfterFoldedSheet { await viewModel.load() }
             .refreshable { await viewModel.load() }
             // Shared delete confirmation for both the row ⋮ menu and the swipe
             // action (HIG: confirm permanent deletes).

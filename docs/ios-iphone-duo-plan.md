@@ -321,7 +321,7 @@ This is a grouped `List` with no split. On regular width the list is constrained
 | I-B | The system moves the sheet into one region, away from the fold. **No custom code.** |
 | I-T | The system moves the sheet clear of the fold. Long forms scroll. |
 | Keyboard | Fields stay scrolled into view. `CurrencyField`'s `maxWidth: 150` is acceptable. |
-| Fold / unfold mid-edit | **State must survive.** Each sheet keeps its draft in `@State` or in a view model owned *outside* any size-class branch. Verify that no `if sizeClass` wrapper re-creates the sheet. |
+| Fold / unfold mid-edit | **State must survive.** Each sheet keeps its draft in `@State` or in a view model owned *outside* any size-class branch. A fold re-creates the screens themselves (`SplitRootContainer`, the More ⇄ sidebar swap), so a screen's first-level sheets use `.foldSafeSheet`, presented from above every branch by `ContentRootView`. |
 | Discard dialog | `confirmationDialog`: an action sheet on compact width, a popover on regular. System behavior. |
 
 ### 5.2 Per-sheet notes

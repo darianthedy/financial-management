@@ -50,6 +50,7 @@ struct CategoryPicker: View {
                 await loadCategories()
                 selectedId = newCategoryId
             }
+            .duoSheetSizing()
         }
     }
 

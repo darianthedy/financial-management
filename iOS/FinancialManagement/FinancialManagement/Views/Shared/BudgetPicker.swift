@@ -67,6 +67,7 @@ struct BudgetPicker: View {
                 await load()
                 selectedBudgetId = newBudgetId
             }
+            .duoSheetSizing()
         }
     }
 

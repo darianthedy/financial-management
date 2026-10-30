@@ -149,7 +149,7 @@ struct ScheduledListView: View {
         .onChange(of: selection.selection) { _, selected in
             if selected == nil { selection.isDirty = false }
         }
-        .sheet(item: $editingPending) { txn in
+        .foldSafeSheet(item: $editingPending) { txn in
             NavigationStack {
                 TransactionFormView(
                     editing: txn,
@@ -160,7 +160,7 @@ struct ScheduledListView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingForm) {
+        .foldSafeSheet(isPresented: $showingForm) {
             NavigationStack {
                 ScheduledFormView(
                     defaultAccountId: appState.defaultAccountId,
@@ -170,7 +170,7 @@ struct ScheduledListView: View {
                 }
             }
         }
-        .sheet(item: $editingScheduled) { enriched in
+        .foldSafeSheet(item: $editingScheduled) { enriched in
             NavigationStack {
                 ScheduledFormView(
                     editing: enriched.base,

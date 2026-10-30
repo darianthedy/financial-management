@@ -57,6 +57,7 @@ struct FixedExpensePicker: View {
                 await load()
                 selectedExpenseId = newExpenseId
             }
+            .duoSheetSizing()
         }
     }
 
