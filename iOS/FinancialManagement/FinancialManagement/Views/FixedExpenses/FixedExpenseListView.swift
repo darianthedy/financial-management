@@ -76,7 +76,10 @@ struct FixedExpenseListView: View {
             )
         ) { expenseId in
             if let expense = viewModel.fixedExpenses.first(where: { $0.id == expenseId }) {
-                TransactionListView(initialFilters: Self.linkedTransactionFilters(for: expense))
+                DrilldownTransactionList(
+                    screen: "fixedExpenses", item: expense.id.uuidString,
+                    filters: Self.linkedTransactionFilters(for: expense)
+                )
             }
         }
         .foldSafeSheet(isPresented: $showingForm) {

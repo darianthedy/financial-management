@@ -46,7 +46,7 @@ struct TagsListView: View {
                 description: "Its transactions appear here."
             )
         ) { tag in
-            TransactionListView(initialFilters: filtersFor(tag))
+            DrilldownTransactionList(screen: "tags", item: tag.id.uuidString, filters: filtersFor(tag))
         }
         .foldSafeSheet(item: $formMode) { mode in
             TagFormSheet(mode: mode) { await viewModel.load() }

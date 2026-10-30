@@ -150,7 +150,9 @@ enum SplitSelectionRule {
 
 private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @Environment(\.canTileSplitRoot) private var canTile
+    @Environment(\.foldKeptModels) private var keptModels
     @Binding var selection: Item?
+    let storageKey: String
     let items: [Item]
     let id: (Item) -> String
     let placeholder: SplitPlaceholder
@@ -165,6 +167,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         storageKey: String, placeholder: SplitPlaceholder, detail: @escaping (Item) -> Detail
     ) {
         _selection = selection
+        self.storageKey = storageKey
         self.items = items
         self.id = id
         self.placeholder = placeholder
@@ -219,6 +222,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         }
         .onChange(of: selection) { _, new in
             storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
+            if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
         }
     }
 
