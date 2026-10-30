@@ -30,6 +30,8 @@ Measured baselines from this repo:
 - **Layout checks don't wait.** The Duo work *is* layout work. If layout were checked only at the end, a wrong assumption made in PR 3 would surface after PRs 4–20 had built on it. Every one of those would then need rework, which costs far more CI time than checking as we go. So layout is verified on every PR, but **cheaply**: as hosted unit tests (D0.3) that render real screens in-process with fixture data and assert on frames. They need no app relaunch, no login and no network, and add seconds per test, not minutes.
 - **Why gates still matter.** The hosted tests can't see what the system draws, such as Liquid Glass bars, the vertical rail and sheet chrome. The 4 gate runs cover that with real screenshots.
 
+**Gate G2 finding: regular-width renders need an iPad.** On the Duo simulator the hosted scene is the 466 pt outer display, so T1 and T2 renders at inner sizes inherit its rail: an 84 pt inset, a floating vertical toolbar and a narrowed list. Column *positions* are still valid there; what's *inside* a column is not. Run the gate a second time with `device=iPad` (iOS 27.1 ships only the Duo, so this uses iOS 27.0) to judge regular-width content and the Summary inspector. `LayoutHarness.sceneFits` skips the in-column checks where they'd be wrong.
+
 ### 1.3 Other CI rules
 
 1. **Build once, test twice.** Run `build-for-testing` once, then `test-without-building` against the same DerivedData. Never run a bare `xcodebuild test` after a separate build.

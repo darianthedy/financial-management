@@ -248,6 +248,9 @@ private struct ScheduledRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(Color.appMutedForeground)
+                // One line in a narrow split column, not one word per line.
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .padding(.top, 1)
             }
 

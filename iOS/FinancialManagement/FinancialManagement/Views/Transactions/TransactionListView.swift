@@ -559,11 +559,59 @@ struct TransactionListView: View {
     /// Sticky per-day heading: the absolute date on the left, the item count and
     /// the day's net (green/red, muted when it nets to zero) on the right.
     private func dateGroupHeader(_ group: TransactionDateGroup) -> some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                // A narrow split column drops the count and the row-aligned
+                // amount column rather than wrapping the day's net.
+                ViewThatFits(in: .horizontal) {
+                    fullDateGroupHeader(group)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        dateLabel(group)
+                        Spacer(minLength: 8)
+                        AmountColumnView(
+                            minorUnits: group.net,
+                            sign: netSign(group.net),
+                            currencyCode: appState.defaultCurrency
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(netColor(group.net))
+                    }
+                }
+            } else {
+                fullDateGroupHeader(group)
+            }
+        }
+        .textCase(nil)
+        // Match the rows' horizontal inset (we zero the header's list insets in
+        // the Section so the background can reach the edges) plus a little
+        // vertical breathing room.
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Opaque backdrop so the pinned header doesn't let the rows scrolling
+        // underneath it show through.
+        .background(Color.appBackground)
+        // System-style hairline under the pinned header, matching the separator
+        // UIKit draws beneath plain-list section headers.
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.appBorder)
+                .frame(height: 0.5)
+        }
+    }
+
+    private func dateLabel(_ group: TransactionDateGroup) -> some View {
+        Text(group.dateLabel)
+            .font(.caption.weight(.bold))
+            .textCase(.uppercase)
+            .foregroundStyle(Color.appMutedForeground)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func fullDateGroupHeader(_ group: TransactionDateGroup) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(group.dateLabel)
-                .font(.caption.weight(.bold))
-                .textCase(.uppercase)
-                .foregroundStyle(Color.appMutedForeground)
+            dateLabel(group)
             Spacer()
             Text("\(group.count) \(group.count == 1 ? "item" : "items")")
                 .font(.caption)
@@ -585,23 +633,6 @@ struct TransactionListView: View {
                     .foregroundStyle(netColor(group.net))
                 Color.clear.frame(width: 44, height: 0)
             }
-        }
-        .textCase(nil)
-        // Match the rows' horizontal inset (we zero the header's list insets in
-        // the Section so the background can reach the edges) plus a little
-        // vertical breathing room.
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Opaque backdrop so the pinned header doesn't let the rows scrolling
-        // underneath it show through.
-        .background(Color.appBackground)
-        // System-style hairline under the pinned header, matching the separator
-        // UIKit draws beneath plain-list section headers.
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.appBorder)
-                .frame(height: 0.5)
         }
     }
 

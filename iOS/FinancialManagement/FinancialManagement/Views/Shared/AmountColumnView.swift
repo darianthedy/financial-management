@@ -40,9 +40,14 @@ struct AmountColumnView: View {
                 }
             }
             .monospacedDigit()
+            // Money never wraps or truncates; its neighbours give way instead.
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
         } else {
             Text(sign + parts.symbol + parts.number)
                 .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
     }
 }
