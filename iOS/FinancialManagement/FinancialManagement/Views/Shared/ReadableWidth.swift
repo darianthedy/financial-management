@@ -34,6 +34,10 @@ private struct ReadableContentMargins: ViewModifier {
                 ReadableWidth.margin(width: width, sizeClass: horizontalSizeClass),
                 for: .scrollContent
             )
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            // Content margins are measured from the list's edges, not from its
+            // safe area, so include a vertical bar's inset in the width.
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width + $0.safeAreaInsets.leading + $0.safeAreaInsets.trailing
+            } action: { width = $0 }
     }
 }
