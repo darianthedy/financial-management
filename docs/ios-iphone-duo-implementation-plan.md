@@ -164,7 +164,7 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
 **D5.1 Sheet sizing** · S
 - **Scope:** `.presentationSizing(.form)` on F1 and F5–F10 (F2 and F4 use `.page`); category swatches in an even column count (6 on compact, 8 when form-sized); an audit that sheet draft state lives outside size-class branches.
 - **Tests:** a sheet survives a trait flip with its draft intact.
-- **Audit finding:** a fold re-creates the screens, so every draft in a plain `.sheet` was lost. Screens now present through `.foldSafeSheet` (`FoldSafeSheetHost`, owned by `ContentRootView`). Summary stays a plain sheet: it shows live data and has no draft.
+- **Audit finding:** a fold re-creates the screens, so every draft in a plain `.sheet` was lost. Screens now present through `.foldSafeSheet` (`FoldSafeSheetHost`, owned by `ContentRootView`). Summary stays a plain sheet: it shows live data and has no draft. `ContentRootView` also owns the Transactions tab's list model, so its filters and search survive a fold.
 
 **D5.2 Readable width** · S
 - **Scope:** content margins derived from the width for Settings and More on regular width.
