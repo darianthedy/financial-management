@@ -10,7 +10,8 @@ import SwiftUI
 /// action, as before.
 struct FixedExpenseListView: View {
     @Environment(AppState.self) private var appState
-    @State private var viewModel = FixedExpenseListViewModel()
+    @Environment(\.foldKeptModels) private var keptModels
+    @State private var localModel = FixedExpenseListViewModel()
     @State private var showingForm = false
     @State private var editingExpense: FixedExpense?
     /// The expense we're adding a linked (paid) transaction for.
@@ -25,6 +26,8 @@ struct FixedExpenseListView: View {
     }
 
     private var currencyCode: String { appState.defaultCurrency }
+
+    private var viewModel: FixedExpenseListViewModel { keptModels?.fixedExpenses ?? localModel }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,7 +110,6 @@ struct FixedExpenseListView: View {
         // treats as still loading, so drop the selection explicitly.
         .onChange(of: viewModel.yearMonth) { selectedExpenseId = nil }
         .task { await viewModel.load() }
-        .reloadsAfterFoldedSheet { await viewModel.load() }
         // Confirm the swipe delete (HIG: confirm permanent deletes), matching the
         // other destructive swipes across the app.
         .alert(

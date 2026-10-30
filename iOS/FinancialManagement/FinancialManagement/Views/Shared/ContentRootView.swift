@@ -24,6 +24,8 @@ struct ContentRootView: View {
     /// keeps its filters and search, and a Filters sheet left open through the
     /// fold still applies to the list on screen.
     @State private var transactionList = TransactionListViewModel()
+    /// Keeps the Budgets and Fixed Expenses month across a fold.
+    @State private var keptModels = FoldKeptModels()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -85,6 +87,7 @@ struct ContentRootView: View {
         .hostsFoldSafeSheets()
         // Outside the sheet host too, so the sheets inherit it.
         .environment(\.transactionDrafts, transactionDrafts)
+        .environment(\.foldKeptModels, keptModels)
     }
 
     private func resolveRoute(for sizeClass: UserInterfaceSizeClass?) {
