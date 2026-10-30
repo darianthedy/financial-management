@@ -59,6 +59,8 @@ final class TransactionListViewModel {
     var isLoadingMore = false
     var errorMessage: String?
     var navigationDirection: Edge = .trailing
+    /// Whether the Summary is open. Kept here so it survives a fold.
+    var isShowingSummary = false
 
     /// When set, the list is scoped to a single account (its detail screen).
     let scopedAccountId: UUID?

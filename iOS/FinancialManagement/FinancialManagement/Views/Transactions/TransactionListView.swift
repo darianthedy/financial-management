@@ -15,7 +15,6 @@ struct TransactionListView: View {
     @State private var editingTransaction: Transaction?
     @State private var installmentSource: Transaction?
     @State private var showingFilters = false
-    @State private var showingSummary: Bool
     /// Whether the tab root is wide enough for the Summary inspector
     /// (`SummaryPresentation`); nil until measured. A Bool rather than the
     /// width, so only crossing the threshold re-renders the screen.
@@ -49,10 +48,20 @@ struct TransactionListView: View {
         _searchText = State(initialValue: model.filters.search ?? "")
         _selection = State(initialValue: GuardedSelection(selection: isTabRoot ? selectedTransactionId : nil))
         self.isTabRoot = isTabRoot
-        _showingSummary = State(initialValue: showsSummary)
+        if showsSummary { model.isShowingSummary = true }
     }
 
     private var drafts: TransactionEditorDrafts { sharedDrafts ?? localDrafts }
+
+    /// On the model, so an open Summary stays open through a fold.
+    private var showingSummary: Bool {
+        get { viewModel.isShowingSummary }
+        nonmutating set { viewModel.isShowingSummary = newValue }
+    }
+
+    private var showingSummaryBinding: Binding<Bool> {
+        Binding(get: { showingSummary }, set: { showingSummary = $0 })
+    }
 
     /// Whether this list tiles list | detail (tab root on regular width).
     private var tilesDetail: Bool { isTabRoot && canTileSplitRoot }
@@ -99,10 +108,10 @@ struct TransactionListView: View {
                 } action: { fitsSummaryInspector = $0 }
         } else if isTabRoot {
             // Compact: the sheet, as before. No `.inspector` at all here.
-            splitScreen.sheet(isPresented: $showingSummary) { summaryView }
+            splitScreen.sheet(isPresented: showingSummaryBinding) { summaryView }
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
-            screen.sheet(isPresented: $showingSummary) { summaryView }
+            screen.sheet(isPresented: showingSummaryBinding) { summaryView }
         }
     }
 
