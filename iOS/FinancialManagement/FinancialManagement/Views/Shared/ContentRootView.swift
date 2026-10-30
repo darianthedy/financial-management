@@ -17,6 +17,9 @@ struct ContentRootView: View {
     @SceneStorage("root.tab") private var selection: AppTab = .dashboard
     /// What is pushed on More's stack (compact width only).
     @State private var morePath: [MoreDestination] = []
+    /// The Transactions detail form's draft, owned above every size-class
+    /// branch so a fold / unfold keeps unsaved edits (D3.1).
+    @State private var transactionDrafts = TransactionEditorDrafts()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -34,7 +37,7 @@ struct ContentRootView: View {
             }
             // web ArrowLeftRight
             Tab("Transactions", systemImage: "arrow.left.arrow.right", value: AppTab.transactions) {
-                NavigationStack { TransactionListView() }
+                SplitRootContainer { TransactionListView(isTabRoot: true) }
             }
             // web PiggyBank (no SF piggy-bank symbol; target reads as a budget goal)
             Tab("Budgets", systemImage: "target", value: AppTab.budgets) {
@@ -61,6 +64,7 @@ struct ContentRootView: View {
                 }
             }
         }
+        .environment(\.transactionDrafts, transactionDrafts)
         .tabViewStyle(.sidebarAdaptable)
         .duoSidebarTabPlacement()
         .tabViewSidebarBottomBar {

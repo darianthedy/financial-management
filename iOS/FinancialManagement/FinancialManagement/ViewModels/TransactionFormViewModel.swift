@@ -130,11 +130,19 @@ final class TransactionFormViewModel {
         self.initialSnapshot = currentSnapshot
     }
 
+    /// Set once the edited transaction's tags have loaded. A draft kept across
+    /// a fold (`TransactionEditorDrafts`) re-appears in a new form, whose
+    /// `.task` must not overwrite tag edits with the stored tags again.
+    private(set) var hasLoadedTags = false
+
     func loadTags() async {
-        guard let transaction = editingTransaction else { return }
+        guard let transaction = editingTransaction, !hasLoadedTags else { return }
         do {
-            selectedTags = try await repository.getTagIds(transactionId: transaction.id)
-            initialTags = selectedTags
+            let loaded = try await repository.getTagIds(transactionId: transaction.id)
+            // The user may have picked tags while this was in flight; keep them.
+            if selectedTags == initialTags { selectedTags = loaded }
+            initialTags = loaded
+            hasLoadedTags = true
         } catch {}
     }
 

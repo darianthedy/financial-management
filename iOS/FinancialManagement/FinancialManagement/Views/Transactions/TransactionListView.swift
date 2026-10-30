@@ -1,7 +1,14 @@
 import SwiftUI
 
+/// Transactions (S6). Compact edits a transaction in a sheet, as before. As the
+/// Transactions tab root on regular width (iPhone Duo plan D3.1) tapping a row
+/// opens it in the detail column as an embedded `TransactionFormView`;
+/// switching rows with unsaved edits asks "Discard changes?" first. New still
+/// opens a sheet. Drill-down embeddings (Budgets, Categories, …) never tile.
 struct TransactionListView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.canTileSplitRoot) private var canTileSplitRoot
+    @Environment(\.transactionDrafts) private var sharedDrafts
     @State private var viewModel: TransactionListViewModel
     @State private var showingForm = false
     @State private var editingTransaction: Transaction?
@@ -12,15 +19,40 @@ struct TransactionListView: View {
     /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
     /// and the trailing swipe so they share one confirmation alert.
     @State private var pendingDelete: Transaction?
+    /// The tiled split's selection (transaction ID), guarded against dropping
+    /// edits. Tab root only.
+    @State private var selection: GuardedSelection<UUID>
+    /// Used when no `ContentRootView` provides shared drafts (hosted tests).
+    @State private var localDrafts = TransactionEditorDrafts()
+    /// The Transactions tab root, the only embedding that adopts the split.
+    private let isTabRoot: Bool
 
     init(
         scopedAccountId: UUID? = nil,
-        initialFilters: TransactionFilters? = nil
+        initialFilters: TransactionFilters? = nil,
+        isTabRoot: Bool = false,
+        selectedTransactionId: UUID? = nil
     ) {
         _viewModel = State(initialValue: TransactionListViewModel(
             scopedAccountId: scopedAccountId, initialFilters: initialFilters
         ))
         _searchText = State(initialValue: initialFilters?.search ?? "")
+        _selection = State(initialValue: GuardedSelection(selection: isTabRoot ? selectedTransactionId : nil))
+        self.isTabRoot = isTabRoot
+    }
+
+    private var drafts: TransactionEditorDrafts { sharedDrafts ?? localDrafts }
+
+    /// Whether this list tiles list | detail (tab root on regular width).
+    private var tilesDetail: Bool { isTabRoot && canTileSplitRoot }
+
+    /// Edit opens the transaction in the detail column when tiled, else a sheet.
+    private func edit(_ txn: Transaction) {
+        if tilesDetail {
+            selection.request(txn.id)
+        } else {
+            editingTransaction = txn
+        }
     }
 
     private var isScoped: Bool { viewModel.scopedAccountId != nil }
@@ -34,6 +66,59 @@ struct TransactionListView: View {
     }
 
     var body: some View {
+        if isTabRoot {
+            screen
+                .splitDetail(
+                    selection: $selection.selection,
+                    in: selectableIds,
+                    id: \.uuidString,
+                    storageKey: "transactions",
+                    placeholder: SplitPlaceholder(
+                        title: "Select a Transaction",
+                        systemImage: "arrow.left.arrow.right",
+                        description: "Edit a transaction here."
+                    )
+                ) { id in
+                    detailEditor(for: id)
+                }
+                .discardChangesDialog(for: $selection)
+                // Nothing selected means no editor, so nothing can be dirty.
+                .onChange(of: selection.selection) { _, selected in
+                    if selected == nil {
+                        selection.isDirty = false
+                        drafts.discard()
+                    }
+                }
+        } else {
+            screen
+        }
+    }
+
+    /// The loaded rows, plus a kept draft whose row isn't loaded (yet), so the
+    /// split doesn't clear the selection under it.
+    private var selectableIds: [UUID] {
+        let ids = viewModel.transactions.map(\.id)
+        guard let draft = drafts.transaction, !ids.isEmpty, !ids.contains(draft.id) else { return ids }
+        return ids + [draft.id]
+    }
+
+    /// The embedded edit form for the selected transaction, on the shared
+    /// draft so a fold / unfold keeps its edits.
+    @ViewBuilder
+    private func detailEditor(for id: UUID) -> some View {
+        if let txn = viewModel.transactions.first(where: { $0.id == id }) ?? drafts.transaction(withId: id) {
+            TransactionFormView(
+                model: drafts.model(
+                    for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces
+                ),
+                onSaved: { await viewModel.load() },
+                onClose: { selection.close() },
+                isDirty: $selection.isDirty
+            )
+        }
+    }
+
+    private var screen: some View {
         content
             // The main list uses the native large title; the (dormant) scoped
             // account-detail embedding keeps the inline title it had before.
@@ -113,6 +198,8 @@ struct TransactionListView: View {
             ) { txn in
                 Button("Cancel", role: .cancel) {}
                 Button("Delete", role: .destructive) {
+                    // Deleting the transaction being edited drops its draft.
+                    if selection.selection == txn.id { selection.close() }
                     Task { await viewModel.deleteTransaction(txn) }
                 }
             } message: { _ in
@@ -347,12 +434,13 @@ struct TransactionListView: View {
             showDate: false,
             widestNumber: widestAmountBody,
             onCreateInstallment: { installmentSource = txn },
-            onEdit: { editingTransaction = txn },
+            onEdit: { edit(txn) },
             onDelete: { pendingDelete = txn }
         )
-            .listRowBackground(txn.status == .pending ? Color.appMuted : Color.clear)
+            .layoutProbe("transactions.row.\(txn.description ?? txn.type.rawValue)", interactive: true)
+            .listRowBackground(rowBackground(for: txn))
             .contentShape(Rectangle())
-            .onTapGesture { editingTransaction = txn }
+            .onTapGesture { edit(txn) }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 if txn.status == .pending {
                     Button {
@@ -386,6 +474,15 @@ struct TransactionListView: View {
                     Task { await viewModel.loadMore() }
                 }
             }
+    }
+
+    /// Pending rows are muted; in a tiled split the selected row is
+    /// highlighted instead (as `.splitRowSelected` does for other lists).
+    private func rowBackground(for txn: Transaction) -> Color {
+        if tilesDetail && selection.selection == txn.id {
+            return Color.appPrimary.opacity(0.15)
+        }
+        return txn.status == .pending ? Color.appMuted : Color.clear
     }
 
     // MARK: - Date group header (web: DateGroupHeader)

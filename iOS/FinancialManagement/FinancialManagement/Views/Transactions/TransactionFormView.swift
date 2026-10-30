@@ -1,11 +1,18 @@
 import SwiftUI
 
+/// Create / edit a transaction. Presented as a sheet, or embedded in the
+/// Transactions detail column on regular width (iPhone Duo plan D3.1): there
+/// the view model comes from `TransactionEditorDrafts` so edits survive a fold,
+/// `onClose` replaces `dismiss`, and `isDirty` reports unsaved changes so the
+/// list can confirm before switching rows.
 struct TransactionFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @State private var viewModel: TransactionFormViewModel
     @State private var showDiscardConfirm = false
     var onSaved: (() async -> Void)?
+    private let onClose: (() -> Void)?
+    private let isDirty: Binding<Bool>?
 
     init(
         editing transaction: Transaction? = nil,
@@ -27,6 +34,26 @@ struct TransactionFormView: View {
             prefillDate: prefillDate
         ))
         self.onSaved = onSaved
+        self.onClose = nil
+        self.isDirty = nil
+    }
+
+    /// Edits through an existing (draft) view model, embedded in a split.
+    init(
+        model: TransactionFormViewModel,
+        onSaved: (() async -> Void)? = nil,
+        onClose: (() -> Void)? = nil,
+        isDirty: Binding<Bool>? = nil
+    ) {
+        _viewModel = State(initialValue: model)
+        self.onSaved = onSaved
+        self.onClose = onClose
+        self.isDirty = isDirty
+    }
+
+    /// Dismisses the sheet, or hands back to the embedding split view.
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 
     var body: some View {
@@ -103,7 +130,7 @@ struct TransactionFormView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
-                    if viewModel.hasChanges { showDiscardConfirm = true } else { dismiss() }
+                    if viewModel.hasChanges { showDiscardConfirm = true } else { close() }
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
@@ -114,7 +141,7 @@ struct TransactionFormView: View {
                         await viewModel.save()
                         if viewModel.didSave {
                             await onSaved?()
-                            dismiss()
+                            close()
                         }
                     }
                 }
@@ -122,13 +149,19 @@ struct TransactionFormView: View {
             }
         }
         .interactiveDismissDisabled(viewModel.hasChanges)
+        // Embedded and pushed (a kept draft after a fold), Back would drop the
+        // edits unasked; Cancel / Save are the way out, as in the sheet.
+        .navigationBarBackButtonHidden(onClose != nil)
         .confirmationDialog(
             "Discard changes?",
             isPresented: $showDiscardConfirm,
             titleVisibility: .visible
         ) {
-            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Discard Changes", role: .destructive) { close() }
             Button("Keep Editing", role: .cancel) {}
+        }
+        .onChange(of: viewModel.hasChanges, initial: true) { _, dirty in
+            if let isDirty, isDirty.wrappedValue != dirty { isDirty.wrappedValue = dirty }
         }
         .task { await viewModel.loadTags() }
     }
