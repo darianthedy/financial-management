@@ -22,7 +22,6 @@ final class BudgetListViewModel {
 
     private let repository = BudgetRepository()
     private let installmentRepository = InstallmentRepository()
-    private let supabase = SupabaseService.shared.client
     private let realtime = RealtimeTableWatch()
     private var progressCache: [String: [BudgetProgress]] = [:]
     private var installmentsCache: [String: [ActiveInstallment]] = [:]

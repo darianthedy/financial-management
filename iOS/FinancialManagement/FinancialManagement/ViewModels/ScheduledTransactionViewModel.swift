@@ -25,7 +25,6 @@ final class ScheduledTransactionViewModel {
     var currencyCode = "USD"
 
     private let repository = ScheduledTransactionRepository()
-    private let supabase = SupabaseService.shared.client
     private let realtime = RealtimeTableWatch()
 
     /// Pending IDs already surfaced to the user. `nil` until the first load so

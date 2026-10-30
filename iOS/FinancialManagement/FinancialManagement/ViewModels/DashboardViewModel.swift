@@ -18,7 +18,6 @@ final class DashboardViewModel {
     var navigationDirection: Edge = .trailing
 
     private let repository = DashboardRepository()
-    private let supabase = SupabaseService.shared.client
     private let realtime = RealtimeTableWatch()
     private var cache: [String: DashboardData] = [:]
 

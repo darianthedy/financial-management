@@ -10,7 +10,6 @@ final class CategoryListViewModel {
     var errorMessage: String?
 
     private let repository = CategoryRepository()
-    private let supabase = SupabaseService.shared.client
     private let realtime = RealtimeTableWatch()
 
     func load() async {
