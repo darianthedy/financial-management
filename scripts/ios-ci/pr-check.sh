@@ -64,9 +64,22 @@ if [ "${GATE:-0}" = "1" ]; then
 fi
 
 status=0
-env ${gate_env[@]+"${gate_env[@]}"} xcodebuild test-without-building "${common[@]}" \
+# A hung test is killed after 3 min (with a spindump in the xcresult) and
+# reported as failed, instead of stalling the job to its 30-min timeout. Each
+# test case is echoed as it runs, so the job log names a stalled one. A
+# main-thread hang escapes those allowances, so the whole step is also capped
+# at 15 min (perl's alarm: macOS has no `timeout`); the suite takes ~2.
+set +e
+env ${gate_env[@]+"${gate_env[@]}"} perl -e 'alarm shift; exec @ARGV' 900 \
+  xcodebuild test-without-building "${common[@]}" \
   -only-testing:FinancialManagementTests \
-  -resultBundlePath "$out/tests.xcresult" >"$out/test.log" 2>&1 || status=$?
+  -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 180 \
+  -maximum-test-execution-time-allowance 300 \
+  -resultBundlePath "$out/tests.xcresult" 2>&1 \
+  | tee "$out/test.log" | grep --line-buffered -E "^Test Case .*(started|passed|failed)"
+status=${PIPESTATUS[0]}
+set -e
 
 grep -E "Test Case .*failed|error:" "$out/test.log" | head -100 || true
 {

@@ -16,19 +16,22 @@ final class TransactionsSplitLayoutTests: XCTestCase {
 
     private func render(
         selected: UUID? = nil, drafts: TransactionEditorDrafts? = nil,
-        at size: LayoutSize
+        showsSummary: Bool = false, at size: LayoutSize
     ) async throws -> LayoutSnapshot {
         let appState = AppState()
         await appState.loadCurrencyData()
         let row = row
         let drafts = drafts ?? TransactionEditorDrafts()
         return try await LayoutHarness.render(
-            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: selected) }
+            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: selected, showsSummary: showsSummary) }
                 .environment(\.transactionDrafts, drafts)
                 .environment(appState)
                 .environment(ThemeManager()),
             at: size,
-            until: { $0[row] != nil && (selected == nil || $0["split.detail"] != nil) }
+            until: {
+                $0[row] != nil && (selected == nil || $0["split.detail"] != nil)
+                    && (!showsSummary || $0["transactions.summary"] != nil)
+            }
         )
     }
 
@@ -68,5 +71,44 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         XCTAssertTrue(kept === model)
         XCTAssertEqual(kept.description, "Top up (October)")
         XCTAssertTrue(kept.hasChanges)
+    }
+
+    /// D3.2: on the inner display in landscape, Summary opens as a trailing
+    /// inspector column and list | detail give up that room. The inspector's
+    /// content is hosted apart from the screen, so its own probe frame isn't in
+    /// screen coordinates; the column itself is checked on the real bar at G2.
+    func testSummaryIsATrailingInspectorInLandscape() async throws {
+        let size = LayoutSize.innerLandscape
+        let roomForInspector = SummaryPresentation.inspectorWidth.min - 120
+        let appState = try await loadedAppState()
+        let snapshot = try await LayoutHarness.render(
+            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: topUp, showsSummary: true) }
+                .environment(\.transactionDrafts, TransactionEditorDrafts())
+                .environment(appState)
+                .environment(ThemeManager()),
+            at: size,
+            until: { frames in
+                // Wait out the inspector's presentation animation.
+                frames["transactions.summary"] != nil
+                    && (frames["split.detail"]?.frame.maxX ?? .infinity) <= size.size.width - roomForInspector
+            }
+        )
+        attach(snapshot, name: "transactions-summary")
+        XCTAssertNotNil(snapshot.frames["transactions.summary"], "the Summary never rendered")
+        let list = try snapshot.frame("split.list")
+        let detail = try snapshot.frame("split.detail")
+        XCTAssertLessThanOrEqual(list.maxX, detail.minX + 1)
+        XCTAssertLessThanOrEqual(
+            detail.maxX, size.size.width - roomForInspector,
+            "list | detail didn't make room for the inspector"
+        )
+        XCTAssertGreaterThanOrEqual(detail.width, 280, "the detail column was squeezed")
+        assertNoInteractiveOverlap(snapshot)
+    }
+
+    private func loadedAppState() async throws -> AppState {
+        let appState = AppState()
+        await appState.loadCurrencyData()
+        return appState
     }
 }
