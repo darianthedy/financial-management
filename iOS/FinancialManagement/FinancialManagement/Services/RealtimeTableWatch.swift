@@ -12,6 +12,7 @@ import Supabase
 @MainActor
 final class RealtimeTableWatch {
     private static var queue: Task<Void, Never>?
+    private static var realtime: RealtimeClientV2 { SupabaseService.shared.client.realtimeV2 }
 
     /// Returns when the calling task is cancelled. Call it from a view's
     /// `.task`, so the watch ends when the view disappears.
@@ -31,8 +32,8 @@ final class RealtimeTableWatch {
         tasks.forEach { $0.cancel() }
         await Self.inOrder {
             // A newer watch may already own this topic.
-            if supabase.realtimeV2.channels[channel.topic] === channel {
-                await supabase.realtimeV2.removeChannel(channel)
+            if Self.realtime.channels[channel.topic] === channel {
+                await Self.realtime.removeChannel(channel)
             }
         }
     }
@@ -42,11 +43,11 @@ final class RealtimeTableWatch {
         tables: [String],
         onChange: @escaping @MainActor () async -> Void
     ) async -> (RealtimeChannelV2, [Task<Void, Never>]) {
-        if let leftover = supabase.realtimeV2.channels["realtime:\(topic)"] {
-            await supabase.realtimeV2.removeChannel(leftover)
+        if let leftover = realtime.channels["realtime:\(topic)"] {
+            await realtime.removeChannel(leftover)
         }
 
-        let channel = supabase.realtimeV2.channel(topic)
+        let channel = realtime.channel(topic)
         var tasks = tables.map { table in
             let changes = channel.postgresChange(AnyAction.self, schema: "public", table: table)
             return Task { @MainActor in

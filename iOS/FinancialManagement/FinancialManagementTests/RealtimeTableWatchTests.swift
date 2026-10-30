@@ -7,6 +7,7 @@ import XCTest
 @MainActor
 final class RealtimeTableWatchTests: XCTestCase {
     private let topic = "realtime-table-watch-test"
+    private var realtime: RealtimeClientV2 { SupabaseService.shared.client.realtimeV2 }
     private var key: String { "realtime:\(topic)" }
 
     private func start() -> Task<Void, Never> {
@@ -24,21 +25,21 @@ final class RealtimeTableWatchTests: XCTestCase {
 
     func testNewWatchReplacesAJoiningChannel() async throws {
         let first = start()
-        try await poll { supabase.realtimeV2.channels[key] != nil }
-        let firstChannel = try XCTUnwrap(supabase.realtimeV2.channels[key])
+        try await poll { realtime.channels[key] != nil }
+        let firstChannel = try XCTUnwrap(realtime.channels[key])
 
         let second = start()
-        try await poll { supabase.realtimeV2.channels[key] !== firstChannel }
-        let secondChannel = try XCTUnwrap(supabase.realtimeV2.channels[key])
+        try await poll { realtime.channels[key] !== firstChannel }
+        let secondChannel = try XCTUnwrap(realtime.channels[key])
         XCTAssertFalse(secondChannel === firstChannel)
 
         // The old screen leaves after the new one arrived, as in a fold.
         first.cancel()
         await first.value
-        XCTAssertTrue(supabase.realtimeV2.channels[key] === secondChannel)
+        XCTAssertTrue(realtime.channels[key] === secondChannel)
 
         second.cancel()
         await second.value
-        XCTAssertNil(supabase.realtimeV2.channels[key])
+        XCTAssertNil(realtime.channels[key])
     }
 }
