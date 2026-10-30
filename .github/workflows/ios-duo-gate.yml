@@ -10,11 +10,15 @@ name: iOS Duo gate
 
 on:
   workflow_dispatch:
+    inputs:
+      device:
+        description: Simulator device name to match. An iPad (e.g. "iPad Pro") has no outer-display rail, to tell render artifacts from real bugs.
+        default: Duo
   pull_request:
     types: [labeled]
 
 concurrency:
-  group: ios-duo-gate-${{ github.head_ref || github.ref }}
+  group: ios-duo-gate-${{ github.head_ref || github.ref }}-${{ inputs.device || 'Duo' }}
   cancel-in-progress: true
 
 jobs:
@@ -43,6 +47,8 @@ jobs:
           restore-keys: spm-${{ runner.os }}-
 
       - name: Build, test and capture screens
+        env:
+          DEVICE_FILTER: ${{ inputs.device || 'Duo' }}
         run: GATE=1 bash ../../scripts/ios-ci/pr-check.sh "$RUNNER_TEMP/gate"
 
       - name: Summarize

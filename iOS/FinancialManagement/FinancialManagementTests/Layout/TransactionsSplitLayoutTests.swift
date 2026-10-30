@@ -51,6 +51,20 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         }
     }
 
+    /// G2: rows use their column. The plain List's insets take about 32 pt, so
+    /// a row far narrower than its list has lost its title and amount.
+    func testRowsFillTheListColumn() async throws {
+        for size in LayoutSize.all {
+            let snapshot = try await render(at: size)
+            let list = try snapshot.frame("transactions.list")
+            let rowFrame = try snapshot.frame(row)
+            XCTAssertGreaterThanOrEqual(
+                rowFrame.width, list.width - 60,
+                "row \(rowFrame) in list \(list) at \(size)"
+            )
+        }
+    }
+
     /// Unfold → edit → fold: the compact push re-opens the same draft.
     func testDirtyDetailIsKeptAcrossAFold() async throws {
         let drafts = TransactionEditorDrafts()

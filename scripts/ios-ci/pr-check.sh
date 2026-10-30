@@ -20,7 +20,8 @@ start=$SECONDS
 runtime="$(xcrun simctl list -j runtimes |
   jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version) | last | .identifier')"
 devtype="$(xcrun simctl list -j devicetypes |
-  jq -r '.devicetypes[] | select(.name | test("Duo"; "i")) | .identifier' | head -1)"
+  jq -r --arg want "${DEVICE_FILTER:-Duo}" \
+    '.devicetypes[] | select(.name | test($want; "i")) | .identifier' | head -1)"
 if [ -z "$devtype" ]; then
   devtype="$(xcrun simctl list -j devicetypes |
     jq -r '[.devicetypes[] | select(.productFamily == "iPhone")] | last | .identifier')"

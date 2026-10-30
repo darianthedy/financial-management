@@ -74,7 +74,7 @@ struct TransactionListView: View {
 
     @ViewBuilder
     var body: some View {
-        if isTabRoot {
+        if isTabRoot && horizontalSizeClass == .regular {
             splitScreen
                 // Summary (F3, D3.2): a trailing inspector column beside the
                 // split on wide regular width, else a sheet exactly as before.
@@ -93,6 +93,9 @@ struct TransactionListView: View {
                 .onGeometryChange(for: Bool.self) {
                     $0.size.width >= SummaryPresentation.minimumInspectorScreenWidth
                 } action: { fitsSummaryInspector = $0 }
+        } else if isTabRoot {
+            // Compact: the sheet, as before. No `.inspector` at all here.
+            splitScreen.sheet(isPresented: $showingSummary) { summaryView }
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
             screen.sheet(isPresented: $showingSummary) { summaryView }
@@ -468,6 +471,7 @@ struct TransactionListView: View {
             }
         }
         .listStyle(.plain)
+        .layoutProbe("transactions.list")
         .overlay {
             if viewModel.transactions.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
