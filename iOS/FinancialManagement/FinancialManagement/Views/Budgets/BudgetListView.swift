@@ -6,7 +6,8 @@ import SwiftUI
 /// clears it.
 struct BudgetListView: View {
     @Environment(AppState.self) private var appState
-    @State private var viewModel = BudgetListViewModel()
+    @Environment(\.foldKeptModels) private var keptModels
+    @State private var localModel = BudgetListViewModel()
     @State private var formMode: BudgetFormSheet.Mode?
     @State private var drilldown: BudgetDrilldown?
     @State private var installmentSource: Transaction?
@@ -19,6 +20,8 @@ struct BudgetListView: View {
     init(drilldown: BudgetDrilldown? = nil) {
         _drilldown = State(initialValue: drilldown)
     }
+
+    private var viewModel: BudgetListViewModel { keptModels?.budgets ?? localModel }
 
     var body: some View {
         Group {
