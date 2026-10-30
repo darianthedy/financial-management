@@ -18,7 +18,7 @@ final class TransactionsFoldLayoutTests: XCTestCase {
         let row = row
         let model = TransactionListViewModel()
         var filters = TransactionFilters()
-        filters.dateFrom = "2020-01-01"
+        filters.dateFrom = Date(timeIntervalSince1970: 0)
         filters.search = "Top up"
         model.applyFilters(filters)
 
