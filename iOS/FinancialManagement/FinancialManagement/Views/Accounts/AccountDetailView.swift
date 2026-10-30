@@ -65,7 +65,7 @@ struct AccountDetailView: View {
                     .disabled(viewModel.account == nil)
             }
         }
-        .sheet(isPresented: $showingEditSheet) {
+        .foldSafeSheet(isPresented: $showingEditSheet) {
             if let account = viewModel.account {
                 AccountFormSheet(account: account) {
                     await viewModel.load()
@@ -73,6 +73,7 @@ struct AccountDetailView: View {
             }
         }
         .task { await viewModel.load() }
+        .reloadsAfterFoldedSheet { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
 }

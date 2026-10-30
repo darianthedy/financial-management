@@ -73,6 +73,7 @@ struct FixedExpenseNamePicker: View {
                     selectedName = created.name
                 }
             }
+            .duoSheetSizing()
         }
     }
 

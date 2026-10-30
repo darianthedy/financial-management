@@ -84,6 +84,7 @@ struct BudgetNamePicker: View {
                     selectedName = created.budgetName
                 }
             }
+            .duoSheetSizing()
         }
     }
 

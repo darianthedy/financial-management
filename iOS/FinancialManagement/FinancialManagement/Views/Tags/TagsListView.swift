@@ -48,7 +48,7 @@ struct TagsListView: View {
         ) { tag in
             TransactionListView(initialFilters: filtersFor(tag))
         }
-        .sheet(item: $formMode) { mode in
+        .foldSafeSheet(item: $formMode) { mode in
             TagFormSheet(mode: mode) { await viewModel.load() }
         }
         .alert(

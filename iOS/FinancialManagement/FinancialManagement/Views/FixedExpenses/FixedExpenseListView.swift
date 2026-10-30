@@ -76,12 +76,12 @@ struct FixedExpenseListView: View {
                 TransactionListView(initialFilters: Self.linkedTransactionFilters(for: expense))
             }
         }
-        .sheet(isPresented: $showingForm) {
+        .foldSafeSheet(isPresented: $showingForm) {
             FixedExpenseFormSheet(yearMonth: viewModel.yearMonth) {
                 await viewModel.load()
             }
         }
-        .sheet(item: $editingExpense) { expense in
+        .foldSafeSheet(item: $editingExpense) { expense in
             FixedExpenseEditSheet(expense: expense, decimalPlaces: appState.decimalPlaces) {
                 await viewModel.load()
             }
@@ -89,7 +89,7 @@ struct FixedExpenseListView: View {
         // "Add transaction" opens the transaction form pre-linked to this expense
         // (an expense, which marks it paid) with the amount and month prefilled —
         // mirrors web's `addTransaction`.
-        .sheet(item: $addingTransactionFor) { expense in
+        .foldSafeSheet(item: $addingTransactionFor) { expense in
             NavigationStack {
                 TransactionFormView(
                     defaultAccountId: appState.defaultAccountId,
@@ -107,6 +107,7 @@ struct FixedExpenseListView: View {
         // treats as still loading, so drop the selection explicitly.
         .onChange(of: viewModel.yearMonth) { selectedExpenseId = nil }
         .task { await viewModel.load() }
+        .reloadsAfterFoldedSheet { await viewModel.load() }
         // Confirm the swipe delete (HIG: confirm permanent deletes), matching the
         // other destructive swipes across the app.
         .alert(

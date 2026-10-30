@@ -54,10 +54,10 @@ struct CategoryListView: View {
         ) { category in
             TransactionListView(initialFilters: filtersFor(category))
         }
-        .sheet(isPresented: $showingAddSheet) {
+        .foldSafeSheet(isPresented: $showingAddSheet) {
             CategoryFormSheet { await viewModel.load() }
         }
-        .sheet(item: $editingCategory) { category in
+        .foldSafeSheet(item: $editingCategory) { category in
             CategoryFormSheet(category: category) { await viewModel.load() }
         }
         .alert(

@@ -21,6 +21,8 @@ struct CategoryFormSheet: View {
     @State private var errorMessage: String?
     @State private var didLoad = false
     @State private var showDiscardConfirm = false
+    /// The swatch grid's width, for `SwatchGridLayout`; 0 until measured.
+    @State private var swatchGridWidth: CGFloat = 0
 
     private let repository = CategoryRepository()
 
@@ -63,8 +65,9 @@ struct CategoryFormSheet: View {
                 }
 
                 Section("Color") {
-                    colorPaletteRow
+                    colorPaletteGrid
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    LabeledContent("Custom color") { customColorButton }
                 }
 
                 if let error = errorMessage {
@@ -103,15 +106,19 @@ struct CategoryFormSheet: View {
 
     // MARK: - Color palette
 
-    /// Horizontal row of palette swatches followed by a ColorPicker for custom hues.
-    /// Each item fills an equal share of the row width; min height 44 pt (HIG tap target).
-    private var colorPaletteRow: some View {
-        HStack(spacing: 0) {
+    /// The palette swatches, in an even column count (`SwatchGridLayout`).
+    /// Each fills an equal share of its row; min height 44 pt (HIG tap target).
+    private var colorPaletteGrid: some View {
+        let columns = Array(
+            repeating: GridItem(.flexible(), spacing: 0),
+            count: SwatchGridLayout.columns(width: swatchGridWidth)
+        )
+        return LazyVGrid(columns: columns, spacing: 0) {
             ForEach(Self.palette, id: \.self) { hex in
                 paletteCircle(hex: hex)
             }
-            customColorButton
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { swatchGridWidth = $0 }
     }
 
     private func paletteCircle(hex: String) -> some View {
@@ -161,7 +168,7 @@ struct CategoryFormSheet: View {
                     .allowsHitTesting(false)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 44)
+        .frame(minWidth: 44, minHeight: 44)
     }
 
     // MARK: - Helpers
@@ -202,5 +209,17 @@ struct CategoryFormSheet: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+/// The category swatch grid's column count: even around the hinge (HIG), 6 in
+/// an iPhone-width sheet and 8 in a form-sized one. Pure, so it's unit-tested
+/// directly.
+enum SwatchGridLayout {
+    /// Wider than any iPhone portrait sheet's row, narrower than a form card's.
+    static let minimumEightColumnWidth: CGFloat = 420
+
+    static func columns(width: CGFloat) -> Int {
+        width >= minimumEightColumnWidth ? 8 : 6
     }
 }

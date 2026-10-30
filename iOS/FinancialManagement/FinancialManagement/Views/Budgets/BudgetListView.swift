@@ -160,10 +160,10 @@ struct BudgetListView: View {
         // An empty month lists nothing, which `.splitDetail` treats as still
         // loading, so drop the selection explicitly.
         .onChange(of: viewModel.yearMonth) { drilldown = nil }
-        .sheet(item: $formMode) { mode in
+        .foldSafeSheet(item: $formMode) { mode in
             BudgetFormSheet(mode: mode, viewModel: viewModel)
         }
-        .sheet(item: $installmentSource) { source in
+        .foldSafeSheet(item: $installmentSource) { source in
             NavigationStack {
                 TransactionFormView(
                     editing: source,

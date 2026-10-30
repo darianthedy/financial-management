@@ -47,6 +47,7 @@ struct TagPicker: View {
         .task { await loadTags() }
         .sheet(isPresented: $showingPicker) {
             TagPickerSheet(tags: $tags, selectedTags: $selectedTags, isLoading: isLoading)
+            .duoSheetSizing()
         }
     }
 

@@ -64,7 +64,6 @@ struct ContentRootView: View {
                 }
             }
         }
-        .environment(\.transactionDrafts, transactionDrafts)
         .tabViewStyle(.sidebarAdaptable)
         .duoSidebarTabPlacement()
         .tabViewSidebarBottomBar {
@@ -77,6 +76,11 @@ struct ContentRootView: View {
         // the user on the same screen, e.g. Tags ⇄ More › Tags.
         .onAppear { resolveRoute(for: horizontalSizeClass) }
         .onChange(of: horizontalSizeClass) { _, sizeClass in resolveRoute(for: sizeClass) }
+        // Above the size-class branches here and in each tab, so an open sheet
+        // and its draft survive a fold (D5.1).
+        .hostsFoldSafeSheets()
+        // Outside the sheet host too, so the sheets inherit it.
+        .environment(\.transactionDrafts, transactionDrafts)
     }
 
     private func resolveRoute(for sizeClass: UserInterfaceSizeClass?) {

@@ -14,7 +14,9 @@ import SwiftUI
 // same `navigationDestination(item:)` push as before, so compact is unchanged.
 //
 // The modifier sits *inside* the screen, so the screen's own state (its view
-// model, sheets, the selection) lives above the container switch.
+// model, the selection) lives above the modifier's switch. `SplitRootContainer`
+// still re-creates the screen on a size-class change, which is why the selection
+// is restored from `@SceneStorage` and sheets use `.foldSafeSheet`.
 
 extension EnvironmentValues {
     /// Set by `SplitRootContainer` on regular width: the next `.splitDetail`
