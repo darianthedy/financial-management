@@ -1,0 +1,44 @@
+import Supabase
+import XCTest
+@testable import FinancialManagement
+
+/// A re-created screen must get its own channel, even while the old one is
+/// still joining, and the old screen leaving must not remove the new channel.
+@MainActor
+final class RealtimeTableWatchTests: XCTestCase {
+    private let topic = "realtime-table-watch-test"
+    private var key: String { "realtime:\(topic)" }
+
+    private func start() -> Task<Void, Never> {
+        let topic = topic
+        return Task { await RealtimeTableWatch().watch(topic: topic, tables: ["accounts"]) {} }
+    }
+
+    private func poll(until done: () -> Bool) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while !done(), clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    func testNewWatchReplacesAJoiningChannel() async throws {
+        let first = start()
+        try await poll { supabase.realtimeV2.channels[key] != nil }
+        let firstChannel = try XCTUnwrap(supabase.realtimeV2.channels[key])
+
+        let second = start()
+        try await poll { supabase.realtimeV2.channels[key] !== firstChannel }
+        let secondChannel = try XCTUnwrap(supabase.realtimeV2.channels[key])
+        XCTAssertFalse(secondChannel === firstChannel)
+
+        // The old screen leaves after the new one arrived, as in a fold.
+        first.cancel()
+        await first.value
+        XCTAssertTrue(supabase.realtimeV2.channels[key] === secondChannel)
+
+        second.cancel()
+        await second.value
+        XCTAssertNil(supabase.realtimeV2.channels[key])
+    }
+}

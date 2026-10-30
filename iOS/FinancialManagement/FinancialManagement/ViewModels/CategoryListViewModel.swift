@@ -11,7 +11,7 @@ final class CategoryListViewModel {
 
     private let repository = CategoryRepository()
     private let supabase = SupabaseService.shared.client
-    private var realtimeChannel: RealtimeChannelV2?
+    private let realtime = RealtimeTableWatch()
 
     func load() async {
         isLoading = true
@@ -23,22 +23,10 @@ final class CategoryListViewModel {
         }
     }
 
+    /// Keeps the list live until the calling task is cancelled.
     func subscribeToChanges() async {
-        let channel = supabase.realtimeV2.channel("categories-realtime")
-        let changes = channel.postgresChange(AnyAction.self, schema: "public", table: "categories")
-        await channel.subscribe()
-        Task {
-            for await _ in changes {
-                await load()
-            }
-        }
-        realtimeChannel = channel
-    }
-
-    func unsubscribe() async {
-        if let channel = realtimeChannel {
-            await supabase.realtimeV2.removeChannel(channel)
-            realtimeChannel = nil
+        await realtime.watch(topic: "categories-realtime", tables: ["categories"]) { [weak self] in
+            await self?.load()
         }
     }
 

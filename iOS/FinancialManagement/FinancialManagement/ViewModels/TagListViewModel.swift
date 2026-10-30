@@ -11,7 +11,7 @@ final class TagListViewModel {
 
     private let repository = TagRepository()
     private let supabase = SupabaseService.shared.client
-    private var realtimeChannel: RealtimeChannelV2?
+    private let realtime = RealtimeTableWatch()
     private var currentUserId: UUID? {
         get async { try? await supabase.auth.session.user.id }
     }
@@ -27,23 +27,11 @@ final class TagListViewModel {
         }
     }
 
+    /// Keeps the list live until the calling task is cancelled.
     func subscribeToChanges() async {
         guard let userId = await currentUserId else { return }
-        let channel = supabase.realtimeV2.channel("tags-realtime-\(userId)")
-        let changes = channel.postgresChange(AnyAction.self, schema: "public", table: "tags")
-        await channel.subscribe()
-        Task {
-            for await _ in changes {
-                await load()
-            }
-        }
-        realtimeChannel = channel
-    }
-
-    func unsubscribe() async {
-        if let channel = realtimeChannel {
-            await supabase.realtimeV2.removeChannel(channel)
-            realtimeChannel = nil
+        await realtime.watch(topic: "tags-realtime-\(userId)", tables: ["tags"]) { [weak self] in
+            await self?.load()
         }
     }
 

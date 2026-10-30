@@ -47,7 +47,6 @@ struct DashboardView: View {
             await viewModel.load()
             await viewModel.subscribeToChanges()
         }
-        .onDisappear { Task { await viewModel.unsubscribe() } }
         .refreshable { await viewModel.load() }
     }
 

@@ -79,9 +79,6 @@ struct CategoryListView: View {
             await viewModel.load()
             await viewModel.subscribeToChanges()
         }
-        .onDisappear {
-            Task { await viewModel.unsubscribe() }
-        }
     }
 
     // MARK: - Row

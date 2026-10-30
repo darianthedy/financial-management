@@ -23,7 +23,7 @@ final class BudgetListViewModel {
     private let repository = BudgetRepository()
     private let installmentRepository = InstallmentRepository()
     private let supabase = SupabaseService.shared.client
-    private var realtimeChannel: RealtimeChannelV2?
+    private let realtime = RealtimeTableWatch()
     private var progressCache: [String: [BudgetProgress]] = [:]
     private var installmentsCache: [String: [ActiveInstallment]] = [:]
 
@@ -128,40 +128,14 @@ final class BudgetListViewModel {
         }
     }
 
+    /// Keeps the budgets live until the calling task is cancelled.
     func subscribeToChanges() async {
-        let channel = supabase.realtimeV2.channel("budgets-realtime")
-
-        // Budget rows themselves (add / edit / remove / copy).
-        let budgetChanges = channel.postgresChange(
-            AnyAction.self, schema: "public", table: "budgets"
-        )
-        // Linked transactions change `spent`, which re-flows carry-over.
-        let transactionChanges = channel.postgresChange(
-            AnyAction.self, schema: "public", table: "transactions"
-        )
-        // Installment reservations (P1) feed `reserved` into the view.
-        let allocationChanges = channel.postgresChange(
-            AnyAction.self, schema: "public", table: "budget_installment_allocations"
-        )
-
-        await channel.subscribe()
-
-        Task {
-            for await _ in budgetChanges { invalidateAndReload() }
-        }
-        Task {
-            for await _ in transactionChanges { invalidateAndReload() }
-        }
-        Task {
-            for await _ in allocationChanges { invalidateAndReload() }
-        }
-
-        realtimeChannel = channel
-    }
-
-    func unsubscribe() async {
-        if let channel = realtimeChannel {
-            await supabase.realtimeV2.removeChannel(channel)
+        // Budget rows (add / edit / remove / copy); linked transactions change
+        // `spent`, which re-flows carry-over; installment reservations (P1) feed
+        // `reserved` into the view.
+        let tables = ["budgets", "transactions", "budget_installment_allocations"]
+        await realtime.watch(topic: "budgets-realtime", tables: tables) { [weak self] in
+            self?.invalidateAndReload()
         }
     }
 
