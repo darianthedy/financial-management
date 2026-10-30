@@ -35,6 +35,24 @@ final class DashboardColumnsLayoutTests: XCTestCase {
             let lefts = try left.map { try snapshot.frame($0) }
             let rights = try right.map { try snapshot.frame($0) }
 
+            // The Month Navigator spans the content width. Hosted renders can
+            // inherit the simulator's own side inset (inner portrait gets
+            // ~553 pt, not the device's 637), so the expected column count
+            // follows the width actually rendered; landscape must tile.
+            let expected = DashboardColumns.columnCount(
+                width: navigator.width, spacing: 16, minimumColumnWidth: 300
+            )
+            if size.name == LayoutSize.innerLandscape.name {
+                XCTAssertEqual(expected, 2, "inner landscape must fit two columns (\(navigator.width) pt)")
+            }
+            guard expected == 2 else {
+                let cards = lefts + rights
+                for (upper, lower) in zip(cards, cards.dropFirst()) {
+                    XCTAssertLessThanOrEqual(upper.maxY, lower.minY + 1, "one stack at \(navigator.width) pt, \(size)")
+                }
+                continue
+            }
+
             for (l, r) in zip(lefts, rights) {
                 XCTAssertLessThanOrEqual(l.maxX, r.minX + 1, "left | right must tile at \(size)")
                 XCTAssertEqual(l.width, r.width, accuracy: 1, "columns must be even at \(size)")
