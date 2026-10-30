@@ -21,7 +21,7 @@ runtime="$(xcrun simctl list -j runtimes |
   jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version) | last | .identifier')"
 devtype="$(xcrun simctl list -j devicetypes |
   jq -r --arg want "${DEVICE_FILTER:-Duo}" \
-    '.devicetypes[] | select(.name | test($want; "i")) | .identifier' | head -1)"
+    '.devicetypes[] | select(.name | test($want; "i")) | .identifier' | tail -1)"
 if [ -z "$devtype" ]; then
   devtype="$(xcrun simctl list -j devicetypes |
     jq -r '[.devicetypes[] | select(.productFamily == "iPhone")] | last | .identifier')"

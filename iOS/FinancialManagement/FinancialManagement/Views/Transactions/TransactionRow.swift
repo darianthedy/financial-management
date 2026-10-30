@@ -60,6 +60,7 @@ struct TransactionRow: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.appForeground)
                         .lineLimit(1)
+                        .layoutProbe("transactionRow.title.\(derived.title)")
                     if isPending { pendingBadge }
                     if isSpread {
                         Image(systemName: "square.grid.2x2.fill")

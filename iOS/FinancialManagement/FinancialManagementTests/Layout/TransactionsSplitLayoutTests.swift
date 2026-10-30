@@ -51,8 +51,8 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         }
     }
 
-    /// G2: rows use their column. The plain List's insets take about 32 pt, so
-    /// a row far narrower than its list has lost its title and amount.
+    /// G2: the list fills its column, and its rows keep a readable title. The
+    /// plain List's insets take about 32 pt of the row.
     func testRowsFillTheListColumn() async throws {
         for size in LayoutSize.all {
             let snapshot = try await render(at: size)
@@ -62,6 +62,14 @@ final class TransactionsSplitLayoutTests: XCTestCase {
                 rowFrame.width, list.width - 60,
                 "row \(rowFrame) in list \(list) at \(size)"
             )
+            if size.horizontal == .regular {
+                let column = try snapshot.frame("split.list")
+                XCTAssertGreaterThanOrEqual(
+                    list.width, column.width - 1, "list \(list) in column \(column) at \(size)"
+                )
+            }
+            let title = try snapshot.frame("transactionRow.title.Top up Jenius")
+            XCTAssertGreaterThanOrEqual(title.width, 60, "title \(title) in row \(rowFrame) at \(size)")
         }
     }
 
