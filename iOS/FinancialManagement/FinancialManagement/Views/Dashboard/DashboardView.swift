@@ -5,6 +5,7 @@ import SwiftUI
 /// (iOS Tech Plan §8.1, System Design §4.6).
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
@@ -24,51 +25,13 @@ struct DashboardView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity, minHeight: 200)
                     } else if let data = viewModel.data {
-                        BudgetVerdictBanner(
-                            budgets: data.budgets,
-                            fixedExpenses: data.fixedExpenses,
-                            paidFixedExpenseTotals: data.paidFixedExpenseTotals,
-                            currencyCode: appState.defaultCurrency
-                        )
-                        .layoutProbe("dashboard.verdict")
-
-                        CashflowCard(
-                            cashflow: data.cashflow,
-                            currencyCode: appState.defaultCurrency
-                        )
-
-                        CashflowTrendCard(
-                            trend: data.trend,
-                            selectedYearMonth: viewModel.yearMonth,
-                            currencyCode: appState.defaultCurrency
-                        )
-
-                        AccountsCard(
-                            accounts: data.accounts,
-                            currencyCode: appState.defaultCurrency,
-                            widestAmountBody: widestDashboardAmountBody(
-                                accounts: data.accounts
-                            )
-                        )
-
-                        PlannedExpensesCard(
-                            budgets: data.budgets,
-                            fixedExpenses: data.fixedExpenses,
-                            paidFixedExpenseTotals: data.paidFixedExpenseTotals,
-                            yearMonth: viewModel.yearMonth,
-                            currencyCode: appState.defaultCurrency,
-                            widestAmountBody: widestDashboardAmountBody(
-                                accounts: data.accounts
-                            )
-                        )
-
-                        UnplannedExpensesCard(
-                            groups: data.unplanned,
-                            currencyCode: appState.defaultCurrency,
-                            widestAmountBody: widestDashboardAmountBody(
-                                accounts: data.accounts
-                            )
-                        )
+                        // Regular width (D4.1): two balanced columns; compact
+                        // keeps the single stack below, exactly as before.
+                        if horizontalSizeClass == .regular {
+                            DashboardColumns(spacing: 16) { cards(data) }
+                        } else {
+                            cards(data)
+                        }
                     }
                 }
                 .monthPageTransition(
@@ -86,6 +49,68 @@ struct DashboardView: View {
         }
         .onDisappear { Task { await viewModel.unsubscribe() } }
         .refreshable { await viewModel.load() }
+    }
+
+    /// The six cards in iPhone order. Left column: Verdict, Cashflow, Trend;
+    /// right (`.dashboardColumn(1)`): Accounts, Planned, Unplanned.
+    @ViewBuilder
+    private func cards(_ data: DashboardData) -> some View {
+        BudgetVerdictBanner(
+            budgets: data.budgets,
+            fixedExpenses: data.fixedExpenses,
+            paidFixedExpenseTotals: data.paidFixedExpenseTotals,
+            currencyCode: appState.defaultCurrency
+        )
+        .layoutProbe("dashboard.verdict")
+
+        CashflowCard(
+            cashflow: data.cashflow,
+            currencyCode: appState.defaultCurrency
+        )
+        .layoutProbe("dashboard.cashflow")
+
+        CashflowTrendCard(
+            trend: data.trend,
+            selectedYearMonth: viewModel.yearMonth,
+            currencyCode: appState.defaultCurrency
+        )
+        .layoutProbe("dashboard.trend")
+
+        AccountsCard(
+            accounts: data.accounts,
+            currencyCode: appState.defaultCurrency,
+            widestAmountBody: widestDashboardAmountBody(
+                accounts: data.accounts
+            )
+        )
+        .layoutProbe("dashboard.accounts")
+        // Outermost, so `DashboardColumns` reads it.
+        .dashboardColumn(1)
+
+        PlannedExpensesCard(
+            budgets: data.budgets,
+            fixedExpenses: data.fixedExpenses,
+            paidFixedExpenseTotals: data.paidFixedExpenseTotals,
+            yearMonth: viewModel.yearMonth,
+            currencyCode: appState.defaultCurrency,
+            widestAmountBody: widestDashboardAmountBody(
+                accounts: data.accounts
+            )
+        )
+        .layoutProbe("dashboard.planned")
+        // Outermost, so `DashboardColumns` reads it.
+        .dashboardColumn(1)
+
+        UnplannedExpensesCard(
+            groups: data.unplanned,
+            currencyCode: appState.defaultCurrency,
+            widestAmountBody: widestDashboardAmountBody(
+                accounts: data.accounts
+            )
+        )
+        .layoutProbe("dashboard.unplanned")
+        // Outermost, so `DashboardColumns` reads it.
+        .dashboardColumn(1)
     }
 
     // MARK: - Amount alignment across dashboard cards
