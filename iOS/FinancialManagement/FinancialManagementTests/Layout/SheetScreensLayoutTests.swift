@@ -64,5 +64,16 @@ final class SheetScreensLayoutTests: XCTestCase {
             TransactionFilterSheet(initial: TransactionFilters()) { _ in },
             card: pageCard
         )
+        let expense = Transaction(
+            id: UUID(), userId: UUID(), accountId: UUID(), type: .expense, status: .confirmed,
+            amount: 1_200_000, description: "Laptop", transactionDate: Date(),
+            transferAccountId: nil, budgetId: nil, categoryId: nil, scheduledTxnId: nil,
+            fixedExpenseId: nil, tagIds: nil, createdAt: Date(), updatedAt: Date()
+        )
+        try await capture(
+            "F4-installment",
+            CreateInstallmentSheet(source: expense) {},
+            card: pageCard
+        )
     }
 }
