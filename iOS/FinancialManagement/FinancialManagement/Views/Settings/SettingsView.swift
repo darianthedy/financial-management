@@ -39,6 +39,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .layoutProbe("settings.theme", interactive: true)
             } header: {
                 Text("Theme")
             } footer: {
@@ -58,6 +59,7 @@ struct SettingsView: View {
                 Text("Pre-selected when adding a new transaction.")
             }
         }
+        .readableContentMargins()
         .navigationTitle("Settings")
         .task {
             defaultCurrency = appState.defaultCurrency

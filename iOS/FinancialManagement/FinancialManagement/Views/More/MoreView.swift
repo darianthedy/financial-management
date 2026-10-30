@@ -25,6 +25,7 @@ struct MoreView: View {
                 SignOutButton()
             }
         }
+        .readableContentMargins()
         .navigationTitle("More")
     }
 }
