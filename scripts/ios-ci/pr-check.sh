@@ -66,9 +66,12 @@ fi
 status=0
 # A hung test is killed after 3 min (with a spindump in the xcresult) and
 # reported as failed, instead of stalling the job to its 30-min timeout. Each
-# test case is echoed as it runs, so the job log names a stalled one.
+# test case is echoed as it runs, so the job log names a stalled one. A
+# main-thread hang escapes those allowances, so the whole step is also capped
+# at 15 min (perl's alarm: macOS has no `timeout`); the suite takes ~2.
 set +e
-env ${gate_env[@]+"${gate_env[@]}"} xcodebuild test-without-building "${common[@]}" \
+env ${gate_env[@]+"${gate_env[@]}"} perl -e 'alarm shift; exec @ARGV' 900 \
+  xcodebuild test-without-building "${common[@]}" \
   -only-testing:FinancialManagementTests \
   -test-timeouts-enabled YES \
   -default-test-execution-time-allowance 180 \
