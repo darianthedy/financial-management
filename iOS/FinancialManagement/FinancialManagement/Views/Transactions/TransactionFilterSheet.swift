@@ -53,6 +53,8 @@ struct TransactionFilterSheet: View {
     @State private var minAmount = ""
     @State private var maxAmount = ""
     @State private var showDiscardConfirm = false
+    /// The Date section's row width, for `FilterDateRowLayout` (D3.3).
+    @State private var dateRowWidth: CGFloat = 0
 
     @State private var accounts: [Account] = []
     @State private var categories: [Category] = []
@@ -270,24 +272,45 @@ struct TransactionFilterSheet: View {
                 }
                 .contentShape(Rectangle())
             }
+            // The Range row spans the section, so its width decides the
+            // From / To layout below it.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { dateRowWidth = $0 }
 
             if hasDateRange {
-                HStack(spacing: 8) {
-                    FilterRowDot(isActive: false)
-                    DatePicker("From", selection: Binding(
-                        get: { working.dateFrom ?? Date() },
-                        set: { working.dateFrom = $0 }
-                    ), displayedComponents: .date)
-                }
-                HStack(spacing: 8) {
-                    FilterRowDot(isActive: false)
-                    DatePicker("To", selection: Binding(
-                        get: { working.dateTo ?? Date() },
-                        set: { working.dateTo = $0 }
-                    ), displayedComponents: .date)
+                if FilterDateRowLayout.isSideBySide(rowWidth: dateRowWidth) {
+                    // Wide (page-sized) sheet: From and To share one row.
+                    HStack(spacing: 8) {
+                        FilterRowDot(isActive: false)
+                        fromDatePicker
+                        Divider()
+                        toDatePicker
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        FilterRowDot(isActive: false)
+                        fromDatePicker
+                    }
+                    HStack(spacing: 8) {
+                        FilterRowDot(isActive: false)
+                        toDatePicker
+                    }
                 }
             }
         }
+    }
+
+    private var fromDatePicker: some View {
+        DatePicker("From", selection: Binding(
+            get: { working.dateFrom ?? Date() },
+            set: { working.dateFrom = $0 }
+        ), displayedComponents: .date)
+    }
+
+    private var toDatePicker: some View {
+        DatePicker("To", selection: Binding(
+            get: { working.dateTo ?? Date() },
+            set: { working.dateTo = $0 }
+        ), displayedComponents: .date)
     }
 
     private var hasDateRange: Bool { working.dateFrom != nil || working.dateTo != nil }

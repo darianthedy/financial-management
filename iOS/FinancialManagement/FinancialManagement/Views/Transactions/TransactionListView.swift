@@ -182,21 +182,25 @@ struct TransactionListView: View {
             .navigationTitle("Transactions")
             .navigationBarTitleDisplayMode(isScoped ? .automatic : .large)
             .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    if isScoped {
+                if isScoped {
+                    ToolbarItemGroup(placement: .primaryAction) {
                         // Scoped account detail keeps web's labeled header actions:
                         // an outline "Summary" button and a filled primary "Add".
                         summaryButton(showLabel: true)
                         addButton(showLabel: true)
-                    } else {
-                        // Main list: native nav-bar actions — Summary and Filter as
-                        // secondary icons, Add as the primary create affordance.
-                        // Search and the active-filter tokens live in the
-                        // `.searchable` field (see `content`).
-                        summaryToolbarButton
-                        filterToolbarButton
-                        addToolbarButton
                     }
+                } else {
+                    // Main list: native nav-bar actions — Summary and Filter as
+                    // secondary icons, Add as the primary create affordance.
+                    // Search and the active-filter tokens live in the
+                    // `.searchable` field (see `content`). On the iPhone Duo's
+                    // vertical bar (D3.3) Add keeps its place and Summary is the
+                    // first to overflow into "…" (`TransactionsToolbar`).
+                    ToolbarItem(placement: .primaryAction) { summaryToolbarButton }
+                        .duoVisibilityPriority(TransactionsToolbar.priority(of: .summary))
+                    ToolbarItem(placement: .primaryAction) { filterToolbarButton }
+                    ToolbarItem(placement: .primaryAction) { addToolbarButton }
+                        .duoVisibilityPriority(TransactionsToolbar.priority(of: .add))
                 }
             }
             .sheet(isPresented: $showingForm) {
@@ -231,6 +235,8 @@ struct TransactionListView: View {
                     viewModel.applyFilters(newFilters)
                     searchText = newFilters.search ?? ""
                 }
+                // A large centered card on the inner display; no-op on iPhone.
+                .presentationSizing(.page)
             }
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
