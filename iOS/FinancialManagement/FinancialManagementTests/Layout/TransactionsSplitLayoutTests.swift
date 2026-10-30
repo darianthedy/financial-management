@@ -15,12 +15,13 @@ final class TransactionsSplitLayoutTests: XCTestCase {
     }
 
     private func render(
-        selected: UUID? = nil, drafts: TransactionEditorDrafts = TransactionEditorDrafts(),
+        selected: UUID? = nil, drafts: TransactionEditorDrafts? = nil,
         showsSummary: Bool = false, at size: LayoutSize
     ) async throws -> LayoutSnapshot {
         let appState = AppState()
         await appState.loadCurrencyData()
         let row = row
+        let drafts = drafts ?? TransactionEditorDrafts()
         return try await LayoutHarness.render(
             SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: selected, showsSummary: showsSummary) }
                 .environment(\.transactionDrafts, drafts)
