@@ -3,6 +3,11 @@ import SwiftUI
 /// Month-scoped fixed expenses (§8.5): an unpaid/paid split with subtotals,
 /// `MonthNavigator`, and add / copy-from-previous / edit / delete.
 /// Paid is derived — to mark one paid the user links a transaction to it.
+///
+/// On regular width (implementation plan D2.4) tapping a row shows its linked
+/// transactions in the detail column; the month navigator stays in the list
+/// column, and changing month clears the selection. Compact rows have no tap
+/// action, as before.
 struct FixedExpenseListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = FixedExpenseListViewModel()
@@ -12,6 +17,12 @@ struct FixedExpenseListView: View {
     @State private var addingTransactionFor: FixedExpense?
     /// The expense awaiting delete confirmation (swipe-only here).
     @State private var pendingDelete: FixedExpense?
+    /// The tiled split's selection (regular width only), by expense ID.
+    @State private var selectedExpenseId: UUID?
+
+    init(selectedExpenseId: UUID? = nil) {
+        _selectedExpenseId = State(initialValue: selectedExpenseId)
+    }
 
     private var currencyCode: String { appState.defaultCurrency }
 
@@ -49,6 +60,22 @@ struct FixedExpenseListView: View {
                 }
             }
         }
+        .refreshable { await viewModel.load() }
+        .splitDetail(
+            selection: $selectedExpenseId,
+            in: viewModel.fixedExpenses.map(\.id),
+            id: \.uuidString,
+            storageKey: "fixedExpenses",
+            placeholder: SplitPlaceholder(
+                title: "Select a Fixed Expense",
+                systemImage: "receipt",
+                description: "The transactions that paid it appear here."
+            )
+        ) { expenseId in
+            if let expense = viewModel.fixedExpenses.first(where: { $0.id == expenseId }) {
+                TransactionListView(initialFilters: Self.linkedTransactionFilters(for: expense))
+            }
+        }
         .sheet(isPresented: $showingForm) {
             FixedExpenseFormSheet(yearMonth: viewModel.yearMonth) {
                 await viewModel.load()
@@ -76,8 +103,10 @@ struct FixedExpenseListView: View {
                 }
             }
         }
+        // A month with no fixed expenses lists nothing, which `.splitDetail`
+        // treats as still loading, so drop the selection explicitly.
+        .onChange(of: viewModel.yearMonth) { selectedExpenseId = nil }
         .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
         // Confirm the swipe delete (HIG: confirm permanent deletes), matching the
         // other destructive swipes across the app.
         .alert(
@@ -153,6 +182,9 @@ struct FixedExpenseListView: View {
                     isPaid: viewModel.isPaid(expense),
                     currencyCode: currencyCode
                 )
+                .splitSelectOnTap { selectedExpenseId = expense.id }
+                .splitRowSelected(selectedExpenseId == expense.id)
+                .layoutProbe("fixed.row.\(expense.name)", interactive: true)
                 // Web parity: each row carries Add transaction / Edit / Delete.
                 // The context menu holds all three (like web's ⋮ dropdown); the
                 // swipe actions remain as the native iOS shortcut.
@@ -204,6 +236,18 @@ struct FixedExpenseListView: View {
                     .minimumScaleFactor(0.7)
             }
         }
+    }
+
+    /// The transactions linked to `expense`: the fixed-expense facet (by name)
+    /// pinned to the expense's own month, like a budget drill-down.
+    static func linkedTransactionFilters(for expense: FixedExpense) -> TransactionFilters {
+        var filters = TransactionFilters()
+        filters.fixedExpenses = Facet(values: [expense.name])
+        if let range = DateUtils.monthDateRange(expense.yearMonth) {
+            filters.dateFrom = range.start
+            filters.dateTo = range.end
+        }
+        return filters
     }
 
     /// Prefilled amount (display units) for a linked transaction — the expense's

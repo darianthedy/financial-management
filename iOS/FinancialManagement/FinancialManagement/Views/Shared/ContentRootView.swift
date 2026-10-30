@@ -30,7 +30,7 @@ struct ContentRootView: View {
             }
             // web Wallet
             Tab("Accounts", systemImage: "wallet.bifold", value: AppTab.accounts) {
-                NavigationStack { AccountListView() }
+                SplitRootContainer { AccountListView() }
             }
             // web ArrowLeftRight
             Tab("Transactions", systemImage: "arrow.left.arrow.right", value: AppTab.transactions) {
@@ -38,7 +38,7 @@ struct ContentRootView: View {
             }
             // web PiggyBank (no SF piggy-bank symbol; target reads as a budget goal)
             Tab("Budgets", systemImage: "target", value: AppTab.budgets) {
-                NavigationStack { BudgetListView() }
+                SplitRootContainer { BudgetListView() }
             }
 
             if horizontalSizeClass == .regular {
@@ -48,7 +48,7 @@ struct ContentRootView: View {
                 TabSection("Management") {
                     ForEach(MoreDestination.allCases, id: \.self) { destination in
                         Tab(destination.title, systemImage: destination.systemImage, value: destination.tab) {
-                            NavigationStack { destination.view }
+                            destination.sidebarTabRoot
                         }
                     }
                 }
@@ -107,6 +107,25 @@ extension MoreDestination {
         // web CalendarClock
         case .scheduled: "calendar.badge.clock"
         case .settings: "gear"
+        }
+    }
+
+    /// List → detail screens that tile on regular width (implementation plan
+    /// Phase 2). Pushed from More on compact, they still push their detail.
+    var tilesOnRegularWidth: Bool {
+        switch self {
+        case .categories, .tags, .fixedExpenses, .scheduled: true
+        case .settings: false
+        }
+    }
+
+    /// The root of this destination's sidebar tab (regular width).
+    @ViewBuilder
+    var sidebarTabRoot: some View {
+        if tilesOnRegularWidth {
+            SplitRootContainer { view }
+        } else {
+            NavigationStack { view }
         }
     }
 

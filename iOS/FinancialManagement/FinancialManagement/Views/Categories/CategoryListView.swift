@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Categories (S10). Tapping a category opens its transactions: pushed on
+/// compact, in the detail column on regular width (implementation plan D2.2).
 struct CategoryListView: View {
     @State private var viewModel = CategoryListViewModel()
     @State private var showingAddSheet = false
@@ -7,16 +9,19 @@ struct CategoryListView: View {
     @State private var pendingDelete: Category?
     @State private var selectedCategory: Category?
 
+    init(selectedCategory: Category? = nil) {
+        _selectedCategory = State(initialValue: selectedCategory)
+    }
+
     var body: some View {
         List {
             ForEach(viewModel.categories) { category in
                 categoryRow(category)
+                    .splitRowSelected(selectedCategory?.id == category.id)
+                    .layoutProbe("categories.row.\(category.name)", interactive: true)
             }
         }
         .navigationTitle("Categories")
-        .navigationDestination(item: $selectedCategory) { category in
-            TransactionListView(initialFilters: filtersFor(category))
-        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAddSheet = true } label: {
@@ -34,6 +39,20 @@ struct CategoryListView: View {
                     Button("Add category") { showingAddSheet = true }
                 }
             }
+        }
+        .refreshable { await viewModel.load() }
+        .splitDetail(
+            selection: $selectedCategory,
+            in: viewModel.categories,
+            id: { $0.id.uuidString },
+            storageKey: "categories",
+            placeholder: SplitPlaceholder(
+                title: "Select a Category",
+                systemImage: "tag",
+                description: "Its transactions appear here."
+            )
+        ) { category in
+            TransactionListView(initialFilters: filtersFor(category))
         }
         .sheet(isPresented: $showingAddSheet) {
             CategoryFormSheet { await viewModel.load() }
@@ -63,7 +82,6 @@ struct CategoryListView: View {
         .onDisappear {
             Task { await viewModel.unsubscribe() }
         }
-        .refreshable { await viewModel.load() }
     }
 
     // MARK: - Row
