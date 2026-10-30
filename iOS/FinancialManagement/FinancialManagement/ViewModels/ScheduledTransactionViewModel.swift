@@ -25,8 +25,7 @@ final class ScheduledTransactionViewModel {
     var currencyCode = "USD"
 
     private let repository = ScheduledTransactionRepository()
-    private let supabase = SupabaseService.shared.client
-    private var realtimeChannel: RealtimeChannelV2?
+    private let realtime = RealtimeTableWatch()
 
     /// Pending IDs already surfaced to the user. `nil` until the first load so
     /// the initial backlog isn't announced — only rows that arrive afterwards
@@ -141,26 +140,10 @@ final class ScheduledTransactionViewModel {
     /// Live updates: confirms/edits/dismisses and newly generated pending rows
     /// all land in `transactions`; advancing `next_due_date` touches
     /// `scheduled_transactions`. Reload on either.
+    /// Keeps the list live until the calling task is cancelled.
     func subscribeToChanges() async {
-        let channel = supabase.realtimeV2.channel("scheduled-realtime")
-        let streams = ["transactions", "scheduled_transactions"].map {
-            channel.postgresChange(AnyAction.self, schema: "public", table: $0)
-        }
-
-        await channel.subscribe()
-
-        for stream in streams {
-            Task {
-                for await _ in stream { await load() }
-            }
-        }
-
-        realtimeChannel = channel
-    }
-
-    func unsubscribe() async {
-        if let channel = realtimeChannel {
-            await supabase.realtimeV2.removeChannel(channel)
+        await realtime.watch(topic: "scheduled-realtime", tables: ["transactions", "scheduled_transactions"]) { [weak self] in
+            await self?.load()
         }
     }
 }

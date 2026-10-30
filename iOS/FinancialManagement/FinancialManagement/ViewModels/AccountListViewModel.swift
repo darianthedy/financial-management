@@ -12,7 +12,7 @@ final class AccountListViewModel {
 
     private let repository = AccountRepository()
     private let supabase = SupabaseService.shared.client
-    private var realtimeChannel: RealtimeChannelV2?
+    private let realtime = RealtimeTableWatch()
 
     func load() async {
         isLoading = true
@@ -34,40 +34,10 @@ final class AccountListViewModel {
             .value
     }
 
+    /// Keeps the list live until the calling task is cancelled.
     func subscribeToChanges() async {
-        let channel = supabase.realtimeV2.channel("accounts-realtime")
-
-        let accountChanges = channel.postgresChange(
-            AnyAction.self,
-            schema: "public",
-            table: "accounts"
-        )
-
-        let balanceChanges = channel.postgresChange(
-            AnyAction.self,
-            schema: "public",
-            table: "account_monthly_balances"
-        )
-
-        await channel.subscribe()
-
-        Task {
-            for await _ in accountChanges {
-                await load()
-            }
-        }
-        Task {
-            for await _ in balanceChanges {
-                await load()
-            }
-        }
-
-        realtimeChannel = channel
-    }
-
-    func unsubscribe() async {
-        if let channel = realtimeChannel {
-            await supabase.realtimeV2.removeChannel(channel)
+        await realtime.watch(topic: "accounts-realtime", tables: ["accounts", "account_monthly_balances"]) { [weak self] in
+            await self?.load()
         }
     }
 

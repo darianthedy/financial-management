@@ -178,7 +178,6 @@ struct BudgetListView: View {
             await viewModel.load()
             await viewModel.subscribeToChanges()
         }
-        .onDisappear { Task { await viewModel.unsubscribe() } }
         // Shared remove confirmation for both the card ⋮ menu and the swipe action
         // (HIG: confirm permanent deletes).
         .alert(

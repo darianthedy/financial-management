@@ -18,8 +18,7 @@ final class DashboardViewModel {
     var navigationDirection: Edge = .trailing
 
     private let repository = DashboardRepository()
-    private let supabase = SupabaseService.shared.client
-    private var realtimeChannel: RealtimeChannelV2?
+    private let realtime = RealtimeTableWatch()
     private var cache: [String: DashboardData] = [:]
 
     func load() async {
@@ -64,31 +63,14 @@ final class DashboardViewModel {
         Task { await load() }
     }
 
+    /// Keeps the dashboard live until the calling task is cancelled.
     func subscribeToChanges() async {
-        let channel = supabase.realtimeV2.channel("dashboard-realtime")
-
         // Any of these can change a widget: transactions feed spend/balances,
         // budgets/fixed_expenses define the plan, accounts/balances drive the
         // Accounts card.
         let tables = ["transactions", "budgets", "fixed_expenses", "accounts", "account_monthly_balances"]
-        let streams = tables.map {
-            channel.postgresChange(AnyAction.self, schema: "public", table: $0)
-        }
-
-        await channel.subscribe()
-
-        for stream in streams {
-            Task {
-                for await _ in stream { invalidateAndReload() }
-            }
-        }
-
-        realtimeChannel = channel
-    }
-
-    func unsubscribe() async {
-        if let channel = realtimeChannel {
-            await supabase.realtimeV2.removeChannel(channel)
+        await realtime.watch(topic: "dashboard-realtime", tables: tables) { [weak self] in
+            self?.invalidateAndReload()
         }
     }
 
