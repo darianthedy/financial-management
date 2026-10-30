@@ -17,11 +17,11 @@ packages="${RUNNER_TEMP:-/tmp}/SourcePackages"
 start=$SECONDS
 
 # --- Simulator -------------------------------------------------------------
-runtime="$(xcrun simctl list -j runtimes |
-  jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version) | last | .identifier')"
-devtype="$(xcrun simctl list -j devicetypes |
-  jq -r --arg want "${DEVICE_FILTER:-Duo}" \
-    '.devicetypes[] | select(.name | test($want; "i")) | .identifier' | tail -1)"
+runtimes="$(xcrun simctl list -j runtimes)"
+runtime="$(jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version) | last | .identifier' <<<"$runtimes")"
+# Only device types this runtime supports (an old iPad name can match otherwise).
+devtype="$(jq -r --arg rt "$runtime" --arg want "${DEVICE_FILTER:-Duo}" \
+  '.runtimes[] | select(.identifier == $rt) | .supportedDeviceTypes[] | select(.name | test($want; "i")) | .identifier' <<<"$runtimes" | tail -1)"
 if [ -z "$devtype" ]; then
   devtype="$(xcrun simctl list -j devicetypes |
     jq -r '[.devicetypes[] | select(.productFamily == "iPhone")] | last | .identifier')"
