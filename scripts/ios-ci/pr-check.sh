@@ -17,10 +17,23 @@ packages="${RUNNER_TEMP:-/tmp}/SourcePackages"
 start=$SECONDS
 
 # --- Simulator -------------------------------------------------------------
-runtime="$(xcrun simctl list -j runtimes |
-  jq -r '[.runtimes[] | select(.platform == "iOS" and .isAvailable)] | sort_by(.version) | last | .identifier')"
-devtype="$(xcrun simctl list -j devicetypes |
-  jq -r '.devicetypes[] | select(.name | test("Duo"; "i")) | .identifier' | head -1)"
+runtimes="$(xcrun simctl list -j runtimes)"
+# The newest iOS runtime with a matching device: iOS 27.1 ships only the Duo,
+# so another DEVICE_FILTER (e.g. an iPad) lands on an older runtime.
+pick="$(jq -r --arg want "${DEVICE_FILTER:-Duo}" '
+  [.runtimes[] | select(.platform == "iOS" and .isAvailable)
+   | {id: .identifier, version: .version,
+      dev: ([.supportedDeviceTypes[]? | select(.name | test($want; "i")) | .identifier] | last)}]
+  | sort_by(.version | split(".") | map(tonumber))
+  | ([.[] | select(.dev != null)] | last) // last
+  | "\(.id) \(.dev // "")"' <<<"$runtimes")"
+runtime="${pick%% *}"
+devtype="${pick#* }"
+echo "runtime $runtime supports: $(jq -r --arg rt "$runtime" '.runtimes[] | select(.identifier == $rt) | [.supportedDeviceTypes[]?.name] | join(", ")' <<<"$runtimes")"
+if [ -z "$devtype" ] && [ "${DEVICE_FILTER:-Duo}" != "Duo" ]; then
+  echo "error: no simulator matches '$DEVICE_FILTER' on $runtime" | tee -a "$out/summary.txt"
+  exit 1
+fi
 if [ -z "$devtype" ]; then
   devtype="$(xcrun simctl list -j devicetypes |
     jq -r '[.devicetypes[] | select(.productFamily == "iPhone")] | last | .identifier')"

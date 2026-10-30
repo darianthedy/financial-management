@@ -214,18 +214,61 @@ struct ScheduledListView: View {
 /// subtitle, a chip row (category / fixed-expense / tags), a calendar-clock
 /// next-due footer, and a type-tinted amount. Row is dimmed while paused.
 private struct ScheduledRow: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let scheduled: EnrichedScheduledTransaction
     let currencyCode: String
 
-    var body: some View {
-        HStack(spacing: 12) {
-            AccountAvatar(
-                imageUrl: scheduled.accountImageUrl,
-                accountType: scheduled.accountType ?? .other,
-                size: 40
-            )
-            .overlay(alignment: .bottomTrailing) { typeBadge }
+    /// Below this the one-line row would cut off the next-due date.
+    private static let minimumTextWidth: CGFloat = 170
 
+    var body: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                // A narrow split column (inner portrait) can't fit the text and
+                // the amount side by side, so the amount moves under the text.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        avatar
+                        details
+                            .frame(
+                                minWidth: Self.minimumTextWidth, idealWidth: Self.minimumTextWidth,
+                                maxWidth: .infinity, alignment: .leading
+                            )
+                        Spacer(minLength: 8)
+                        amountText
+                    }
+                    HStack(spacing: 12) {
+                        avatar
+                        VStack(alignment: .leading, spacing: 4) {
+                            details
+                            amountText
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    avatar
+                    details
+                    Spacer(minLength: 8)
+                    amountText
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .opacity(scheduled.isActive ? 1 : 0.6)
+    }
+
+    private var avatar: some View {
+        AccountAvatar(
+            imageUrl: scheduled.accountImageUrl,
+            accountType: scheduled.accountType ?? .other,
+            size: 40
+        )
+        .overlay(alignment: .bottomTrailing) { typeBadge }
+    }
+
+    private var details: some View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleDerived.title)
                     .font(.subheadline.weight(.semibold))
@@ -250,17 +293,14 @@ private struct ScheduledRow: View {
                 .foregroundStyle(Color.appMutedForeground)
                 .padding(.top, 1)
             }
+    }
 
-            Spacer(minLength: 8)
-
-            Text(scheduled.amount.asCurrency(code: currencyCode))
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(amountColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(.vertical, 4)
-        .opacity(scheduled.isActive ? 1 : 0.6)
+    private var amountText: some View {
+        Text(scheduled.amount.asCurrency(code: currencyCode))
+            .font(.subheadline.weight(.semibold).monospacedDigit())
+            .foregroundStyle(amountColor)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
     }
 
     // MARK: - Title derivation (mirrors TransactionRow.derived / web deriveTitle)

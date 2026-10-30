@@ -9,6 +9,7 @@ import SwiftUI
 /// amount (success/danger/foreground per type) over the date.
 struct TransactionRow: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let transaction: Transaction
     /// The transaction's source account, used for the avatar. Falls back to a
     /// type glyph when unavailable.
@@ -50,16 +51,57 @@ struct TransactionRow: View {
 
     private var isPending: Bool { transaction.status == .pending }
 
-    var body: some View {
-        HStack(spacing: 12) {
-            avatar
+    /// Below this the one-line row would leave the title unreadable.
+    private static let minimumTitleWidth: CGFloat = 96
 
-            VStack(alignment: .leading, spacing: 2) {
+    var body: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                // A narrow split column (inner portrait) can't fit title,
+                // amount and ⋮ on one line, so the amount moves under the title.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        avatar
+                        titleColumn
+                            .frame(
+                                minWidth: Self.minimumTitleWidth, idealWidth: Self.minimumTitleWidth,
+                                maxWidth: .infinity, alignment: .leading
+                            )
+                        Spacer(minLength: 8)
+                        amountColumn(widestNumber: widestNumber)
+                        actionsMenu
+                    }
+                    HStack(spacing: 12) {
+                        avatar
+                        VStack(alignment: .leading, spacing: 4) {
+                            titleColumn
+                            amountColumn(widestNumber: nil)
+                        }
+                        Spacer(minLength: 0)
+                        actionsMenu
+                    }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    avatar
+                    titleColumn
+                    Spacer(minLength: 8)
+                    amountColumn(widestNumber: widestNumber)
+                    actionsMenu
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var titleColumn: some View {
+        VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(derived.title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.appForeground)
                         .lineLimit(1)
+                        .layoutProbe("transactionRow.title.\(derived.title)")
                     if isPending { pendingBadge }
                     if isSpread {
                         Image(systemName: "square.grid.2x2.fill")
@@ -77,30 +119,27 @@ struct TransactionRow: View {
                 }
 
                 chips
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                AmountColumnView(
-                    minorUnits: transaction.amount,
-                    sign: amountSign,
-                    currencyCode: appState.defaultCurrency,
-                    widestNumber: widestNumber
-                )
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(amountColor)
-                    .lineLimit(1)
-                if showDate {
-                    Text(Self.dateFormatter.string(from: transaction.transactionDate))
-                        .font(.caption)
-                        .foregroundStyle(Color.appMutedForeground)
-                }
-            }
-
-            actionsMenu
         }
-        .padding(.vertical, 4)
+    }
+
+    private func amountColumn(widestNumber: String?) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            AmountColumnView(
+                minorUnits: transaction.amount,
+                sign: amountSign,
+                currencyCode: appState.defaultCurrency,
+                widestNumber: widestNumber
+            )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(amountColor)
+                .lineLimit(1)
+                .layoutProbe("transactionRow.amount.\(derived.title)")
+            if showDate {
+                Text(Self.dateFormatter.string(from: transaction.transactionDate))
+                    .font(.caption)
+                    .foregroundStyle(Color.appMutedForeground)
+            }
+        }
     }
 
     // MARK: - Actions menu (web: the row's trailing MoreVertical dropdown —

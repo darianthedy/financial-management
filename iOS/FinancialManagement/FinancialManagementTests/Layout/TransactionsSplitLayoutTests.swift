@@ -51,6 +51,33 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         }
     }
 
+    /// G2: the list fills its column, and its rows keep a readable title. The
+    /// plain List's insets take about 32 pt of the row.
+    func testRowsFillTheListColumn() async throws {
+        for size in LayoutSize.all {
+            guard try LayoutHarness.sceneFits(size) else { continue }
+            let snapshot = try await render(at: size)
+            let list = try snapshot.frame("transactions.list")
+            let rowFrame = try snapshot.frame(row)
+            XCTAssertGreaterThanOrEqual(
+                rowFrame.width, list.width - 60,
+                "row \(rowFrame) in list \(list) at \(size)"
+            )
+            if size.horizontal == .regular {
+                let column = try snapshot.frame("split.list")
+                XCTAssertGreaterThanOrEqual(
+                    list.width, column.width - 1, "list \(list) in column \(column) at \(size)"
+                )
+            }
+            let title = try snapshot.frame("transactionRow.title.Top up Jenius")
+            XCTAssertGreaterThanOrEqual(title.width, 60, "title \(title) in row \(rowFrame) at \(size)")
+            // One line of money, inside the row: never wrapped or cut.
+            let amount = try snapshot.frame("transactionRow.amount.Top up Jenius")
+            XCTAssertLessThanOrEqual(amount.height, 30, "amount wrapped: \(amount) at \(size)")
+            XCTAssertLessThanOrEqual(amount.maxX, rowFrame.maxX + 0.5, "amount \(amount) in row \(rowFrame) at \(size)")
+        }
+    }
+
     /// Unfold → edit → fold: the compact push re-opens the same draft.
     func testDirtyDetailIsKeptAcrossAFold() async throws {
         let drafts = TransactionEditorDrafts()

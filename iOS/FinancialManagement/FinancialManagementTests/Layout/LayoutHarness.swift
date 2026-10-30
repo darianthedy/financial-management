@@ -81,6 +81,17 @@ struct LayoutSnapshot {
 /// but renders in-process with fixture data — no relaunch, login or network.
 @MainActor
 enum LayoutHarness {
+    /// Whether the simulator's scene is at least as large as `size`. On the
+    /// iPhone Duo the hosted scene is the 466 pt outer display, so regular-width
+    /// renders inherit its rail: an 84 pt inset, a floating vertical toolbar and
+    /// a list inset that don't exist on the inner display. Checks of what's
+    /// inside a column only mean something when this is true, i.e. on the iPad
+    /// gate run (`ios-duo-gate.yml`, device "iPad").
+    static func sceneFits(_ size: LayoutSize) throws -> Bool {
+        let bounds = try activeScene().coordinateSpace.bounds
+        return bounds.width >= size.size.width && bounds.height >= size.size.height
+    }
+
     /// Renders `view` and waits until `ready` holds for the recorded frames
     /// (e.g. a probe that only appears once data has loaded), or `timeout`.
     static func render<V: View>(
