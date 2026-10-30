@@ -35,14 +35,18 @@ struct TransactionListView: View {
     init(
         scopedAccountId: UUID? = nil,
         initialFilters: TransactionFilters? = nil,
+        model: TransactionListViewModel? = nil,
         isTabRoot: Bool = false,
         selectedTransactionId: UUID? = nil,
         showsSummary: Bool = false
     ) {
-        _viewModel = State(initialValue: TransactionListViewModel(
+        // The tab root passes a model owned above the size-class branches, so
+        // its filters and search survive a fold that re-creates this view.
+        let model = model ?? TransactionListViewModel(
             scopedAccountId: scopedAccountId, initialFilters: initialFilters
-        ))
-        _searchText = State(initialValue: initialFilters?.search ?? "")
+        )
+        _viewModel = State(initialValue: model)
+        _searchText = State(initialValue: model.filters.search ?? "")
         _selection = State(initialValue: GuardedSelection(selection: isTabRoot ? selectedTransactionId : nil))
         self.isTabRoot = isTabRoot
         _showingSummary = State(initialValue: showsSummary)

@@ -20,6 +20,10 @@ struct ContentRootView: View {
     /// The Transactions detail form's draft, owned above every size-class
     /// branch so a fold / unfold keeps unsaved edits (D3.1).
     @State private var transactionDrafts = TransactionEditorDrafts()
+    /// The Transactions tab's list, owned here for the same reason: a fold
+    /// keeps its filters and search, and a Filters sheet left open through the
+    /// fold still applies to the list on screen.
+    @State private var transactionList = TransactionListViewModel()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -37,7 +41,7 @@ struct ContentRootView: View {
             }
             // web ArrowLeftRight
             Tab("Transactions", systemImage: "arrow.left.arrow.right", value: AppTab.transactions) {
-                SplitRootContainer { TransactionListView(isTabRoot: true) }
+                SplitRootContainer { TransactionListView(model: transactionList, isTabRoot: true) }
             }
             // web PiggyBank (no SF piggy-bank symbol; target reads as a budget goal)
             Tab("Budgets", systemImage: "target", value: AppTab.budgets) {
