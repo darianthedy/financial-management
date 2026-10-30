@@ -158,7 +158,7 @@ struct BudgetListView: View {
                 description: "Its transactions for the month appear here."
             )
         ) { link in
-            TransactionListView(initialFilters: link.filters)
+            DrilldownTransactionList(screen: "budgets", item: link.id, filters: link.filters)
         }
         // An empty month lists nothing, which `.splitDetail` treats as still
         // loading, so drop the selection explicitly.

@@ -52,7 +52,7 @@ struct CategoryListView: View {
                 description: "Its transactions appear here."
             )
         ) { category in
-            TransactionListView(initialFilters: filtersFor(category))
+            DrilldownTransactionList(screen: "categories", item: category.id.uuidString, filters: filtersFor(category))
         }
         .foldSafeSheet(isPresented: $showingAddSheet) {
             CategoryFormSheet { await viewModel.load() }
