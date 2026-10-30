@@ -59,56 +59,15 @@ struct BudgetFormSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.appBackground.ignoresSafeArea()
+            Form {
+                Section {
+                    TextField("Budget name", text: $name)
+                    CurrencyField(label: "Monthly amount", value: $amount, decimals: appState.decimalPlaces)
+                }
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            cardField(title: "Name") {
-                                TextField("Budget name", text: $name)
-                                    .textFieldStyle(.plain)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 44)
-                                    .background(Color.appBackground)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                            .strokeBorder(Color.appInput, lineWidth: 1)
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                            }
-
-                            cardField(title: "Monthly amount") {
-                                // label: "" avoids repeating the title inside the HStack
-                                CurrencyField(label: "", value: $amount, decimals: appState.decimalPlaces)
-                                    .textFieldStyle(.plain)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 44)
-                                    .background(Color.appBackground)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                            .strokeBorder(Color.appInput, lineWidth: 1)
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                            }
-
-                            cardField(title: "Note (optional)") {
-                                TextField("", text: $note, axis: .vertical)
-                                    .textFieldStyle(.plain)
-                                    .padding(12)
-                                    .frame(minHeight: 80, alignment: .topLeading)
-                                    .background(Color.appBackground)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                            .strokeBorder(Color.appInput, lineWidth: 1)
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                            }
-                        }
-                        .padding(20)
-                        .appCardSurface()
-                    }
-                    .padding(16)
+                Section("Note (optional)") {
+                    TextField("", text: $note, axis: .vertical)
+                        .lineLimit(3...6)
                 }
             }
             .navigationTitle(title)
@@ -139,17 +98,6 @@ struct BudgetFormSheet: View {
 
     /// A labeled form field: bold caption above, bordered input box below.
     /// Mirrors the `field()` helper in `LoginView`.
-    private func cardField<Content: View>(
-        title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(Color.appForeground)
-            content()
-        }
-    }
 
     private func loadInitialValues() {
         guard case .edit(let progress) = mode, name.isEmpty else { return }
