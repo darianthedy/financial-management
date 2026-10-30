@@ -6,6 +6,19 @@ import XCTest
 /// in a model owned above the size-class branches.
 @MainActor
 final class TransactionsFoldLayoutTests: XCTestCase {
+    @Observable
+    final class Flip { var sizeClass: UserInterfaceSizeClass = .compact }
+
+    struct Root: View {
+        let flip: Flip
+        let model: TransactionListViewModel
+
+        var body: some View {
+            SplitRootContainer { TransactionListView(model: model, isTabRoot: true, showsSummary: true) }
+                .environment(\.horizontalSizeClass, flip.sizeClass)
+        }
+    }
+
     private let row = "transactions.row.Top up Jenius"
 
     override func setUp() async throws {
@@ -41,21 +54,11 @@ final class TransactionsFoldLayoutTests: XCTestCase {
     /// Flips the size class under a live view, which swaps its branch, the way
     /// a fold does: the Summary must still be open, and open only once.
     func testSummaryStaysOpenThroughAFold() async throws {
-        @Observable
-        final class Flip { var sizeClass: UserInterfaceSizeClass = .compact }
         let flip = Flip()
         let model = TransactionListViewModel()
         let appState = AppState()
         await appState.loadCurrencyData()
 
-        struct Root: View {
-            let flip: Flip
-            let model: TransactionListViewModel
-            var body: some View {
-                SplitRootContainer { TransactionListView(model: model, isTabRoot: true, showsSummary: true) }
-                    .environment(\.horizontalSizeClass, flip.sizeClass)
-            }
-        }
         let host = UIHostingController(
             rootView: Root(flip: flip, model: model)
                 .environment(\.transactionDrafts, TransactionEditorDrafts())
