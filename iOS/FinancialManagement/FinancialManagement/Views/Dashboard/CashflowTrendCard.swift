@@ -279,6 +279,10 @@ struct CashflowTrendCard: View {
             swatch(label: plannedLabel, color: .appWarning)
             swatch(label: unplannedLabel, color: .appDanger)
         }
+        // Never compressed: when it doesn't fit beside the title the card
+        // header wraps it underneath (`DashboardCard`, D4.2).
+        .fixedSize()
+        .layoutProbe("dashboard.trend.legend")
     }
 
     private func swatch(label: String, color: Color) -> some View {
