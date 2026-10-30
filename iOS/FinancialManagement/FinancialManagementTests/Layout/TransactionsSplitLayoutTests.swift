@@ -73,19 +73,42 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         XCTAssertTrue(kept.hasChanges)
     }
 
-    /// D3.2: on the inner display in landscape, Summary is a trailing
-    /// inspector column beside list | detail, which keep their room.
+    /// D3.2: on the inner display in landscape, Summary opens as a trailing
+    /// inspector column and list | detail give up that room. The inspector's
+    /// content is hosted apart from the screen, so its own probe frame isn't in
+    /// screen coordinates; the column itself is checked on the real bar at G2.
     func testSummaryIsATrailingInspectorInLandscape() async throws {
-        let snapshot = try await render(selected: topUp, showsSummary: true, at: .innerLandscape)
+        let size = LayoutSize.innerLandscape
+        let roomForInspector = SummaryPresentation.inspectorWidth.min - 120
+        let appState = try await loadedAppState()
+        let snapshot = try await LayoutHarness.render(
+            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: topUp, showsSummary: true) }
+                .environment(\.transactionDrafts, TransactionEditorDrafts())
+                .environment(appState)
+                .environment(ThemeManager()),
+            at: size,
+            until: { frames in
+                // Wait out the inspector's presentation animation.
+                frames["transactions.summary"] != nil
+                    && (frames["split.detail"]?.frame.maxX ?? .infinity) <= size.size.width - roomForInspector
+            }
+        )
         attach(snapshot, name: "transactions-summary")
+        XCTAssertNotNil(snapshot.frames["transactions.summary"], "the Summary never rendered")
         let list = try snapshot.frame("split.list")
         let detail = try snapshot.frame("split.detail")
-        let summary = try snapshot.frame("transactions.summary")
         XCTAssertLessThanOrEqual(list.maxX, detail.minX + 1)
-        XCTAssertLessThanOrEqual(detail.maxX, summary.minX + 1, "the inspector must trail the detail")
-        XCTAssertGreaterThanOrEqual(list.width, 299.5)
+        XCTAssertLessThanOrEqual(
+            detail.maxX, size.size.width - roomForInspector,
+            "list | detail didn't make room for the inspector"
+        )
         XCTAssertGreaterThanOrEqual(detail.width, 280, "the detail column was squeezed")
-        XCTAssertGreaterThanOrEqual(summary.width, SummaryPresentation.inspectorWidth.min - 0.5)
         assertNoInteractiveOverlap(snapshot)
+    }
+
+    private func loadedAppState() async throws -> AppState {
+        let appState = AppState()
+        await appState.loadCurrencyData()
+        return appState
     }
 }
