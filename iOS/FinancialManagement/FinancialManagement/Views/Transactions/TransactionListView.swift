@@ -9,12 +9,15 @@ struct TransactionListView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.canTileSplitRoot) private var canTileSplitRoot
     @Environment(\.transactionDrafts) private var sharedDrafts
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: TransactionListViewModel
     @State private var showingForm = false
     @State private var editingTransaction: Transaction?
     @State private var installmentSource: Transaction?
     @State private var showingFilters = false
-    @State private var showingSummary = false
+    @State private var showingSummary: Bool
+    /// The screen's full width (inspector included), for `SummaryPresentation`.
+    @State private var screenWidth: CGFloat = 0
     @State private var searchText = ""
     /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
     /// and the trailing swipe so they share one confirmation alert.
@@ -31,7 +34,8 @@ struct TransactionListView: View {
         scopedAccountId: UUID? = nil,
         initialFilters: TransactionFilters? = nil,
         isTabRoot: Bool = false,
-        selectedTransactionId: UUID? = nil
+        selectedTransactionId: UUID? = nil,
+        showsSummary: Bool = false
     ) {
         _viewModel = State(initialValue: TransactionListViewModel(
             scopedAccountId: scopedAccountId, initialFilters: initialFilters
@@ -39,6 +43,7 @@ struct TransactionListView: View {
         _searchText = State(initialValue: initialFilters?.search ?? "")
         _selection = State(initialValue: GuardedSelection(selection: isTabRoot ? selectedTransactionId : nil))
         self.isTabRoot = isTabRoot
+        _showingSummary = State(initialValue: showsSummary)
     }
 
     private var drafts: TransactionEditorDrafts { sharedDrafts ?? localDrafts }
@@ -66,6 +71,58 @@ struct TransactionListView: View {
     }
 
     var body: some View {
+        splitScreen
+            // Summary (F3, D3.2): a trailing inspector column beside the split
+            // on wide regular width, else a sheet exactly as before. Applied
+            // outside the split so the inspector spans the whole screen, and
+            // measured outside the inspector so opening it can't flip the style.
+            .inspector(isPresented: summaryBinding(.inspector)) {
+                summaryView
+                    .inspectorColumnWidth(
+                        min: SummaryPresentation.inspectorWidth.min,
+                        ideal: SummaryPresentation.inspectorWidth.ideal,
+                        max: SummaryPresentation.inspectorWidth.max
+                    )
+            }
+            .sheet(isPresented: summaryBinding(.sheet)) { summaryView }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { screenWidth = $0 }
+    }
+
+    private var summaryStyle: SummaryPresentation {
+        SummaryPresentation.style(
+            isTabRoot: isTabRoot, sizeClass: horizontalSizeClass, width: screenWidth
+        )
+    }
+
+    /// Shows the Summary in `style` only, so exactly one presentation is live.
+    private func summaryBinding(_ style: SummaryPresentation) -> Binding<Bool> {
+        Binding(
+            // Nothing until the width is measured, so a Summary open at launch
+            // never flashes as a sheet before it settles into the inspector.
+            get: { showingSummary && screenWidth > 0 && summaryStyle == style },
+            set: { isPresented in
+                if isPresented {
+                    showingSummary = true
+                } else if summaryStyle == style {
+                    showingSummary = false
+                }
+            }
+        )
+    }
+
+    private var summaryView: some View {
+        TransactionSummarySheet(
+            filters: viewModel.effectiveFilters,
+            currencyCode: appState.defaultCurrency,
+            accountsById: viewModel.accountsById,
+            categoriesById: viewModel.categoriesById,
+            tagsById: viewModel.tagsById,
+            onDone: { showingSummary = false }
+        )
+        .layoutProbe("transactions.summary")
+    }
+
+    @ViewBuilder private var splitScreen: some View {
         if isTabRoot {
             screen
                 .splitDetail(
@@ -175,15 +232,6 @@ struct TransactionListView: View {
                     searchText = newFilters.search ?? ""
                 }
             }
-            .sheet(isPresented: $showingSummary) {
-                TransactionSummarySheet(
-                    filters: viewModel.effectiveFilters,
-                    currencyCode: appState.defaultCurrency,
-                    accountsById: viewModel.accountsById,
-                    categoriesById: viewModel.categoriesById,
-                    tagsById: viewModel.tagsById
-                )
-            }
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
             // Shared delete confirmation for both the row ⋮ menu and the swipe
@@ -266,7 +314,7 @@ struct TransactionListView: View {
     // MARK: - Toolbar actions (main list)
 
     private var summaryToolbarButton: some View {
-        Button { showingSummary = true } label: {
+        Button { showingSummary.toggle() } label: {
             Image(systemName: "chart.bar.xaxis")
         }
         .tint(Color.appForeground)

@@ -16,18 +16,21 @@ final class TransactionsSplitLayoutTests: XCTestCase {
 
     private func render(
         selected: UUID? = nil, drafts: TransactionEditorDrafts = TransactionEditorDrafts(),
-        at size: LayoutSize
+        showsSummary: Bool = false, at size: LayoutSize
     ) async throws -> LayoutSnapshot {
         let appState = AppState()
         await appState.loadCurrencyData()
         let row = row
         return try await LayoutHarness.render(
-            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: selected) }
+            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: selected, showsSummary: showsSummary) }
                 .environment(\.transactionDrafts, drafts)
                 .environment(appState)
                 .environment(ThemeManager()),
             at: size,
-            until: { $0[row] != nil && (selected == nil || $0["split.detail"] != nil) }
+            until: {
+                $0[row] != nil && (selected == nil || $0["split.detail"] != nil)
+                    && (!showsSummary || $0["transactions.summary"] != nil)
+            }
         )
     }
 
@@ -67,5 +70,21 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         XCTAssertTrue(kept === model)
         XCTAssertEqual(kept.description, "Top up (October)")
         XCTAssertTrue(kept.hasChanges)
+    }
+
+    /// D3.2: on the inner display in landscape, Summary is a trailing
+    /// inspector column beside list | detail, which keep their room.
+    func testSummaryIsATrailingInspectorInLandscape() async throws {
+        let snapshot = try await render(selected: topUp, showsSummary: true, at: .innerLandscape)
+        attach(snapshot, name: "transactions-summary")
+        let list = try snapshot.frame("split.list")
+        let detail = try snapshot.frame("split.detail")
+        let summary = try snapshot.frame("transactions.summary")
+        XCTAssertLessThanOrEqual(list.maxX, detail.minX + 1)
+        XCTAssertLessThanOrEqual(detail.maxX, summary.minX + 1, "the inspector must trail the detail")
+        XCTAssertGreaterThanOrEqual(list.width, 299.5)
+        XCTAssertGreaterThanOrEqual(detail.width, 280, "the detail column was squeezed")
+        XCTAssertGreaterThanOrEqual(summary.width, SummaryPresentation.inspectorWidth.min - 0.5)
+        assertNoInteractiveOverlap(snapshot)
     }
 }

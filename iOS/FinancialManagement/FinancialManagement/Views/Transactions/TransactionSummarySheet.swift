@@ -42,6 +42,9 @@ struct TransactionSummarySheet: View {
     let accountsById: [UUID: Account]
     let categoriesById: [UUID: Category]
     let tagsById: [UUID: Tag]
+    /// Closes the Summary when it is an inspector column (D3.2), which
+    /// `dismiss` doesn't reach on regular width. Defaults to `dismiss`.
+    var onDone: (() -> Void)? = nil
 
     @State private var result: SummaryResult?
     @State private var isLoading = true
@@ -65,7 +68,7 @@ struct TransactionSummarySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { if let onDone { onDone() } else { dismiss() } }
                 }
             }
         }
