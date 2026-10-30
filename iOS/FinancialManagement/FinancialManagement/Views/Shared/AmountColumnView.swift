@@ -11,6 +11,7 @@ import SwiftUI
 /// (e.g. `.font(.subheadline.weight(.semibold)).foregroundStyle(color)`); the
 /// digits are made monospaced internally so they line up across rows.
 struct AmountColumnView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Amount in minor units; only its magnitude is shown (the sign is explicit).
     let minorUnits: Int64
     /// Leading sign to display: "", "+", or "-". Kept explicit so callers can use
@@ -40,14 +41,15 @@ struct AmountColumnView: View {
                 }
             }
             .monospacedDigit()
-            // Money never wraps or truncates; its neighbours give way instead.
+            // Regular width: money never wraps or truncates in a narrow split
+            // column; its neighbours give way. Compact keeps its old sizing.
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: horizontalSizeClass == .regular, vertical: false)
         } else {
             Text(sign + parts.symbol + parts.number)
                 .monospacedDigit()
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .fixedSize(horizontal: horizontalSizeClass == .regular, vertical: false)
         }
     }
 }
