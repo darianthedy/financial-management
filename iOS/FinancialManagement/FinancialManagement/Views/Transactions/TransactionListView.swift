@@ -16,8 +16,10 @@ struct TransactionListView: View {
     @State private var installmentSource: Transaction?
     @State private var showingFilters = false
     @State private var showingSummary: Bool
-    /// The screen's full width (inspector included), for `SummaryPresentation`.
-    @State private var screenWidth: CGFloat = 0
+    /// Whether the tab root is wide enough for the Summary inspector
+    /// (`SummaryPresentation`); nil until measured. A Bool rather than the
+    /// width, so only crossing the threshold re-renders the screen.
+    @State private var fitsSummaryInspector: Bool?
     @State private var searchText = ""
     /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
     /// and the trailing swipe so they share one confirmation alert.
@@ -70,27 +72,37 @@ struct TransactionListView: View {
         isScoped
     }
 
+    @ViewBuilder
     var body: some View {
-        splitScreen
-            // Summary (F3, D3.2): a trailing inspector column beside the split
-            // on wide regular width, else a sheet exactly as before. Applied
-            // outside the split so the inspector spans the whole screen, and
-            // measured outside the inspector so opening it can't flip the style.
-            .inspector(isPresented: summaryBinding(.inspector)) {
-                summaryView
-                    .inspectorColumnWidth(
-                        min: SummaryPresentation.inspectorWidth.min,
-                        ideal: SummaryPresentation.inspectorWidth.ideal,
-                        max: SummaryPresentation.inspectorWidth.max
-                    )
-            }
-            .sheet(isPresented: summaryBinding(.sheet)) { summaryView }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { screenWidth = $0 }
+        if isTabRoot {
+            splitScreen
+                // Summary (F3, D3.2): a trailing inspector column beside the
+                // split on wide regular width, else a sheet exactly as before.
+                // Applied outside the split so the inspector spans the whole
+                // screen, and measured outside the inspector so opening it
+                // can't flip the style.
+                .inspector(isPresented: summaryBinding(.inspector)) {
+                    summaryView
+                        .inspectorColumnWidth(
+                            min: SummaryPresentation.inspectorWidth.min,
+                            ideal: SummaryPresentation.inspectorWidth.ideal,
+                            max: SummaryPresentation.inspectorWidth.max
+                        )
+                }
+                .sheet(isPresented: summaryBinding(.sheet)) { summaryView }
+                .onGeometryChange(for: Bool.self) {
+                    $0.size.width >= SummaryPresentation.minimumInspectorScreenWidth
+                } action: { fitsSummaryInspector = $0 }
+        } else {
+            // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
+            screen.sheet(isPresented: $showingSummary) { summaryView }
+        }
     }
 
     private var summaryStyle: SummaryPresentation {
         SummaryPresentation.style(
-            isTabRoot: isTabRoot, sizeClass: horizontalSizeClass, width: screenWidth
+            isTabRoot: isTabRoot, sizeClass: horizontalSizeClass,
+            width: fitsSummaryInspector == true ? SummaryPresentation.minimumInspectorScreenWidth : 0
         )
     }
 
@@ -99,7 +111,7 @@ struct TransactionListView: View {
         Binding(
             // Nothing until the width is measured, so a Summary open at launch
             // never flashes as a sheet before it settles into the inspector.
-            get: { showingSummary && screenWidth > 0 && summaryStyle == style },
+            get: { showingSummary && fitsSummaryInspector != nil && summaryStyle == style },
             set: { isPresented in
                 if isPresented {
                     showingSummary = true
@@ -122,8 +134,9 @@ struct TransactionListView: View {
         .layoutProbe("transactions.summary")
     }
 
-    @ViewBuilder private var splitScreen: some View {
-        if isTabRoot {
+    /// The tab root's list | detail split (D3.1).
+    private var splitScreen: some View {
+        Group {
             screen
                 .splitDetail(
                     selection: $selection.selection,
@@ -146,8 +159,6 @@ struct TransactionListView: View {
                         drafts.discard()
                     }
                 }
-        } else {
-            screen
         }
     }
 
