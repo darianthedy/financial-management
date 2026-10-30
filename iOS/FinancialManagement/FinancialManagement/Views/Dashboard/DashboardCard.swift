@@ -24,18 +24,32 @@ struct DashboardCard<Content: View, Accessory: View>: View {
         VStack(alignment: .leading, spacing: 20) {
             // Title row mirrors web's `CardHeader` flex row: the title on the
             // left with an optional trailing accessory (e.g. a status chip).
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Color.appCardForeground)
-                Spacer(minLength: 8)
-                accessory
+            // When both don't fit on one line (a narrow column or ⅓ Split
+            // View, D4.2) the accessory wraps under the title instead of
+            // squeezing either into truncation.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    titleText
+                    Spacer(minLength: 8)
+                    accessory
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    titleText
+                    accessory
+                }
             }
+            .layoutProbe("dashboardCard.header.\(title)")
             content
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCardSurface()
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(Color.appCardForeground)
     }
 }
 

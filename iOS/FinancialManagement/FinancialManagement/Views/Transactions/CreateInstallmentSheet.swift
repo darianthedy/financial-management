@@ -20,6 +20,8 @@ struct CreateInstallmentSheet: View {
     @State private var startOffset = 0          // 0 = this month, 1 = next month
     @State private var months = 3
     @State private var selectedNames: Set<String> = []
+    /// The Form's width, for `AllocationGridLayout`; 0 until measured.
+    @State private var formWidth: CGFloat = 0
     @State private var grid: [Cell: String] = [:]
     @State private var availableNames: [String] = []
     @State private var isSaving = false
@@ -80,6 +82,8 @@ struct CreateInstallmentSheet: View {
                     Section { Text(errorMessage).foregroundStyle(Color.appDanger) }
                 }
             }
+            // The Form's width decides the allocation grid's columns (D4.2).
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { formWidth = $0 }
             .navigationTitle("Virtual Installment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -169,19 +173,37 @@ struct CreateInstallmentSheet: View {
     }
 
     private func allocationSection(for name: String) -> some View {
-        Section(name) {
-            ForEach(monthList, id: \.self) { month in
-                let cell = Cell(name: name, month: month)
-                HStack {
-                    Text(DateUtils.formatYearMonth(month))
-                    Spacer()
-                    TextField("0", text: amountBinding(cell))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 140)
+        let columns = AllocationGridLayout.columns(formWidth: formWidth)
+        let rows = AllocationGridLayout.rows(monthList, columns: columns)
+        return Section(name) {
+            // One month per row on iPhone; two side by side once the sheet is
+            // form- or page-sized on the inner display (D4.2).
+            ForEach(rows, id: \.self) { row in
+                HStack(spacing: 16) {
+                    ForEach(row, id: \.self) { month in
+                        allocationCell(Cell(name: name, month: month))
+                        if columns > 1 && month != row.last { Divider() }
+                    }
+                    // Keep a short last row's cell at column width.
+                    if row.count < columns {
+                        Divider().hidden()
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
+    }
+
+    private func allocationCell(_ cell: Cell) -> some View {
+        HStack {
+            Text(DateUtils.formatYearMonth(cell.month))
+            Spacer()
+            TextField("0", text: amountBinding(cell))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 140)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Grid math
@@ -271,6 +293,26 @@ struct CreateInstallmentSheet: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// The installment sheet's allocation grid (iPhone Duo plan D4.2): one month
+/// per row on iPhone, two side by side once the sheet is form- or page-sized
+/// (a centered card ~540 pt wide or more on the inner display).
+enum AllocationGridLayout {
+    /// The narrowest Form that fits two month | amount cells per row.
+    static let minimumTwoColumnFormWidth: CGFloat = 520
+
+    static func columns(formWidth: CGFloat) -> Int {
+        formWidth >= minimumTwoColumnFormWidth ? 2 : 1
+    }
+
+    /// `months` in rows of `columns`, in order (the last row may be short).
+    static func rows(_ months: [String], columns: Int) -> [[String]] {
+        let size = max(columns, 1)
+        return stride(from: 0, to: months.count, by: size).map {
+            Array(months[$0..<min($0 + size, months.count)])
         }
     }
 }
