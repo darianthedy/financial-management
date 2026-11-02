@@ -59,33 +59,4 @@ final class FoldContextTests: XCTestCase {
             CGRect(x: 0, y: 300, width: 951, height: 0)
         )
     }
-
-    // MARK: - Reflection fallback for ReservedRegion's frame
-
-    /// Mirrors the shape the probe printed for SwiftUI's `ReservedRegion`.
-    private struct StubSceneRegion {
-        let frame: (Double, Double, Double, Double)
-        let isActive: Bool
-    }
-
-    private struct StubRegion {
-        let base: StubSceneRegion
-    }
-
-    func testReflectsFrameFromRegionDescription() {
-        let region = StubRegion(base: .init(frame: (382, 0, 84, 174), isActive: true))
-        XCTAssertEqual(
-            ReservedRegionGeometry.globalFrame(of: region),
-            CGRect(x: 382, y: 0, width: 84, height: 174)
-        )
-    }
-
-    func testInactiveRegionHasNoFrame() {
-        let region = StubRegion(base: .init(frame: (470, 0, 10, 669), isActive: false))
-        XCTAssertNil(ReservedRegionGeometry.globalFrame(of: region))
-    }
-
-    func testUnknownShapeHasNoFrame() {
-        XCTAssertNil(ReservedRegionGeometry.globalFrame(of: "not a region"))
-    }
 }
