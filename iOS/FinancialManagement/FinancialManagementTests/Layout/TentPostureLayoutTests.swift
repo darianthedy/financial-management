@@ -55,7 +55,8 @@ final class TentPostureLayoutTests: XCTestCase {
     }
 
     func testFixedExpenses() async throws {
-        let row = "fixed.row.Rent"
+        // Unpaid, so it heads the list: Paid rows are below the shorter region.
+        let row = "fixed.row.Phone Plan"
         let snapshot = try await render(SplitRootContainer { FixedExpenseListView() }, fold: tent, probe: row)
         attach(snapshot, name: "fixed-expenses-tent")
         try assertSplit(snapshot, below: row)
