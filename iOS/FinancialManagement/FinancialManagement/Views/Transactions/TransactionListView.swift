@@ -106,6 +106,7 @@ struct TransactionListView: View {
                 .onGeometryChange(for: Bool.self) {
                     $0.size.width >= SummaryPresentation.minimumInspectorScreenWidth
                 } action: { fitsSummaryInspector = $0 }
+                .tentGlance { glance }
         } else if isTabRoot {
             // Compact: the sheet, as before. No `.inspector` at all here.
             splitScreen.sheet(isPresented: showingSummaryBinding) { summaryView }
@@ -113,6 +114,19 @@ struct TransactionListView: View {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
             screen.sheet(isPresented: showingSummaryBinding) { summaryView }
         }
+    }
+
+    /// Tent posture (D6.2): the size of the current result, and the latest
+    /// day's net. The Summary has the full totals, but costs a fetch.
+    private var glance: some View {
+        var stats = [GlanceStats.Stat(label: "Transactions", value: "\(viewModel.totalCount)")]
+        if let latest = viewModel.dateGroups.first {
+            stats.append(.init(
+                label: latest.dateLabel,
+                value: CurrencyUtils.format(latest.net, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
+            ))
+        }
+        return GlanceStats(stats: stats)
     }
 
     private var summaryStyle: SummaryPresentation {

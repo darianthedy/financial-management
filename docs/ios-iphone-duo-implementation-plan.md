@@ -181,6 +181,8 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
 **D6.2 Tent posture** · M
 - **Scope:** `ArrangementView` with `.split` puts read-only glance content on top and controls plus the list at the bottom, for Dashboard, Transactions, Budgets and Fixed Expenses.
 - **Tests:** injected tent division layout tests.
+- **Change from this plan:** `.tentGlance` is a `Layout` driven by `FoldContext`, not `ArrangementView`, which reads the real hinge: a test can't inject a fold into it, so it would have no coverage until T3.
+- **Probe finding:** SwiftUI's `ReservedRegion.frame` is in the querying view's coordinates, unlike UIKit's, and is a public property. Regions were only seen at the root, so readers below it convert the root's frames (`\.foldDivisionFrames`).
 
 ### Phase 7: Release
 

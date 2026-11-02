@@ -215,6 +215,21 @@ struct BudgetListView: View {
         } message: { item in
             Text("Cancel \"\(item.title)\"? Its future reservations are deleted and the affected budgets recover their allowance. This can't be undone.")
         }
+        .tentGlance { glance }
+    }
+
+    /// Tent posture (D6.2): the month's totals across every budget.
+    private var glance: some View {
+        let progress = viewModel.progress
+        func money(_ amount: Int64) -> String {
+            CurrencyUtils.format(amount, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
+        }
+        return GlanceStats(stats: [
+            .init(label: "Month", value: DateUtils.formatYearMonth(viewModel.yearMonth)),
+            .init(label: "Budgeted", value: money(progress.map(\.effectiveAmount).reduce(0, +))),
+            .init(label: "Spent", value: money(progress.map(\.spent).reduce(0, +))),
+            .init(label: "Remaining", value: money(progress.map(\.remaining).reduce(0, +))),
+        ])
     }
 }
 
