@@ -85,12 +85,20 @@ extension EnvironmentValues {
     /// The fold position for this view tree. Set by `.readsFoldContext()` at
     /// the root, or injected directly by layout tests.
     @Entry var foldContext: FoldContext = .none
+
+    /// Layout tests' stand-in for the device's division regions, in global
+    /// coordinates, so a `.readsFoldContext()` below the root sees an injected
+    /// fold through the same mapping as a real one. Nil outside tests.
+    @Entry var foldDivisionFramesOverride: [CGRect]? = nil
 }
 
 extension View {
-    /// Measures the fold at this view and publishes it as `\.foldContext` to
-    /// its descendants. Re-measures on resize and on every hinge change.
-    /// Always `.none` before iOS 27.1.
+    /// Measures the fold at this view and publishes it as `\.foldContext`, in
+    /// this view's coordinates, to its descendants. Re-measures when the view
+    /// moves or resizes and on every hinge change. A view that doesn't start at
+    /// the root's origin (e.g. a tab beside the sidebar) needs its own reader.
+    /// Always `.none` before iOS 27.1, and while `AdaptiveLayout` is off, so
+    /// the kill switch also keeps fold layouts away from TestFlight.
     func readsFoldContext() -> some View {
         modifier(FoldContextReader())
     }
@@ -99,6 +107,7 @@ extension View {
 private struct FoldContextReader: ViewModifier {
     @State private var context: FoldContext = .none
     @State private var hingeTick = 0
+    @Environment(\.foldDivisionFramesOverride) private var framesOverride
 
     func body(content: Content) -> some View {
         content
@@ -107,7 +116,7 @@ private struct FoldContextReader: ViewModifier {
                 GeometryReader { geo in
                     Color.clear
                         .onAppear { update(geo) }
-                        .onChange(of: geo.size) { update(geo) }
+                        .onChange(of: geo.frame(in: .global)) { update(geo) }
                         .onChange(of: hingeTick) { update(geo) }
                 }
             }
@@ -115,13 +124,17 @@ private struct FoldContextReader: ViewModifier {
     }
 
     private func update(_ geo: GeometryProxy) {
-        guard #available(iOS 27.1, *) else { return }
+        guard let global = globalDivisionFrames(geo) else { return }
         let origin = geo.frame(in: .global).origin
-        let frames = geo.reservedRegions(kind: .division)
-            .compactMap(ReservedRegionGeometry.globalFrame(of:))
-            .map { $0.offsetBy(dx: -origin.x, dy: -origin.y) }
+        let frames = global.map { $0.offsetBy(dx: -origin.x, dy: -origin.y) }
         let next = FoldContext.from(divisionFrames: frames, in: CGRect(origin: .zero, size: geo.size))
         if next != context { context = next }
+    }
+
+    private func globalDivisionFrames(_ geo: GeometryProxy) -> [CGRect]? {
+        if let framesOverride { return framesOverride }
+        guard AdaptiveLayout.isEnabled, #available(iOS 27.1, *) else { return nil }
+        return geo.reservedRegions(kind: .division).compactMap(ReservedRegionGeometry.globalFrame(of:))
     }
 }
 

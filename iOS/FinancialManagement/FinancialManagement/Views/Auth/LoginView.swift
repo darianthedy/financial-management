@@ -11,14 +11,18 @@ import SwiftUI
 struct LoginView: View {
     @State private var viewModel = AuthViewModel()
     @State private var isSignUp = false
+    @Environment(\.foldContext) private var fold
 
     var body: some View {
         ZStack {
             Color.appBackground.ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: 24) {
+                // One column; on the fold, the header and card get a region each,
+                // with the card trailing or below: it's the interactive part.
+                FoldRegions(fold: fold, spacing: 24, maxChildWidth: 400) {
                     header
+                        .layoutProbe("login.header")
 
                     VStack(alignment: .leading, spacing: 16) {
                         field(title: "Email") {
@@ -57,10 +61,8 @@ struct LoginView: View {
                     }
                     .padding(20)
                     .appCardSurface()
+                    .layoutProbe("login.card", interactive: true)
                 }
-                .frame(maxWidth: 400)
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity)
             }
         }
     }
