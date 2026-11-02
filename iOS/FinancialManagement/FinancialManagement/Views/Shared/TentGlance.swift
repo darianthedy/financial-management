@@ -70,6 +70,16 @@ struct TentSplit: Layout {
         )
     }
 
+    /// Centers a glance of `height` in `region`; a taller one keeps its top
+    /// and is clipped at the region's edge, so it can't reach the fold.
+    static func centered(height: CGFloat, in region: CGRect) -> CGRect {
+        let fitted = min(height, region.height)
+        return CGRect(
+            x: region.minX, y: region.minY + (region.height - fitted) / 2,
+            width: region.width, height: fitted
+        )
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
@@ -84,7 +94,8 @@ struct TentSplit: Layout {
         guard let main = subviews.last else { return }
         let whole = CGRect(origin: .zero, size: bounds.size)
         if subviews.count == 2, let regions = Self.regions(in: bounds.size, foldY: foldY, margin: margin) {
-            place(subviews[0], in: regions.glance)
+            let height = subviews[0].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            place(subviews[0], in: Self.centered(height: height, in: regions.glance))
             place(main, in: regions.main)
         } else {
             // A glance with no room is parked at zero size.

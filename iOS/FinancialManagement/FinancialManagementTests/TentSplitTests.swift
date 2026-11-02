@@ -17,4 +17,17 @@ final class TentSplitTests: XCTestCase {
             XCTAssertNil(TentSplit.regions(in: size, foldY: foldY, margin: 16))
         }
     }
+
+    func testGlanceCentersInItsRegion() {
+        let region = CGRect(x: 0, y: 0, width: 669, height: 459)
+        XCTAssertEqual(
+            TentSplit.centered(height: 59, in: region),
+            CGRect(x: 0, y: 200, width: 669, height: 59)
+        )
+    }
+
+    func testTallGlanceStaysInsideItsRegion() {
+        let region = CGRect(x: 0, y: 0, width: 669, height: 459)
+        XCTAssertEqual(TentSplit.centered(height: 900, in: region), region)
+    }
 }
