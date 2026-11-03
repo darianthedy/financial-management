@@ -2,10 +2,10 @@ import SwiftUI
 
 /// The iPhone Duo **adaptive kill switch** (docs/ios-iphone-duo-implementation-plan.md §1.4).
 ///
-/// Regular-width layouts land on `main` in small PRs, but must not reach
-/// TestFlight or iPad users until they are finished. The switch is the
-/// `ADAPTIVE_LAYOUT_ENABLED` build setting, surfaced through Info.plist:
-/// **on** for Debug, **off** for Release (TestFlight / App Store) until D7.1.
+/// Regular-width layouts landed on `main` in small PRs behind this switch.
+/// The switch is the `ADAPTIVE_LAYOUT_ENABLED` build setting, surfaced through
+/// Info.plist. Since D7.1 it is **on** for Debug and Release; set it to `NO`
+/// for Release to send every device back to the compact layout.
 ///
 /// While off, `AdaptiveLayoutGate` pins the horizontal size class to
 /// `.compact` at the root, so every device renders today's compact layout.
