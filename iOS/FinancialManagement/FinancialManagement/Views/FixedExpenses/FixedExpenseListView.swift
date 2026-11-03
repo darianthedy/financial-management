@@ -130,6 +130,19 @@ struct FixedExpenseListView: View {
         } message: { expense in
             Text("Delete \"\(expense.name)\" for this month? Other months are unaffected.")
         }
+        .tentGlance { glance }
+    }
+
+    /// Tent posture (D6.2): what's paid and what's still due this month.
+    private var glance: some View {
+        func money(_ amount: Int64) -> String {
+            CurrencyUtils.format(amount, currency: currencyCode, decimalPlaces: appState.decimalPlaces)
+        }
+        return GlanceStats(stats: [
+            .init(label: "Month", value: DateUtils.formatYearMonth(viewModel.yearMonth)),
+            .init(label: "Unpaid", value: money(viewModel.unpaidSubtotal)),
+            .init(label: "Paid", value: money(viewModel.paidSubtotal)),
+        ])
     }
 
     @ViewBuilder
