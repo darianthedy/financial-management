@@ -31,43 +31,84 @@ final class HappyPathUITests: XCTestCase {
         app.launch()
 
         // 1. Login.
-        let emailField = app.textFields["Email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 10))
+        let emailField = app.textFields["you@example.com"]
+        waitFor(emailField, 10, in: app)
         emailField.tap()
         emailField.typeText(email!)
 
-        let passwordField = app.secureTextFields["Password"]
+        let passwordField = app.secureTextFields.firstMatch
         passwordField.tap()
         passwordField.typeText(password!)
 
-        app.buttons["Sign In"].tap()
+        app.buttons["Sign in"].tap()
 
         // 2. Land on the tab bar and open Accounts.
-        let accountsTab = app.tabBars.buttons["Accounts"]
-        XCTAssertTrue(accountsTab.waitForExistence(timeout: 15))
+        let accountsTab = tab("Accounts", in: app)
+        waitFor(accountsTab, 15, in: app)
         accountsTab.tap()
 
         // 3. Add an account via the "+" toolbar button.
-        app.navigationBars.buttons["Add"].firstMatch.tap()
+        app.buttons["Add"].firstMatch.tap()
         let accountName = "UITest Account \(Int(Date().timeIntervalSince1970))"
         let nameField = app.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        waitFor(nameField, 5, in: app)
         nameField.tap()
         nameField.typeText(accountName)
         app.buttons["Save"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts[accountName].waitForExistence(timeout: 10))
+        // The sheet closes only on success; a save error keeps it up, with
+        // the new row possibly visible behind it.
+        let accountSheet = app.navigationBars["New Account"]
+        if !accountSheet.waitForNonExistence(timeout: 10) {
+            print("HAPPYPATH-SCREEN-BEGIN\n\(app.debugDescription)\nHAPPYPATH-SCREEN-END")
+            XCTFail("The New Account sheet didn't close after Save")
+        }
+        waitFor(app.staticTexts[accountName], 10, in: app)
 
         // 4. Add a transaction.
-        app.tabBars.buttons["Transactions"].tap()
-        app.navigationBars.buttons["Add"].firstMatch.tap()
-        let amountField = app.textFields.firstMatch
-        XCTAssertTrue(amountField.waitForExistence(timeout: 5))
+        tab("Transactions", in: app).tap()
+        app.buttons["Add"].firstMatch.tap()
+        // Saving needs an account: pick the one just added.
+        // A menu picker's label carries its value: "Account, Select Account".
+        let accountPicker = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Account,")).firstMatch
+        waitFor(accountPicker, 5, in: app)
+        accountPicker.tap()
+        let accountOption = app.buttons[accountName].firstMatch
+        waitFor(accountOption, 10, in: app)
+        accountOption.tap()
+        let amountField = app.textFields["0"].firstMatch
+        waitFor(amountField, 5, in: app)
         amountField.tap()
         amountField.typeText("42")
-        app.buttons["Save"].firstMatch.tap()
+        let save = app.buttons["Save"].firstMatch
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+        XCTAssertTrue(save.waitForNonExistence(timeout: 10))
 
         // 5. Verify the dashboard renders its widgets.
-        app.tabBars.buttons["Dashboard"].tap()
-        XCTAssertTrue(app.staticTexts["Planned Expenses"].waitForExistence(timeout: 10))
+        tab("Dashboard", in: app).tap()
+        waitFor(app.staticTexts["Planned Expenses"], 10, in: app)
+    }
+
+    /// A root tab's button. On the Duo's outer display the tab bar is a
+    /// vertical rail, and with adaptive layouts on (D7.1) a regular-width
+    /// scene shows a sidebar instead, so fall back to any button of that name.
+    private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
+        let bar = app.tabBars.buttons[name]
+        return bar.exists ? bar : app.buttons[name].firstMatch
+    }
+
+    /// Waits for `element`; on a miss, logs what was on screen (the CI log is
+    /// all a failed T3 run leaves to read) and attaches a screenshot.
+    private func waitFor(
+        _ element: XCUIElement, _ timeout: TimeInterval, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard !element.waitForExistence(timeout: timeout) else { return }
+        print("HAPPYPATH-SCREEN-BEGIN\n\(app.debugDescription)\nHAPPYPATH-SCREEN-END")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTFail("Timed out after \(Int(timeout))s waiting for \(element)", file: file, line: line)
     }
 }

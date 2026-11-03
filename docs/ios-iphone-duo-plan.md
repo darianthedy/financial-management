@@ -103,6 +103,17 @@ The probe is the `iOS Duo probe` workflow (`.github/workflows/ios-duo-probe.yml`
 - The size class at each Split View width (I-S).
 - Whether `.defaultTabBarPlacement(.sidebar)` actually shows a sidebar on the inner display. On the outer display it changes nothing, as expected.
 
+**Checked on a device (TestFlight builds 143–145, adaptive layouts on).** Details and fixes are in the implementation plan's Phase 6 device-test notes.
+
+- **Inner display (I-L, I-P):** regular width. `.defaultTabBarPlacement(.sidebar)` **does** show a sidebar, which the user can show or hide. When it floats, content extends under it, and the sidebar becomes the leading safe area.
+  - Flat with the sidebar open, about **585 pt** is left beside it. That is too narrow for the 300 pt list plus a usable detail, so list → detail tiles only when both columns fit (300 + 360 pt) and otherwise pushes, as on compact.
+  - In **landscape**, a tiled list column's content ends **84 pt** short of the column, where its toolbar sits. In portrait it doesn't. Each tiled `NavigationStack` appears to reserve a vertical-bar strip. Still open: the likely fix, `preferredVerticalBarBehavior = .disabled`, isn't exposed by SwiftUI.
+- **Book posture (I-B):** with the sidebar open, the system widens it to fill the leading region, leaving about **390 pt** beside it, so the splits push. With the sidebar hidden, the list column ends on the fold.
+- **Tent posture (I-T):** checked on the inner display in portrait. The glances sit above the fold, with controls and lists below it. Rows of scrolling lists and forms may cross the fold, as the HIG allows.
+- **Outer display:** the top edge has no safe area when flat or closed, so full-screen content such as Login needs its own top margin.
+- **A fold re-creates the screens.** Navigation stacks are torn down and rebuilt, so any state that must survive a fold (drafts, filters, selection) lives above them (implementation plan D5.1).
+- **Not yet checked: Split View (I-S).** The size class at each Split View width is still unknown.
+
 ---
 
 ## 2. Current app inventory

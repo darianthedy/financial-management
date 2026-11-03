@@ -56,17 +56,10 @@ actor AccountRepository {
             .execute()
             .value
 
-        // Seed the current month's balance row with the starting balance.
-        let yearMonth = DateUtils.currentYearMonth()
-        try await client
-            .from("account_monthly_balances")
-            .insert([
-                "account_id": AnyJSON.string(account.id.uuidString),
-                "year_month": AnyJSON.string(yearMonth),
-                "balance": AnyJSON.integer(Int(startingBalance))
-            ])
-            .execute()
-
+        // The current month's balance row is seeded by the database
+        // (trg_seed_account_balance, migration 20260604000001), as on web.
+        // Inserting it here too violates its primary key, so the save fails
+        // after the account has been created.
         return account
     }
 

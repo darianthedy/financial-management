@@ -8,7 +8,21 @@
 #
 # GATE=1 (the T2 gate run, ios-duo-gate.yml) also runs DuoProbeTests and
 # exports every screenshot attachment to <output-dir>/screens/<Test>/.
+#
+# UITESTS=1 (T3, ios-duo-gate.yml's `uitests` input) also runs the XCUITests
+# (HappyPathUITests) against the live backend: it needs SUPABASE_URL,
+# SUPABASE_ANON_KEY, UITEST_EMAIL and UITEST_PASSWORD in the environment, and
+# writes uitests.log / uitests.xcresult.
 set -euo pipefail
+
+if [ "${UITESTS:-0}" = "1" ]; then
+  for v in SUPABASE_URL SUPABASE_ANON_KEY UITEST_EMAIL UITEST_PASSWORD; do
+    if [ -z "${!v:-}" ]; then
+      echo "error: UITESTS=1 needs $v (add it as a repository secret)" >&2
+      exit 1
+    fi
+  done
+fi
 
 out="$1"
 mkdir -p "$out"
@@ -45,16 +59,28 @@ xcrun simctl boot "$udid" &
 echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
 
 # Config/*.xcconfig is git-ignored, so supply placeholder Supabase settings;
-# unit tests never reach the backend.
+# unit tests never reach the backend. The XCUITests (UITESTS=1) launch the
+# real app, so they get the real ones.
+supabase_url="https://pr-check.invalid"
+supabase_key="pr-check"
+# Unsigned builds can't use the keychain, where Supabase keeps the session:
+# sign-in succeeds but every later request fails with "Auth session missing".
+# So the XCUITests build is ad-hoc signed, as Xcode's "Sign to Run Locally".
+signing=(CODE_SIGNING_ALLOWED=NO)
+if [ "${UITESTS:-0}" = "1" ]; then
+  supabase_url="$SUPABASE_URL"
+  supabase_key="$SUPABASE_ANON_KEY"
+  signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=-" DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=)
+fi
 common=(
   -project FinancialManagement.xcodeproj
   -scheme FinancialManagement
   -destination "id=$udid"
   -derivedDataPath "$dd"
   -clonedSourcePackagesDirPath "$packages"
-  CODE_SIGNING_ALLOWED=NO
-  "SUPABASE_URL=https://pr-check.invalid"
-  SUPABASE_ANON_KEY=pr-check
+  "${signing[@]}"
+  "SUPABASE_URL=$supabase_url"
+  "SUPABASE_ANON_KEY=$supabase_key"
 )
 
 # --- Build once ------------------------------------------------------------
@@ -119,6 +145,27 @@ if [ "${GATE:-0}" = "1" ]; then
       done
   fi
   echo "screenshots: $(find "$out/screens" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')" | tee -a "$out/summary.txt"
+fi
+
+# --- T3: XCUITests against the live backend --------------------------------
+if [ "${UITESTS:-0}" = "1" ]; then
+  ui_start=$SECONDS
+  set +e
+  TEST_RUNNER_UITEST_EMAIL="$UITEST_EMAIL" TEST_RUNNER_UITEST_PASSWORD="$UITEST_PASSWORD" \
+    perl -e 'alarm shift; exec @ARGV' 900 \
+    xcodebuild test-without-building "${common[@]}" \
+    -only-testing:FinancialManagementUITests \
+    -resultBundlePath "$out/uitests.xcresult" >"$out/uitests.log" 2>&1
+  ui_status=$?
+  set -e
+  grep -E "Test Case .*(passed|failed|skipped)|error:" "$out/uitests.log" | head -50 || true
+  # HappyPathUITests dumps the screen's accessibility tree when it times out.
+  sed -n '/HAPPYPATH-SCREEN-BEGIN/,/HAPPYPATH-SCREEN-END/p' "$out/uitests.log" | head -400 || true
+  {
+    grep -E "Executed [0-9]+ tests?" "$out/uitests.log" | tail -1 || echo "no UI test summary"
+    echo "uitests: $((SECONDS - ui_start))s (exit $ui_status)"
+  } | tee -a "$out/summary.txt"
+  [ "$ui_status" -eq 0 ] || status=$ui_status
 fi
 
 xcrun simctl delete "$udid" >/dev/null 2>&1 || true
