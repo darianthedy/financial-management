@@ -212,8 +212,11 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
   - The inner-display rows of design doc §1.3 are filled in from the device tests.
   - T3 can now run from CI: the gate workflow's `uitests` input runs `HappyPathUITests` on the simulator against the live backend.
     - It needs the `UITEST_EMAIL` and `UITEST_PASSWORD` repository secrets, for a **test account**, because the run adds an account and a transaction.
-    - The test itself was stale, from before the redesign: its login labels were wrong and it never picked an account, so a transaction couldn't be saved. It was rewritten to work on the Duo's vertical tab rail and the sidebar.
-  - Still open: the T3 run itself (waiting on the secrets), the manual Split View pass (I-S), and the 84 pt vertical-bar strip.
+  - **T3's XCUITest is green** on the Duo's outer display (gate run 41629434128). Its first runs found three problems:
+    - **CI could not keep a session.** Unsigned builds can't use the keychain, so after sign-in every request failed with "Auth session missing". The T3 build is now ad-hoc signed.
+    - **App bug: creating an account on iOS always failed.** Since migration `20260604000001`, `trg_seed_account_balance` seeds the current month's balance row, but `AccountRepository.create` inserted it again. That broke the primary key, so the account was saved but the sheet stayed open with a duplicate-key error. The iOS insert is removed, as web never had it.
+    - **The test was stale:** its labels were out of date, and it now checks that each sheet closes after Save.
+  - Still open: the manual Split View pass (I-S) and the 84 pt vertical-bar strip.
 
 ---
 
