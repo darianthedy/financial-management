@@ -30,13 +30,23 @@ extension EnvironmentValues {
 /// The tab root of a screen that uses `.splitDetail`: a `NavigationStack` on
 /// compact width (exactly as before), and on regular width no stack at all,
 /// because the screen's tiled columns bring their own.
+///
+/// Regular width that is still too narrow for two columns (the inner display in
+/// book posture with the sidebar filling the leading region leaves ~390 pt)
+/// gets the compact stack too, rather than a crushed detail column.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ViewBuilder var content: Content
 
     var body: some View {
         if horizontalSizeClass == .regular {
-            content.environment(\.canTileSplitRoot, true)
+            GeometryReader { geo in
+                if SplitColumns.tiles(width: geo.size.width) {
+                    content.environment(\.canTileSplitRoot, true)
+                } else {
+                    NavigationStack { content }
+                }
+            }
         } else {
             NavigationStack { content }
         }
@@ -96,11 +106,30 @@ extension View {
     }
 }
 
-/// The tiled list column's width: 40% of the space, kept between 300 and
-/// 420 pt, so the detail column always gets the larger share.
+/// The tiled split's columns. Pure, so it is unit-tested directly.
 enum SplitColumns {
-    static func listWidth(for width: CGFloat) -> CGFloat {
-        min(420, max(300, (width * 0.4).rounded()))
+    static let minimumListWidth: CGFloat = 300
+    /// The narrowest detail column worth tiling: the embedded transaction form
+    /// keeps "Cancel", its title and "Save and Confirm" on the bar. At ~290 pt
+    /// (flat, sidebar open) Save fell into "…" and the list column's rows were
+    /// cut to one letter (device test, build 144), so that layout pushes now.
+    static let minimumDetailWidth: CGFloat = 360
+
+    /// Whether `width` fits a list and a detail column at their minimums
+    /// (660 pt): the inner display in landscape or portrait, but not beside an
+    /// open sidebar.
+    static func tiles(width: CGFloat) -> Bool {
+        width >= minimumListWidth + minimumDetailWidth
+    }
+
+    /// The list column's width: on the fold in book posture, when both regions
+    /// fit a column, so neither column straddles it; else 40% of the space,
+    /// kept between 300 and 420 pt, so the detail column gets the larger share.
+    static func listWidth(for width: CGFloat, fold: FoldContext = .none) -> CGFloat {
+        if case .book(let x) = fold, x >= minimumListWidth, width - x >= minimumDetailWidth {
+            return x.rounded()
+        }
+        return min(420, max(minimumListWidth, (width * 0.4).rounded()))
     }
 }
 
@@ -161,6 +190,10 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @SceneStorage private var storedID: String?
     /// The stored selection is restored once per appearance, on first data.
     @State private var hasRestored = false
+    /// Set once the screen is on screen. A push restored before then is
+    /// dropped by its `NavigationStack`, which writes nil back and so clears
+    /// the stored selection and the draft with it.
+    @State private var hasAppeared = false
 
     init(
         selection: Binding<Item?>, items: [Item], id: @escaping (Item) -> String,
@@ -181,36 +214,30 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                 // A fixed two-column layout rather than `NavigationSplitView`,
                 // which on the inner display in portrait (669 pt) overlays the
                 // list on a dimmed detail even with `.balanced` / `.all`.
-                GeometryReader { geo in
-                    HStack(spacing: 0) {
-                        NavigationStack {
-                            content
-                                .environment(\.canTileSplitRoot, false)
-                                .environment(\.isSplitListColumn, true)
-                        }
-                        .frame(width: SplitColumns.listWidth(for: geo.size.width))
-                        .layoutProbe("split.list")
-
-                        Divider().ignoresSafeArea()
-
-                        NavigationStack {
-                            if let selection {
-                                detail(selection)
-                                    .id(id(selection))
-                                    .layoutProbe("split.detail")
-                            } else {
-                                ContentUnavailableView {
-                                    Label(placeholder.title, systemImage: placeholder.systemImage)
-                                } description: {
-                                    if let description = placeholder.description { Text(description) }
-                                }
-                                .layoutProbe("split.placeholder")
-                            }
-                        }
-                        .environment(\.canTileSplitRoot, false)
-                        .frame(maxWidth: .infinity)
+                TiledSplitColumns {
+                    NavigationStack {
+                        content
+                            .environment(\.canTileSplitRoot, false)
+                            .environment(\.isSplitListColumn, true)
                     }
+                } detail: {
+                    NavigationStack {
+                        if let selection {
+                            detail(selection)
+                                .id(id(selection))
+                                .layoutProbe("split.detail")
+                        } else {
+                            ContentUnavailableView {
+                                Label(placeholder.title, systemImage: placeholder.systemImage)
+                            } description: {
+                                if let description = placeholder.description { Text(description) }
+                            }
+                            .layoutProbe("split.placeholder")
+                        }
+                    }
+                    .environment(\.canTileSplitRoot, false)
                 }
+                .readsFoldContext()
             } else {
                 content.navigationDestination(item: $selection) { item in
                     detail(item).layoutProbe("split.detail")
@@ -220,6 +247,10 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         .onChange(of: items.map(id), initial: true) { _, available in
             reconcile(available)
         }
+        .task {
+            hasAppeared = true
+            reconcile(items.map(id))
+        }
         .onChange(of: selection) { _, new in
             storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
             if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
@@ -228,6 +259,10 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
 
     private func reconcile(_ available: [String]) {
         let current = selection.map(id)
+        // A push restore waits for `.task` (e.g. a fold onto the outer display
+        // with the Transactions list already loaded, which reports its items
+        // before its stack exists).
+        if !canTile, current == nil, !hasRestored, !hasAppeared { return }
         let resolved = SplitSelectionRule.resolve(
             selected: current, stored: SplitSelectionRule.Stored(rawValue: storedID),
             available: available, restoring: !hasRestored, isTiled: canTile
@@ -235,6 +270,28 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         if !available.isEmpty { hasRestored = true }
         guard resolved != current else { return }
         selection = resolved.flatMap { wanted in items.first { id($0) == wanted } }
+    }
+}
+
+/// List | detail, side by side, with the list as wide as `SplitColumns` says:
+/// on the fold in book posture, so each column gets a region.
+private struct TiledSplitColumns<ListColumn: View, DetailColumn: View>: View {
+    @Environment(\.foldContext) private var fold
+    @ViewBuilder var list: ListColumn
+    @ViewBuilder var detail: DetailColumn
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                list
+                    .frame(width: SplitColumns.listWidth(for: geo.size.width, fold: fold))
+                    .layoutProbe("split.list")
+
+                Divider().ignoresSafeArea()
+
+                detail.frame(maxWidth: .infinity)
+            }
+        }
     }
 }
 

@@ -14,6 +14,19 @@ enum ReadableWidth {
         guard sizeClass == .regular, width > maximumContentWidth else { return nil }
         return ((width - maximumContentWidth) / 2).rounded(.up)
     }
+
+    /// The leading and trailing content margins for a list `width` wide inside
+    /// its safe area, with `insets` outside it on each side, or nil to keep the
+    /// system's. Content margins are measured from the list's edges and replace
+    /// the safe area, so each side adds its own inset back: the content stays
+    /// clear of a floating sidebar on one side and a vertical bar on the other.
+    static func margins(
+        width: CGFloat, leadingInset: CGFloat, trailingInset: CGFloat,
+        sizeClass: UserInterfaceSizeClass?
+    ) -> (leading: CGFloat, trailing: CGFloat)? {
+        guard let margin = margin(width: width, sizeClass: sizeClass) else { return nil }
+        return (leadingInset + margin, trailingInset + margin)
+    }
 }
 
 extension View {
@@ -25,19 +38,31 @@ extension View {
 
 private struct ReadableContentMargins: ViewModifier {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var width: CGFloat = 0
+    @State private var geometry = Geometry()
+
+    nonisolated private struct Geometry: Equatable, Sendable {
+        var width: CGFloat = 0
+        var leading: CGFloat = 0
+        var trailing: CGFloat = 0
+    }
 
     func body(content: Content) -> some View {
+        let margins = ReadableWidth.margins(
+            width: geometry.width, leadingInset: geometry.leading,
+            trailingInset: geometry.trailing, sizeClass: horizontalSizeClass
+        )
         content
-            .contentMargins(
-                .horizontal,
-                ReadableWidth.margin(width: width, sizeClass: horizontalSizeClass),
-                for: .scrollContent
-            )
-            // Content margins are measured from the list's edges, not from its
-            // safe area, so include a vertical bar's inset in the width.
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width + $0.safeAreaInsets.leading + $0.safeAreaInsets.trailing
-            } action: { width = $0 }
+            .contentMargins(.leading, margins?.leading, for: .scrollContent)
+            .contentMargins(.trailing, margins?.trailing, for: .scrollContent)
+            // The width inside the safe area, and the insets beside it: a
+            // floating sidebar on the leading side (it fills the whole leading
+            // region in book posture), a vertical bar on the trailing side.
+            .onGeometryChange(for: Geometry.self) {
+                Geometry(
+                    width: $0.size.width,
+                    leading: $0.safeAreaInsets.leading,
+                    trailing: $0.safeAreaInsets.trailing
+                )
+            } action: { geometry = $0 }
     }
 }

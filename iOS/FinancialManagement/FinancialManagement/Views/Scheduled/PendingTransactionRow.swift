@@ -14,6 +14,11 @@ struct PendingTransactionRow: View {
     var onDismiss: () async -> Void
 
     @State private var isProcessing = false
+    /// The width the actions get, measured.
+    @State private var actionsWidth: CGFloat = 0
+    /// What the three labelled actions need side by side, measured from their
+    /// ideal size.
+    @State private var sideBySideWidth: CGFloat = 0
 
     /// Title precedence: budget (non-transfer) → fixed expense → category → description → type word.
     private var title: String {
@@ -50,15 +55,36 @@ struct PendingTransactionRow: View {
 
             // Three inline actions. At default sizes they sit side by side, but at
             // larger Dynamic Type / narrow widths three labelled buttons crowd and
-            // truncate ("Conf…", "Dis…"), so ViewThatFits falls back to a full-width
+            // truncate ("Conf…", "Dis…"), so they fall back to a full-width
             // vertical stack. Each button keeps a 44pt-tall hit area (HIG minimum).
-            ViewThatFits(in: .horizontal) {
+            //
+            // Chosen by measuring, not `ViewThatFits`: on the iPhone Duo's 300 pt
+            // list column `ViewThatFits` still picked the row, and the buttons
+            // showed only their first letter (device test, build 143).
+            Group {
+                if PendingActionsLayout.fitsSideBySide(width: actionsWidth, needed: sideBySideWidth) {
+                    HStack(spacing: 8) {
+                        actionButtons(fillWidth: false)
+                    }
+                } else {
+                    VStack(spacing: 8) {
+                        actionButtons(fillWidth: true)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self, of: \.size.width) { actionsWidth = $0 }
+            // The row at its ideal size, never shown: the width the labels
+            // need untruncated, at any Dynamic Type size. A fixed estimate
+            // (320 pt) still truncated them on the outer display (build 144).
+            .background {
                 HStack(spacing: 8) {
                     actionButtons(fillWidth: false)
                 }
-                VStack(spacing: 8) {
-                    actionButtons(fillWidth: true)
-                }
+                .fixedSize()
+                .hidden()
+                .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self, of: \.size.width) { sideBySideWidth = $0 }
             }
             .disabled(isProcessing)
         }
@@ -106,5 +132,14 @@ struct PendingTransactionRow: View {
         .buttonStyle(.bordered)
         .tint(Color.appDanger)
         .controlSize(.small)
+    }
+}
+
+/// When the pending row's three labelled actions fit side by side. Pure, so it
+/// is unit-tested directly.
+enum PendingActionsLayout {
+    static func fitsSideBySide(width: CGFloat, needed: CGFloat) -> Bool {
+        // Unmeasured: side by side, as before, until both widths are known.
+        width <= 0 || needed <= 0 || width >= needed
     }
 }

@@ -35,7 +35,7 @@ final class AccountsSplitLayoutTests: XCTestCase {
             XCTAssertNotNil(snapshot.frames["accounts.row.BCA Tahapan"], "accounts never loaded at \(size)")
             XCTAssertNil(snapshot.frames["split.detail"], "\(size)")
 
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 let list = try snapshot.frame("split.list")
                 let placeholder = try snapshot.frame("split.placeholder")
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "\(size)")
@@ -48,7 +48,7 @@ final class AccountsSplitLayoutTests: XCTestCase {
     }
 
     func testRegularTilesTheSelectedAccount() async throws {
-        for size in LayoutSize.all where size.horizontal == .regular {
+        for size in LayoutSize.all where LayoutHarness.tilesSplit(size) {
             let snapshot = try await render(selected: bca, at: size)
             attach(snapshot, name: "accounts-detail")
             let list = try snapshot.frame("split.list")

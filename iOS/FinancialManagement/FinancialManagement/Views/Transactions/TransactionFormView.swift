@@ -147,6 +147,9 @@ struct TransactionFormView: View {
                 }
                 .disabled(!viewModel.isValid || viewModel.isSaving)
             }
+            // The iPhone Duo's narrow detail column moved "Save and Confirm"
+            // into "…" (device test, build 143); keep it on the bar.
+            .duoVisibilityPriority(.high)
         }
         .interactiveDismissDisabled(viewModel.hasChanges)
         // Embedded and pushed (a kept draft after a fold), Back would drop the

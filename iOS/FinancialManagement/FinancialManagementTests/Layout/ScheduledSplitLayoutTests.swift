@@ -36,7 +36,7 @@ final class ScheduledSplitLayoutTests: XCTestCase {
     }
 
     func testRegularEditsTheScheduleInTheDetailColumn() async throws {
-        for size in LayoutSize.all where size.horizontal == .regular {
+        for size in LayoutSize.all where LayoutHarness.tilesSplit(size) {
             let snapshot = try await render(ScheduledListView(selectedScheduleId: salary), at: size, detail: true)
             attach(snapshot, name: "scheduled-detail")
             try assertSplitTiled(snapshot)

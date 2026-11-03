@@ -31,7 +31,7 @@ final class TagsSplitLayoutTests: XCTestCase {
             attach(snapshot, name: "tags")
             try assertSplitListOnly(snapshot, rowProbe: card, placeholder: "Select a Tag")
 
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 // Even columns: the first row's cards split the column in two.
                 let vacation = try snapshot.frame("tags.card.Vacation")
                 let work = try snapshot.frame("tags.card.Work")
@@ -45,7 +45,7 @@ final class TagsSplitLayoutTests: XCTestCase {
     func testRegularTilesTheTagsTransactions() async throws {
         let tags = try await TagRepository().list()
         let vacation = try XCTUnwrap(tags.first { $0.name == "Vacation" })
-        for size in LayoutSize.all where size.horizontal == .regular {
+        for size in LayoutSize.all where LayoutHarness.tilesSplit(size) {
             let snapshot = try await render(TagsListView(selectedTag: vacation), at: size, detail: true)
             attach(snapshot, name: "tags-detail")
             try assertSplitTiled(snapshot)

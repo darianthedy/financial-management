@@ -37,7 +37,7 @@ final class FixedExpensesSplitLayoutTests: XCTestCase {
     func testRegularTilesTheLinkedTransactions() async throws {
         let entries = try await FixedExpenseRepository().getForMonth(yearMonth: FixtureStore.thisMonth)
         let rent = try XCTUnwrap(entries.first { $0.name == "Rent" })
-        for size in LayoutSize.all where size.horizontal == .regular {
+        for size in LayoutSize.all where LayoutHarness.tilesSplit(size) {
             let snapshot = try await render(FixedExpenseListView(selectedExpenseId: rent.id), at: size, detail: true)
             attach(snapshot, name: "fixed-expenses-detail")
             try assertSplitTiled(snapshot)

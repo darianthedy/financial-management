@@ -35,12 +35,15 @@ final class SplitRootLayoutTests: XCTestCase {
         }
     }
 
-    private func render(selected: String?, at size: LayoutSize) async throws -> LayoutSnapshot {
+    private func render(
+        selected: String?, at size: LayoutSize, fold: FoldContext = .none
+    ) async throws -> LayoutSnapshot {
         try await LayoutHarness.render(
             SplitRootContainer {
                 DummyList(storageKey: "test.\(UUID().uuidString)", selection: selected)
             },
             at: size,
+            fold: fold,
             timeout: .seconds(3),
             until: { frames in
                 selected == nil
@@ -57,7 +60,7 @@ final class SplitRootLayoutTests: XCTestCase {
             let row = try snapshot.frame("row.Alpha")
             XCTAssertNil(snapshot.frames["split.detail"], "\(size)")
 
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 let list = try snapshot.frame("split.list")
                 let placeholder = try snapshot.frame("split.placeholder")
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "list | placeholder must tile at \(size)")
@@ -77,7 +80,7 @@ final class SplitRootLayoutTests: XCTestCase {
             attach(snapshot, name: "split-selected")
             let detail = try snapshot.frame("split.detail")
 
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 // Tiled: the list stays on screen beside the detail.
                 let list = try snapshot.frame("split.list")
                 XCTAssertLessThanOrEqual(list.maxX, detail.minX + 1, "list | detail must tile at \(size)")
@@ -89,5 +92,17 @@ final class SplitRootLayoutTests: XCTestCase {
             }
             XCTAssertNotNil(snapshot.frames["detail.Bravo"], "the selected item's detail is missing at \(size)")
         }
+    }
+
+    /// D6.1 for list → detail: in book posture the list column ends on the
+    /// fold, so neither column straddles it.
+    func testBookPostureSplitsOnTheFold() async throws {
+        let snapshot = try await render(selected: "Bravo", at: .innerLandscape, fold: .book(divisionX: 475))
+        attach(snapshot, name: "split-book")
+        let list = try snapshot.frame("split.list")
+        let detail = try snapshot.frame("split.detail")
+        XCTAssertEqual(list.maxX, 475, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(detail.minX, 475)
+        assertNoInteractiveOverlap(snapshot)
     }
 }

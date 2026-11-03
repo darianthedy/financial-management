@@ -38,6 +38,12 @@ final class TransactionEditorDrafts {
         transaction?.id == id ? transaction : nil
     }
 
+    /// The draft's transaction while it has unsaved edits, to reopen after a
+    /// fold re-creates the list.
+    var unsavedTransaction: Transaction? {
+        model?.hasChanges == true ? transaction : nil
+    }
+
     /// Drops the draft (saved, cancelled, discarded or deselected).
     func discard() {
         transaction = nil

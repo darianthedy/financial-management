@@ -12,6 +12,8 @@ struct LoginView: View {
     @State private var viewModel = AuthViewModel()
     @State private var isSignUp = false
     @Environment(\.foldContext) private var fold
+    /// The scroll view's visible height, so a fold centers the regions in it.
+    @State private var visibleHeight: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -20,7 +22,7 @@ struct LoginView: View {
             ScrollView {
                 // One column; on the fold, the header and card get a region each,
                 // with the card trailing or below: it's the interactive part.
-                FoldRegions(fold: fold, spacing: 24, maxChildWidth: 400) {
+                FoldRegions(fold: fold, spacing: 24, maxChildWidth: 400, minimumHeight: visibleHeight) {
                     header
                         .layoutProbe("login.header")
 
@@ -64,6 +66,10 @@ struct LoginView: View {
                     .layoutProbe("login.card", interactive: true)
                 }
             }
+            // Above the keyboard, if it is up: the focused field scrolls into view.
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.height - $0.safeAreaInsets.top - $0.safeAreaInsets.bottom
+            } action: { visibleHeight = max(0, $0) }
         }
     }
 

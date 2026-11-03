@@ -74,6 +74,8 @@ final class BookPostureLayoutTests: XCTestCase {
         XCTAssertEqual(card.width, 400, accuracy: 0.5)
         XCTAssertEqual(header.midX, card.midX, accuracy: 1)
         XCTAssertEqual(card.minY - header.maxY, 24, accuracy: 1)
+        // Build 144: flat, the header touched the screen's top edge.
+        XCTAssertGreaterThanOrEqual(header.minY, 16)
     }
 
     private func splash(fold: FoldContext, at size: LayoutSize) async throws -> CGRect {

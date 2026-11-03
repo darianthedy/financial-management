@@ -63,4 +63,17 @@ final class TransactionEditorDraftsTests: XCTestCase {
         XCTAssertNotNil(drafts.transaction(withId: transaction(1).id))
         XCTAssertNil(drafts.transaction(withId: transaction(2).id))
     }
+
+    /// Build 144: only a draft with unsaved edits is reopened after a fold.
+    func testOnlyAnEditedDraftIsReopened() {
+        let drafts = TransactionEditorDrafts()
+        let model = drafts.model(for: transaction(1), currency: "IDR", decimalPlaces: 0)
+        XCTAssertNil(drafts.unsavedTransaction)
+
+        model.description = "Test"
+        XCTAssertEqual(drafts.unsavedTransaction?.id, transaction(1).id)
+
+        drafts.discard()
+        XCTAssertNil(drafts.unsavedTransaction)
+    }
 }
