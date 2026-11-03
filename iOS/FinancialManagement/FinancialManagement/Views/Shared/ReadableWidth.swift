@@ -40,7 +40,7 @@ private struct ReadableContentMargins: ViewModifier {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var geometry = Geometry()
 
-    private struct Geometry: Equatable {
+    nonisolated private struct Geometry: Equatable, Sendable {
         var width: CGFloat = 0
         var leading: CGFloat = 0
         var trailing: CGFloat = 0
