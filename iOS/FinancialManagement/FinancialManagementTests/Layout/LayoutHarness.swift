@@ -110,6 +110,7 @@ enum LayoutHarness {
             .environment(\.horizontalSizeClass, size.horizontal)
             .environment(\.verticalSizeClass, size.vertical)
             .environment(\.foldContext, fold)
+            .environment(\.foldDivisionFrames, fold.divisionRect(in: size.size).map { [$0] })
         let host = UIHostingController(rootView: root)
         host.traitOverrides.horizontalSizeClass = size.horizontal == .regular ? .regular : .compact
         host.traitOverrides.verticalSizeClass = size.vertical == .regular ? .regular : .compact

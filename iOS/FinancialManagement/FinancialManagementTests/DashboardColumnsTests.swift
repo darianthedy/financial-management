@@ -21,4 +21,20 @@ final class DashboardColumnsTests: XCTestCase {
         XCTAssertEqual(count(616), 2)
         XCTAssertEqual(count(615.5), 1)
     }
+
+    func testGutterSitsOnTheFold() throws {
+        let widths = try XCTUnwrap(DashboardColumns.foldedWidths(
+            width: 919, foldX: 459, gutter: 32, minimumColumnWidth: 300
+        ))
+        XCTAssertEqual(widths.left, 443)
+        XCTAssertEqual(widths.right, 444)
+    }
+
+    func testFoldThatStarvesAColumnKeepsEvenColumns() {
+        for foldX: CGFloat? in [nil, 200, 700] {
+            XCTAssertNil(DashboardColumns.foldedWidths(
+                width: 919, foldX: foldX, gutter: 32, minimumColumnWidth: 300
+            ))
+        }
+    }
 }

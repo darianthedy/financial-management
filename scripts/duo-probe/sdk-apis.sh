@@ -48,6 +48,19 @@ symbols='ReservedRegion|ArrangementView|arrangementViewStyle|overlayArrangementZ
       awk '/(struct|enum|class) (ReservedRegion|DeviceHingeContext|UIHingeInteraction)[ :<]/,/^}/' "$f" |
         grep -v '^\s*//' | cut -c1-240 | head -200
     done
+
+  # Declarations with their bodies, for the types the fold work (Phase 6)
+  # builds on: how to read a region's frame, what a hinge context carries, and
+  # ArrangementView's initialisers.
+  echo
+  echo "=================================================================="
+  echo "== Fold declarations in context"
+  find "$sdk/System/Library/Frameworks" -maxdepth 6 -name "arm64-apple-ios-simulator.swiftinterface" -path "*SwiftUI*" |
+    while read -r f; do
+      echo "-- ${f#"$sdk"/}"
+      grep -n -B3 -A26 -E "public struct (ReservedRegion|DeviceHingeContext|ArrangementView)[ :<]|extension .*(ArrangementView|DeviceHingeContext|ReservedRegion)[ <]|func reservedRegions" "$f" |
+        grep -v -E "^[0-9]+-\s*//" | cut -c1-260
+    done
 } >"$out" 2>&1
 
 echo "Wrote $(wc -l <"$out") lines to $out"

@@ -85,12 +85,22 @@ extension EnvironmentValues {
     /// The fold position for this view tree. Set by `.readsFoldContext()` at
     /// the root, or injected directly by layout tests.
     @Entry var foldContext: FoldContext = .none
+
+    /// The device's active division regions in global coordinates, from the
+    /// outermost `.readsFoldContext()`, for any reader below it. The region
+    /// API's results below the root are unproven (the probe could only see
+    /// them at the root), and it keeps one source of truth. Layout tests inject
+    /// a fold here. Nil above the outermost reader.
+    @Entry var foldDivisionFrames: [CGRect]? = nil
 }
 
 extension View {
-    /// Measures the fold at this view and publishes it as `\.foldContext` to
-    /// its descendants. Re-measures on resize and on every hinge change.
-    /// Always `.none` before iOS 27.1.
+    /// Measures the fold at this view and publishes it as `\.foldContext`, in
+    /// this view's coordinates, to its descendants. Re-measures when the view
+    /// moves or resizes and on every hinge change. A view that doesn't start at
+    /// the root's origin (e.g. a tab beside the sidebar) needs its own reader.
+    /// Always `.none` before iOS 27.1, and while `AdaptiveLayout` is off, so
+    /// the kill switch also keeps fold layouts away from TestFlight.
     func readsFoldContext() -> some View {
         modifier(FoldContextReader())
     }
@@ -98,30 +108,42 @@ extension View {
 
 private struct FoldContextReader: ViewModifier {
     @State private var context: FoldContext = .none
+    @State private var measured: [CGRect] = []
     @State private var hingeTick = 0
+    @Environment(\.foldDivisionFrames) private var inherited
 
     func body(content: Content) -> some View {
         content
             .environment(\.foldContext, context)
+            .environment(\.foldDivisionFrames, inherited ?? measured)
             .background {
                 GeometryReader { geo in
                     Color.clear
                         .onAppear { update(geo) }
-                        .onChange(of: geo.size) { update(geo) }
+                        .onChange(of: geo.frame(in: .global)) { update(geo) }
                         .onChange(of: hingeTick) { update(geo) }
+                        .onChange(of: inherited) { update(geo) }
                 }
             }
             .modifier(HingeTicker(tick: $hingeTick))
     }
 
     private func update(_ geo: GeometryProxy) {
-        guard #available(iOS 27.1, *) else { return }
-        let origin = geo.frame(in: .global).origin
-        let frames = geo.reservedRegions(kind: .division)
-            .compactMap(ReservedRegionGeometry.globalFrame(of:))
-            .map { $0.offsetBy(dx: -origin.x, dy: -origin.y) }
-        let next = FoldContext.from(divisionFrames: frames, in: CGRect(origin: .zero, size: geo.size))
+        let frame = geo.frame(in: .global)
+        let global = inherited ?? activeDivisions(geo).map { $0.offsetBy(dx: frame.minX, dy: frame.minY) }
+        if inherited == nil, global != measured { measured = global }
+
+        let local = global.map { $0.offsetBy(dx: -frame.minX, dy: -frame.minY) }
+        let next = FoldContext.from(divisionFrames: local, in: CGRect(origin: .zero, size: frame.size))
         if next != context { context = next }
+    }
+
+    /// Frames in `geo`'s own coordinates: the probe found SwiftUI's regions are
+    /// already local, unlike UIKit's (a root at x 84 reports a region at -84
+    /// that `UIWindow` reports at 0).
+    private func activeDivisions(_ geo: GeometryProxy) -> [CGRect] {
+        guard AdaptiveLayout.isEnabled, #available(iOS 27.1, *) else { return [] }
+        return geo.reservedRegions(kind: .division).map(\.frame)
     }
 }
 
@@ -136,37 +158,5 @@ private struct HingeTicker: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-/// Reads a `ReservedRegion`'s frame.
-///
-/// The iOS 27.1 SDK dump (scripts/duo-probe/sdk-apis.sh) only surfaced the
-/// region's `id` and `kind`, so the public geometry accessor isn't confirmed
-/// yet. Until it is, this reads the frame the probe saw in the region's
-/// description — `base.frame` in window (global) coordinates, plus
-/// `base.isActive` — via reflection. Returns nil for inactive regions or if the
-/// shape changes, which degrades to `FoldContext.none` rather than crashing.
-/// TODO(D6.1): replace with the public accessor once the SDK dump shows it.
-enum ReservedRegionGeometry {
-    static func globalFrame(of region: Any) -> CGRect? {
-        let base = child(named: "base", of: region) ?? region
-        if let active = child(named: "isActive", of: base) as? Bool, !active { return nil }
-        guard let frame = child(named: "frame", of: base) else { return nil }
-        if let rect = frame as? CGRect { return rect }
-        // The probe printed the frame as a 4-tuple (x, y, w, h).
-        let parts = Mirror(reflecting: frame).children.compactMap { child -> CGFloat? in
-            switch child.value {
-            case let d as Double: CGFloat(d)
-            case let c as CGFloat: c
-            default: nil
-            }
-        }
-        guard parts.count == 4 else { return nil }
-        return CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3])
-    }
-
-    private static func child(named name: String, of value: Any) -> Any? {
-        Mirror(reflecting: value).children.first { $0.label == name }?.value
     }
 }
