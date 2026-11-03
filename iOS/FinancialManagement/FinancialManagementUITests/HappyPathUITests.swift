@@ -55,6 +55,13 @@ final class HappyPathUITests: XCTestCase {
         nameField.tap()
         nameField.typeText(accountName)
         app.buttons["Save"].firstMatch.tap()
+        // The sheet closes only on success; a save error keeps it up, with
+        // the new row possibly visible behind it.
+        let accountSheet = app.navigationBars["New Account"]
+        if !accountSheet.waitForNonExistence(timeout: 10) {
+            print("HAPPYPATH-SCREEN-BEGIN\n\(app.debugDescription)\nHAPPYPATH-SCREEN-END")
+            XCTFail("The New Account sheet didn't close after Save")
+        }
         waitFor(app.staticTexts[accountName], 10, in: app)
 
         // 4. Add a transaction.
