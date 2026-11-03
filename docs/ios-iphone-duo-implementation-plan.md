@@ -208,7 +208,7 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
 - **Done when:** gate **G4** is green, T3 passes, and the TestFlight build is checked on an iPhone (and an iPad, if available).
 - **Done (2026-11-03):** switched on for Release after the device tests of TestFlight builds 143–145, with known issues left open (the Phase 6 device-test notes above, and the build 145 recheck). The only TestFlight user is the owner, so they are fixed in follow-up PRs rather than behind the switch. T3 and G4 were not run.
 - **Follow-up (Phase 7 wrap-up):**
-  - G4 ran on `main` after the switch flip, on both the Duo and an iPad.
+  - **G4 is green.** It ran on `main` after the switch flip. On the Duo (iOS 27.1), 218 tests passed with 0 failures and 99 screenshots were captured. On an iPad Pro 12.9" (iOS 27.0), 218 tests passed and 104 screenshots were captured.
   - The inner-display rows of design doc §1.3 are filled in from the device tests.
   - T3 can now run from CI: the gate workflow's `uitests` input runs `HappyPathUITests` on the simulator against the live backend.
     - It needs the `UITEST_EMAIL` and `UITEST_PASSWORD` repository secrets, for a **test account**, because the run adds an account and a transaction.
