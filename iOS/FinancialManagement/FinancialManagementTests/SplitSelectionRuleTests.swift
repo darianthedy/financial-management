@@ -64,4 +64,25 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.listWidth(for: 1366), 420)
         XCTAssertEqual(SplitColumns.listWidth(for: 500), 300)
     }
+
+    /// Device test (build 143): in book posture the sidebar fills the leading
+    /// region, leaving ~392 pt, and the detail column was crushed to ~90 pt.
+    func testTilesOnlyWhenBothColumnsFit() {
+        XCTAssertTrue(SplitColumns.tiles(width: 867))    // inner landscape, rail only
+        XCTAssertTrue(SplitColumns.tiles(width: 585))    // inner portrait, or flat with the sidebar
+        XCTAssertTrue(SplitColumns.tiles(width: 560))
+        XCTAssertFalse(SplitColumns.tiles(width: 559))
+        XCTAssertFalse(SplitColumns.tiles(width: 392))   // book posture with the sidebar
+    }
+
+    func testListColumnEndsOnTheFoldInBookPosture() {
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 475.5)), 476)
+    }
+
+    func testListColumnIgnoresAFoldThatStarvesAColumn() {
+        // The fold at the container's edge (the sidebar fills the leading region).
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 0)), 347)
+        XCTAssertEqual(SplitColumns.listWidth(for: 700, fold: .book(divisionX: 500)), 300)
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 347)
+    }
 }

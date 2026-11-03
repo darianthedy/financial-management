@@ -49,6 +49,11 @@ private struct TentGlanceContainer<Glance: View, Content: View>: View {
             // comes and goes.
             content.environment(\.isBelowTentGlance, foldY != nil)
         }
+        // The scroll view now starts below the fold, away from the bar, and the
+        // Dashboard lost its large title there (device test, build 143). Inline
+        // keeps it in the bar. Screens whose stacks sit below the glance (the
+        // tiled splits) keep their own titles.
+        .navigationBarTitleDisplayMode(foldY != nil ? .inline : .automatic)
     }
 }
 

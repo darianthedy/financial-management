@@ -184,6 +184,14 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
 - **Change from this plan:** `.tentGlance` is a `Layout` driven by `FoldContext`, not `ArrangementView`, which reads the real hinge: a test can't inject a fold into it, so it would have no coverage until T3.
 - **Probe finding:** SwiftUI's `ReservedRegion.frame` is in the querying view's coordinates, unlike UIKit's, and is a public property. Regions were only seen at the root, so readers below it convert the root's frames (`\.foldDivisionFrames`).
 
+**Device test, TestFlight build 143** (adaptive layouts forced on):
+- **Book posture with the sidebar open:** the system widens the sidebar to fill the leading region, leaving ~390 pt beside it. The tiled split kept its 300 pt list and crushed the detail to ~90 pt, one letter per line. `SplitRootContainer` now tiles only when both columns fit (300 + 260 pt) and otherwise pushes, as on compact. With the sidebar hidden, the list column ends on the fold.
+- **Floating sidebar:** content extends under it, with the sidebar as the leading safe area. `ReadableWidth` margins are measured from the list's edges, so Settings' sections slid under it. Each side now adds its own inset back.
+- **Transactions draft lost on fold:** the shared list model is already loaded when the outer display's list appears, so the restored selection was pushed before its `NavigationStack` existed. The push was dropped and nil written back, which cleared the stored selection and the draft. A push restore now waits for `.task`.
+- **Login in book posture:** in its scroll view the card was pinned to the top edge. `FoldRegions` now takes the visible height as `minimumHeight`.
+- **Still open:** in landscape the list column's content ends 84 pt short of the column, where its toolbar sits; in portrait (no vertical bar) it doesn't. So each tiled `NavigationStack` appears to reserve a vertical-bar strip on its trailing edge (the G2 "narrowed list" may be this, not a simulator artifact). The likely fix is `preferredVerticalBarBehavior = .disabled` on the list column's navigation controller, which SwiftUI doesn't expose; confirm on a device first.
+- **Tent posture** (retaken on the inner display in portrait): the glances sit above the fold with the controls and lists below, and Login's card is below it. Three failures, fixed: the Dashboard lost its title (the scroll view no longer meets the bar, so `.tentGlance` now makes the title inline); the pending Scheduled rows' buttons showed only their first letter in the 300 pt list column (`ViewThatFits` kept the row, so the layout is now chosen from the measured width); and the embedded edit form's "Save and Confirm" moved into "…" (now `.duoVisibilityPriority(.high)`). Rows of scrolling lists and forms may cross the fold, as the HIG allows; no other screen needs `.tentGlance`.
+
 ### Phase 7: Release
 
 **D7.1 Switch it on** · S
