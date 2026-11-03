@@ -129,6 +129,12 @@ enum SplitColumns {
     /// The split's column visibility after a selection change: the list with
     /// nothing selected, else the system's choice (both in landscape, the
     /// detail alone in portrait, where the list overlays it).
+    /// Landscape: list | detail side by side. Portrait: the detail fills the
+    /// screen and the list slides over it, as in Notes.
+    static func sideBySide(_ size: CGSize) -> Bool {
+        size.width > size.height
+    }
+
     static func visibility(selected: Bool) -> NavigationSplitViewVisibility {
         selected ? .automatic : .all
     }
@@ -298,12 +304,21 @@ private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
     var body: some View {
         GeometryReader { geo in
             let width = SplitColumns.listWidth(for: geo.size.width, fold: fold)
-            NavigationSplitView(columnVisibility: $visibility) {
+            let split = NavigationSplitView(columnVisibility: $visibility) {
                 list
                     .layoutProbe("split.list")
                     .navigationSplitViewColumnWidth(min: width, ideal: width, max: width)
             } detail: {
                 detail
+            }
+            // Explicit, because `.automatic` overlaid the list in landscape
+            // too when an inspector (Transactions' Summary) wraps the split,
+            // and in book posture. Rotating swaps the style, which rebuilds
+            // the split; the selection and drafts live above it.
+            if SplitColumns.sideBySide(geo.size) {
+                split.navigationSplitViewStyle(.balanced)
+            } else {
+                split.navigationSplitViewStyle(.prominentDetail)
             }
         }
     }

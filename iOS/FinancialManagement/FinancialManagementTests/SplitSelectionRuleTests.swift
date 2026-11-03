@@ -94,4 +94,9 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.visibility(selected: false), .all)
         XCTAssertEqual(SplitColumns.visibility(selected: true), .automatic)
     }
+
+    func testSideBySideOnlyInLandscape() {
+        XCTAssertTrue(SplitColumns.sideBySide(CGSize(width: 951, height: 669)))
+        XCTAssertFalse(SplitColumns.sideBySide(CGSize(width: 669, height: 951)))
+    }
 }
