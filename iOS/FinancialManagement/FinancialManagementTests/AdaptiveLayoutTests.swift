@@ -21,8 +21,8 @@ final class AdaptiveLayoutTests: XCTestCase {
         XCTAssertFalse(AdaptiveLayout.isEnabled(infoValue: "$(ADAPTIVE_LAYOUT_ENABLED)"))
     }
 
-    /// Tests run against the Debug build, where the switch is on. Release
-    /// keeps it off until D7.1 (project.pbxproj: ADAPTIVE_LAYOUT_ENABLED).
+    /// Tests run against the Debug build, where the switch is on. Release is
+    /// on too since D7.1 (project.pbxproj: ADAPTIVE_LAYOUT_ENABLED).
     func testDebugBuildHasSwitchOn() {
         #if DEBUG
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: AdaptiveLayout.infoKey) as? String, "YES")

@@ -49,7 +49,7 @@ The app also targets iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so every regular-wid
 .environment(\.horizontalSizeClass, AdaptiveLayout.isEnabled ? horizontalSizeClass : .compact)
 ```
 
-- **Debug builds** turn it **on**. **Release and TestFlight** builds keep it **off** until D7.1.
+- **Debug builds** turn it **on**. **Release and TestFlight** builds kept it **off** until D7.1, which turned it on.
 - While it's off, every device renders today's compact layout. Half-finished split views never ship, and there's no long-lived integration branch to drift away from `main`, which the hourly autotask routine also targets.
 - Every PR keeps the compact layout pixel-identical. The outer display *is* compact, and the probe confirmed it behaves like an iPhone. Compact regressions are caught by T1's existing unit tests plus the new compact layout assertions.
 
@@ -206,6 +206,7 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
   - Run **T3**: `HappyPathUITests` plus the manual Device Hub or device pass of I-L, I-P, I-B, I-T and I-S.
   - Fill in the inner-display rows of design doc §1.3.
 - **Done when:** gate **G4** is green, T3 passes, and the TestFlight build is checked on an iPhone (and an iPad, if available).
+- **Done (2026-11-03):** switched on for Release after the device tests of TestFlight builds 143–145, with known issues left open (the Phase 6 device-test notes above, and the build 145 recheck). The only TestFlight user is the owner, so they are fixed in follow-up PRs rather than behind the switch. T3 and G4 were not run.
 
 ---
 
