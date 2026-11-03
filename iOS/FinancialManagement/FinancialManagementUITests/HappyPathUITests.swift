@@ -68,7 +68,9 @@ final class HappyPathUITests: XCTestCase {
         tab("Transactions", in: app).tap()
         app.buttons["Add"].firstMatch.tap()
         // Saving needs an account: pick the one just added.
-        let accountPicker = app.buttons["Account"].firstMatch
+        // A menu picker's label carries its value: "Account, Select Account".
+        let accountPicker = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Account,")).firstMatch
         waitFor(accountPicker, 5, in: app)
         accountPicker.tap()
         let accountOption = app.buttons[accountName].firstMatch
