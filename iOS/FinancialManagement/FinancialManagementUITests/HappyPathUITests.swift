@@ -31,24 +31,24 @@ final class HappyPathUITests: XCTestCase {
         app.launch()
 
         // 1. Login.
-        let emailField = app.textFields["Email"]
+        let emailField = app.textFields["you@example.com"]
         XCTAssertTrue(emailField.waitForExistence(timeout: 10))
         emailField.tap()
         emailField.typeText(email!)
 
-        let passwordField = app.secureTextFields["Password"]
+        let passwordField = app.secureTextFields.firstMatch
         passwordField.tap()
         passwordField.typeText(password!)
 
-        app.buttons["Sign In"].tap()
+        app.buttons["Sign in"].tap()
 
         // 2. Land on the tab bar and open Accounts.
-        let accountsTab = app.tabBars.buttons["Accounts"]
+        let accountsTab = tab("Accounts", in: app)
         XCTAssertTrue(accountsTab.waitForExistence(timeout: 15))
         accountsTab.tap()
 
         // 3. Add an account via the "+" toolbar button.
-        app.navigationBars.buttons["Add"].firstMatch.tap()
+        app.buttons["Add"].firstMatch.tap()
         let accountName = "UITest Account \(Int(Date().timeIntervalSince1970))"
         let nameField = app.textFields.firstMatch
         XCTAssertTrue(nameField.waitForExistence(timeout: 5))
@@ -58,16 +58,34 @@ final class HappyPathUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts[accountName].waitForExistence(timeout: 10))
 
         // 4. Add a transaction.
-        app.tabBars.buttons["Transactions"].tap()
-        app.navigationBars.buttons["Add"].firstMatch.tap()
-        let amountField = app.textFields.firstMatch
+        tab("Transactions", in: app).tap()
+        app.buttons["Add"].firstMatch.tap()
+        // Saving needs an account: pick the one just added.
+        let accountPicker = app.buttons["Account"].firstMatch
+        XCTAssertTrue(accountPicker.waitForExistence(timeout: 5))
+        accountPicker.tap()
+        let accountOption = app.buttons[accountName].firstMatch
+        XCTAssertTrue(accountOption.waitForExistence(timeout: 10))
+        accountOption.tap()
+        let amountField = app.textFields["0"].firstMatch
         XCTAssertTrue(amountField.waitForExistence(timeout: 5))
         amountField.tap()
         amountField.typeText("42")
-        app.buttons["Save"].firstMatch.tap()
+        let save = app.buttons["Save"].firstMatch
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+        XCTAssertTrue(save.waitForNonExistence(timeout: 10))
 
         // 5. Verify the dashboard renders its widgets.
-        app.tabBars.buttons["Dashboard"].tap()
+        tab("Dashboard", in: app).tap()
         XCTAssertTrue(app.staticTexts["Planned Expenses"].waitForExistence(timeout: 10))
+    }
+
+    /// A root tab's button. On the Duo's outer display the tab bar is a
+    /// vertical rail, and with adaptive layouts on (D7.1) a regular-width
+    /// scene shows a sidebar instead, so fall back to any button of that name.
+    private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
+        let bar = app.tabBars.buttons[name]
+        return bar.exists ? bar : app.buttons[name].firstMatch
     }
 }
