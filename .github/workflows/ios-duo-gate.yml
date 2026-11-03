@@ -16,19 +16,23 @@ on:
         description: Simulator device name to match. An iPad (e.g. "iPad Pro") has no outer-display rail, to tell render artifacts from real bugs.
         default: Duo
       uitests:
-        description: "T3: also run HappyPathUITests against the live backend (needs the UITEST_EMAIL / UITEST_PASSWORD secrets for a test account; it adds an account and a transaction)."
+        description: "T3: also run HappyPathUITests against the live backend (needs the UITEST_EMAIL / UITEST_PASSWORD secrets for a test account; it adds an account and a transaction, which are deleted afterwards)."
         type: boolean
         default: false
   pull_request:
     types: [labeled]
+  # T3 nightly on main: the full gate plus HappyPathUITests, 03:00 WIB.
+  # GitHub emails the workflow's last editor when a scheduled run fails.
+  schedule:
+    - cron: "0 20 * * *"
 
 concurrency:
-  group: ios-duo-gate-${{ github.head_ref || github.ref }}-${{ inputs.device || 'Duo' }}-${{ inputs.uitests && 'ui' || 'layout' }}
+  group: ios-duo-gate-${{ github.head_ref || github.ref }}-${{ inputs.device || 'Duo' }}-${{ (inputs.uitests || github.event_name == 'schedule') && 'ui' || 'layout' }}
   cancel-in-progress: true
 
 jobs:
   gate:
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'duo-gate'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event.label.name == 'duo-gate'
     runs-on: xcode-27
     timeout-minutes: 45
     defaults:
@@ -54,12 +58,22 @@ jobs:
       - name: Build, test and capture screens
         env:
           DEVICE_FILTER: ${{ inputs.device || 'Duo' }}
-          UITESTS: ${{ inputs.uitests && '1' || '0' }}
-          SUPABASE_URL: ${{ inputs.uitests && secrets.SUPABASE_URL || '' }}
-          SUPABASE_ANON_KEY: ${{ inputs.uitests && secrets.SUPABASE_ANON_KEY || '' }}
-          UITEST_EMAIL: ${{ inputs.uitests && secrets.UITEST_EMAIL || '' }}
-          UITEST_PASSWORD: ${{ inputs.uitests && secrets.UITEST_PASSWORD || '' }}
+          UITESTS: ${{ (inputs.uitests || github.event_name == 'schedule') && '1' || '0' }}
+          SUPABASE_URL: ${{ (inputs.uitests || github.event_name == 'schedule') && secrets.SUPABASE_URL || '' }}
+          SUPABASE_ANON_KEY: ${{ (inputs.uitests || github.event_name == 'schedule') && secrets.SUPABASE_ANON_KEY || '' }}
+          UITEST_EMAIL: ${{ (inputs.uitests || github.event_name == 'schedule') && secrets.UITEST_EMAIL || '' }}
+          UITEST_PASSWORD: ${{ (inputs.uitests || github.event_name == 'schedule') && secrets.UITEST_PASSWORD || '' }}
         run: GATE=1 bash ../../scripts/ios-ci/pr-check.sh "$RUNNER_TEMP/gate"
+
+      - name: Clean up the test account
+        if: always() && (inputs.uitests || github.event_name == 'schedule')
+        working-directory: .
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          UITEST_EMAIL: ${{ secrets.UITEST_EMAIL }}
+          UITEST_PASSWORD: ${{ secrets.UITEST_PASSWORD }}
+        run: bash scripts/ios-ci/clean-test-account.sh
 
       - name: Summarize
         if: always()
