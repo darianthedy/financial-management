@@ -154,6 +154,8 @@ if [ "${UITESTS:-0}" = "1" ]; then
   ui_status=$?
   set -e
   grep -E "Test Case .*(passed|failed|skipped)|error:" "$out/uitests.log" | head -50 || true
+  # HappyPathUITests dumps the screen's accessibility tree when it times out.
+  sed -n '/HAPPYPATH-SCREEN-BEGIN/,/HAPPYPATH-SCREEN-END/p' "$out/uitests.log" | head -400 || true
   {
     grep -E "Executed [0-9]+ tests?" "$out/uitests.log" | tail -1 || echo "no UI test summary"
     echo "uitests: $((SECONDS - ui_start))s (exit $ui_status)"

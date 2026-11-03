@@ -32,7 +32,7 @@ final class HappyPathUITests: XCTestCase {
 
         // 1. Login.
         let emailField = app.textFields["you@example.com"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 10))
+        waitFor(emailField, 10, in: app)
         emailField.tap()
         emailField.typeText(email!)
 
@@ -44,31 +44,31 @@ final class HappyPathUITests: XCTestCase {
 
         // 2. Land on the tab bar and open Accounts.
         let accountsTab = tab("Accounts", in: app)
-        XCTAssertTrue(accountsTab.waitForExistence(timeout: 15))
+        waitFor(accountsTab, 15, in: app)
         accountsTab.tap()
 
         // 3. Add an account via the "+" toolbar button.
         app.buttons["Add"].firstMatch.tap()
         let accountName = "UITest Account \(Int(Date().timeIntervalSince1970))"
         let nameField = app.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        waitFor(nameField, 5, in: app)
         nameField.tap()
         nameField.typeText(accountName)
         app.buttons["Save"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts[accountName].waitForExistence(timeout: 10))
+        waitFor(app.staticTexts[accountName], 10, in: app)
 
         // 4. Add a transaction.
         tab("Transactions", in: app).tap()
         app.buttons["Add"].firstMatch.tap()
         // Saving needs an account: pick the one just added.
         let accountPicker = app.buttons["Account"].firstMatch
-        XCTAssertTrue(accountPicker.waitForExistence(timeout: 5))
+        waitFor(accountPicker, 5, in: app)
         accountPicker.tap()
         let accountOption = app.buttons[accountName].firstMatch
-        XCTAssertTrue(accountOption.waitForExistence(timeout: 10))
+        waitFor(accountOption, 10, in: app)
         accountOption.tap()
         let amountField = app.textFields["0"].firstMatch
-        XCTAssertTrue(amountField.waitForExistence(timeout: 5))
+        waitFor(amountField, 5, in: app)
         amountField.tap()
         amountField.typeText("42")
         let save = app.buttons["Save"].firstMatch
@@ -78,7 +78,7 @@ final class HappyPathUITests: XCTestCase {
 
         // 5. Verify the dashboard renders its widgets.
         tab("Dashboard", in: app).tap()
-        XCTAssertTrue(app.staticTexts["Planned Expenses"].waitForExistence(timeout: 10))
+        waitFor(app.staticTexts["Planned Expenses"], 10, in: app)
     }
 
     /// A root tab's button. On the Duo's outer display the tab bar is a
@@ -87,5 +87,19 @@ final class HappyPathUITests: XCTestCase {
     private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
         let bar = app.tabBars.buttons[name]
         return bar.exists ? bar : app.buttons[name].firstMatch
+    }
+
+    /// Waits for `element`; on a miss, logs what was on screen (the CI log is
+    /// all a failed T3 run leaves to read) and attaches a screenshot.
+    private func waitFor(
+        _ element: XCUIElement, _ timeout: TimeInterval, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard !element.waitForExistence(timeout: timeout) else { return }
+        print("HAPPYPATH-SCREEN-BEGIN\n\(app.debugDescription)\nHAPPYPATH-SCREEN-END")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTFail("Timed out after \(Int(timeout))s waiting for \(element)", file: file, line: line)
     }
 }
