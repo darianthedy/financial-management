@@ -219,6 +219,9 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                         content
                             .environment(\.canTileSplitRoot, false)
                             .environment(\.isSplitListColumn, true)
+                            // Else its toolbar takes a vertical strip of the
+                            // column in landscape (DuoCompat).
+                            .duoHorizontalToolbar()
                     }
                 } detail: {
                     NavigationStack {
