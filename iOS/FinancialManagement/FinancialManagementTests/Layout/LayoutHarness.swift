@@ -92,16 +92,25 @@ enum LayoutHarness {
         return bounds.width >= size.size.width && bounds.height >= size.size.height
     }
 
-    /// Whether a list → detail screen tiles at `size`. Regular width alone isn't
-    /// enough: `SplitColumns` needs 660 pt, and on the Duo simulator the
-    /// hosted scene's 84 pt rail leaves inner portrait 585 pt, which pushes, as
-    /// beside an open sidebar on the device. Checks of the tiled columns skip
-    /// that size there; the iPad gate run still covers it.
-    static func tilesSplit(_ size: LayoutSize) -> Bool {
-        guard size.horizontal == .regular else { return false }
+    /// How a list → detail screen shows at `size`:
+    /// - `.tiled`: side by side, in landscape. Regular width alone isn't
+    ///   enough: `SplitColumns` needs 660 pt, and on the Duo simulator the
+    ///   hosted scene's 84 pt rail leaves inner portrait 585 pt, which pushes,
+    ///   as beside an open sidebar on the device.
+    /// - `.overlay`: the system split in portrait, the list sliding over a
+    ///   full-screen detail, as in Notes (only the iPad gate run sees it).
+    /// - `.push`: compact, or too narrow to split.
+    enum SplitMode { case tiled, overlay, push }
+
+    static func splitMode(_ size: LayoutSize) -> SplitMode {
+        guard size.horizontal == .regular else { return .push }
         let fits = (try? sceneFits(size)) ?? false
-        return SplitColumns.tiles(width: size.size.width - (fits ? 0 : 84))
+        guard SplitColumns.tiles(width: size.size.width - (fits ? 0 : 84)) else { return .push }
+        return size.size.width > size.size.height ? .tiled : .overlay
     }
+
+    static func tilesSplit(_ size: LayoutSize) -> Bool { splitMode(size) == .tiled }
+    static func pushesSplit(_ size: LayoutSize) -> Bool { splitMode(size) == .push }
 
     /// Renders `view` and waits until `ready` holds for the recorded frames
     /// (e.g. a probe that only appears once data has loaded), or `timeout`.

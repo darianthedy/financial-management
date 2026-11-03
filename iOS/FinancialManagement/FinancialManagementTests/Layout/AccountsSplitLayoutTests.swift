@@ -39,7 +39,7 @@ final class AccountsSplitLayoutTests: XCTestCase {
                 let list = try snapshot.frame("split.list")
                 let placeholder = try snapshot.frame("split.placeholder")
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "\(size)")
-            } else {
+            } else if LayoutHarness.pushesSplit(size) {
                 XCTAssertNil(snapshot.frames["split.list"], "\(size)")
                 try assertInsideSafeArea(snapshot, probe: "accounts.row.BCA Tahapan")
             }

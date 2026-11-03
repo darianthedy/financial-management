@@ -7,9 +7,10 @@ import SwiftUI
 // 2. Its body applies `.splitDetail(selection:…)` where it used
 //    `.navigationDestination(item:)`, after its title, toolbar and overlay.
 //
-// On regular width the container lets the modifier tile the screen: a list
-// column | a detail column (each its own `NavigationStack`), with a
-// placeholder while nothing is selected. Everywhere else — compact width, or the screen pushed
+// On regular width the container lets the modifier split the screen with the
+// system's `NavigationSplitView`, as Notes does: list | detail side by side in
+// landscape; in portrait the detail fills the screen and the list slides over
+// it. A placeholder fills the detail while nothing is selected. Everywhere else — compact width, or the screen pushed
 // onto another stack (More › Tags on the outer display) — the modifier is the
 // same `navigationDestination(item:)` push as before, so compact is unchanged.
 //
@@ -125,6 +126,13 @@ enum SplitColumns {
     /// The list column's width: on the fold in book posture, when both regions
     /// fit a column, so neither column straddles it; else 40% of the space,
     /// kept between 300 and 420 pt, so the detail column gets the larger share.
+    /// The split's column visibility after a selection change: the list with
+    /// nothing selected, else the system's choice (both in landscape, the
+    /// detail alone in portrait, where the list overlays it).
+    static func visibility(selected: Bool) -> NavigationSplitViewVisibility {
+        selected ? .automatic : .all
+    }
+
     static func listWidth(for width: CGFloat, fold: FoldContext = .none) -> CGFloat {
         if case .book(let x) = fold, x >= minimumListWidth, width - x >= minimumDetailWidth {
             return x.rounded()
@@ -194,6 +202,9 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     /// dropped by its `NavigationStack`, which writes nil back and so clears
     /// the stored selection and the draft with it.
     @State private var hasAppeared = false
+    /// The list shows while nothing is selected; picking a row closes it where
+    /// it overlays the detail (portrait). Landscape keeps both either way.
+    @State private var columns: NavigationSplitViewVisibility = .all
 
     init(
         selection: Binding<Item?>, items: [Item], id: @escaping (Item) -> String,
@@ -211,18 +222,16 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if canTile {
-                // A fixed two-column layout rather than `NavigationSplitView`,
-                // which on the inner display in portrait (669 pt) overlays the
-                // list on a dimmed detail even with `.balanced` / `.all`.
-                TiledSplitColumns {
-                    NavigationStack {
-                        content
-                            .environment(\.canTileSplitRoot, false)
-                            .environment(\.isSplitListColumn, true)
-                            // Else its toolbar takes a vertical strip of the
-                            // column in landscape (DuoCompat).
-                            .duoHorizontalToolbar()
-                    }
+                // The system split, as in Notes: side by side in landscape,
+                // the detail full screen with the list sliding over it in
+                // portrait. The system knows the list is the leading column,
+                // so its bar stays horizontal; two side-by-side stacks each
+                // took the vertical bar in landscape, which cut an 84 pt
+                // strip off the list (device test, builds 148–149).
+                SystemSplitColumns(visibility: $columns) {
+                    content
+                        .environment(\.canTileSplitRoot, false)
+                        .environment(\.isSplitListColumn, true)
                 } detail: {
                     NavigationStack {
                         if let selection {
@@ -252,11 +261,13 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         }
         .task {
             hasAppeared = true
+            columns = SplitColumns.visibility(selected: selection != nil)
             reconcile(items.map(id))
         }
         .onChange(of: selection) { _, new in
             storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
             if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
+            columns = SplitColumns.visibility(selected: new != nil)
         }
     }
 
@@ -276,23 +287,23 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     }
 }
 
-/// List | detail, side by side, with the list as wide as `SplitColumns` says:
-/// on the fold in book posture, so each column gets a region.
-private struct TiledSplitColumns<ListColumn: View, DetailColumn: View>: View {
+/// The system split's two columns, with the list as wide as `SplitColumns`
+/// says: on the fold in book posture, so each column gets a region.
+private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
     @Environment(\.foldContext) private var fold
+    @Binding var visibility: NavigationSplitViewVisibility
     @ViewBuilder var list: ListColumn
     @ViewBuilder var detail: DetailColumn
 
     var body: some View {
         GeometryReader { geo in
-            HStack(spacing: 0) {
+            let width = SplitColumns.listWidth(for: geo.size.width, fold: fold)
+            NavigationSplitView(columnVisibility: $visibility) {
                 list
-                    .frame(width: SplitColumns.listWidth(for: geo.size.width, fold: fold))
                     .layoutProbe("split.list")
-
-                Divider().ignoresSafeArea()
-
-                detail.frame(maxWidth: .infinity)
+                    .navigationSplitViewColumnWidth(min: width, ideal: width, max: width)
+            } detail: {
+                detail
             }
         }
     }
