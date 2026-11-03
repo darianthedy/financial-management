@@ -60,7 +60,7 @@ final class SplitRootLayoutTests: XCTestCase {
             let row = try snapshot.frame("row.Alpha")
             XCTAssertNil(snapshot.frames["split.detail"], "\(size)")
 
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 let list = try snapshot.frame("split.list")
                 let placeholder = try snapshot.frame("split.placeholder")
                 XCTAssertLessThanOrEqual(list.maxX, placeholder.minX + 1, "list | placeholder must tile at \(size)")
@@ -80,7 +80,7 @@ final class SplitRootLayoutTests: XCTestCase {
             attach(snapshot, name: "split-selected")
             let detail = try snapshot.frame("split.detail")
 
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 // Tiled: the list stays on screen beside the detail.
                 let list = try snapshot.frame("split.list")
                 XCTAssertLessThanOrEqual(list.maxX, detail.minX + 1, "list | detail must tile at \(size)")

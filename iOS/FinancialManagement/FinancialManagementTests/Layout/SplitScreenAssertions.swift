@@ -13,7 +13,7 @@ extension XCTestCase {
         let size = snapshot.size
         XCTAssertNotNil(snapshot.frames[rowProbe], "'\(rowProbe)' never appeared at \(size)", file: file, line: line)
         XCTAssertNil(snapshot.frames["split.detail"], "detail shown with nothing selected at \(size)", file: file, line: line)
-        if size.horizontal == .regular {
+        if LayoutHarness.tilesSplit(size) {
             let list = try snapshot.frame("split.list", file: file, line: line)
             let empty = try snapshot.frame("split.placeholder", file: file, line: line)
             XCTAssertLessThanOrEqual(list.maxX, empty.minX + 1, "list | placeholder must tile at \(size)", file: file, line: line)

@@ -44,7 +44,7 @@ final class TransactionsSplitLayoutTests: XCTestCase {
     }
 
     func testRegularEditsTheTransactionInTheDetailColumn() async throws {
-        for size in LayoutSize.all where size.horizontal == .regular {
+        for size in LayoutSize.all where LayoutHarness.tilesSplit(size) {
             let snapshot = try await render(selected: topUp, at: size)
             attach(snapshot, name: "transactions-detail")
             try assertSplitTiled(snapshot)
@@ -63,7 +63,7 @@ final class TransactionsSplitLayoutTests: XCTestCase {
                 rowFrame.width, list.width - 60,
                 "row \(rowFrame) in list \(list) at \(size)"
             )
-            if size.horizontal == .regular {
+            if LayoutHarness.tilesSplit(size) {
                 let column = try snapshot.frame("split.list")
                 XCTAssertGreaterThanOrEqual(
                     list.width, column.width - 1, "list \(list) in column \(column) at \(size)"
