@@ -194,7 +194,7 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
 
 **Device test, TestFlight build 144** (the fixes above): book posture with the sidebar open now pushes; with it hidden the columns meet on the fold; Settings clears the sidebar; tent posture shows the Dashboard title, stacked Scheduled actions and Save. Still failing, fixed after:
 - **Flat with the sidebar open** (~585 pt beside it) still tiled: the list's rows were cut to one letter and the editor's Save fell into "…". Tiling now needs a 360 pt detail column (660 pt in all), so this layout pushes too.
-- **The draft was still lost** on closing the phone. A fold tears down the stacks, which writes nil into the selection, and nil discarded the draft. The draft is now dropped only when its editor closes or another row is edited, and the list reopens an unsaved draft when it appears.
+- **The draft was still lost** on closing the phone. A fold tears down the stacks, which writes nil into the selection, and nil discarded the draft. The draft is now dropped only when its editor closes or another row is edited, and the list reopens an unsaved draft when it appears. **Resolved (2026-11-03):** checked on the device, a draft now survives flat → closed → flat.
 - **Scheduled on the outer display** truncated to "Confi… / Dis…": the 320 pt estimate was too small. The row now measures its actions' ideal width.
 - **Login flat and on the outer display** touched the top edge, which has no safe area there: the column is centered in the visible height, and at least 16 pt from the top.
 
