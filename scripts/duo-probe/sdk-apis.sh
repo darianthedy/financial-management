@@ -61,6 +61,20 @@ symbols='ReservedRegion|ArrangementView|arrangementViewStyle|overlayArrangementZ
       grep -n -B3 -A26 -E "public struct (ReservedRegion|DeviceHingeContext|ArrangementView)[ :<]|extension .*(ArrangementView|DeviceHingeContext|ReservedRegion)[ <]|func reservedRegions" "$f" |
         grep -v -E "^[0-9]+-\s*//" | cut -c1-260
     done
+
+  # The vertical bar's opt-outs, with their docs: SwiftUI's
+  # toolbarVerticalBehavior(_:) and UIKit's preferredVerticalBarBehavior.
+  echo
+  echo "=================================================================="
+  echo "== Vertical bar behavior"
+  find "$sdk/System/Library/Frameworks" -maxdepth 6 -name "arm64-apple-ios-simulator.swiftinterface" -path "*SwiftUI*" |
+    while read -r f; do
+      echo "-- ${f#"$sdk"/}"
+      grep -n -B12 -A30 -E "struct ToolbarVerticalBehavior|func toolbarVerticalBehavior" "$f" | cut -c1-260
+    done
+  h="$(find "$sdk/System/Library/Frameworks/UIKit.framework" -name UIViewController.h | head -1)"
+  echo "-- $h"
+  grep -n -B4 -A50 "typedef NS_ENUM(NSInteger, UIVerticalBarBehavior)" "$h" | cut -c1-260
 } >"$out" 2>&1
 
 echo "Wrote $(wc -l <"$out") lines to $out"
