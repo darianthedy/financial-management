@@ -110,10 +110,14 @@ extension View {
 enum SplitColumns {
     static let minimumListWidth: CGFloat = 300
     /// The narrowest detail column worth tiling: the embedded transaction form
-    /// still fits its labels and values on one line.
-    static let minimumDetailWidth: CGFloat = 260
+    /// keeps "Cancel", its title and "Save and Confirm" on the bar. At ~290 pt
+    /// (flat, sidebar open) Save fell into "…" and the list column's rows were
+    /// cut to one letter (device test, build 144), so that layout pushes now.
+    static let minimumDetailWidth: CGFloat = 360
 
-    /// Whether `width` fits a list and a detail column at their minimums.
+    /// Whether `width` fits a list and a detail column at their minimums
+    /// (660 pt): the inner display in landscape or portrait, but not beside an
+    /// open sidebar.
     static func tiles(width: CGFloat) -> Bool {
         width >= minimumListWidth + minimumDetailWidth
     }

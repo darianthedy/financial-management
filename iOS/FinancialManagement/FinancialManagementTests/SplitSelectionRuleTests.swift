@@ -69,10 +69,11 @@ final class SplitSelectionRuleTests: XCTestCase {
     /// region, leaving ~392 pt, and the detail column was crushed to ~90 pt.
     func testTilesOnlyWhenBothColumnsFit() {
         XCTAssertTrue(SplitColumns.tiles(width: 867))    // inner landscape, rail only
-        XCTAssertTrue(SplitColumns.tiles(width: 585))    // inner portrait, or flat with the sidebar
-        XCTAssertTrue(SplitColumns.tiles(width: 560))
-        XCTAssertFalse(SplitColumns.tiles(width: 559))
-        XCTAssertFalse(SplitColumns.tiles(width: 392))   // book posture with the sidebar
+        XCTAssertTrue(SplitColumns.tiles(width: 669))    // inner portrait / tent
+        XCTAssertTrue(SplitColumns.tiles(width: 660))
+        XCTAssertFalse(SplitColumns.tiles(width: 659))
+        XCTAssertFalse(SplitColumns.tiles(width: 585))   // flat with the sidebar (build 144)
+        XCTAssertFalse(SplitColumns.tiles(width: 392))   // book posture with the sidebar (build 143)
     }
 
     func testListColumnEndsOnTheFoldInBookPosture() {

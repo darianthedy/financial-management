@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Places content clear of the iPhone Duo's fold (implementation plan D6.1).
 ///
-/// - **Two children, flat:** stacked with `spacing`, like a `VStack`.
+/// - **Two children, flat:** stacked with `spacing`, like a `VStack`, and
+///   centered in the height when it fits.
 /// - **Two children, folded:** one per region: leading and trailing in book
 ///   posture, top and bottom in tent. Each is centered in its region; below the
 ///   fold the second child starts at the fold, so a scroll view can extend it.
@@ -13,7 +14,8 @@ import SwiftUI
 ///
 /// In a scroll view, which proposes no height, pass the visible height as
 /// `minimumHeight`: folded, the regions are then centered in what's on screen
-/// rather than pinned to its top edge. The layout still grows past it to fit.
+/// rather than pinned to its top edge, flat or folded. The layout still grows
+/// past it to fit.
 struct FoldRegions: Layout {
     var fold: FoldContext
     var spacing: CGFloat = 16
@@ -35,8 +37,7 @@ struct FoldRegions: Layout {
         case .tent(let y) where y > 0 && y < height ?? .infinity:
             return tent(foldY: y, width: width, height: height, subviews: subviews)
         default:
-            // Flat keeps today's top-down column.
-            return flat(width: width, height: proposal.height, subviews: subviews)
+            return flat(width: width, height: height, subviews: subviews)
         }
     }
 
@@ -53,18 +54,22 @@ struct FoldRegions: Layout {
         CGRect(x: rect.midX - child.width / 2, y: y, width: child.width, height: child.height)
     }
 
+    /// One column, centered in `height` when it fits; else from the top, a
+    /// `margin` clear of it. The outer and inner displays have no top safe
+    /// area (their status bar is on the side), so a top-aligned column touched
+    /// the screen's edge (device test, build 144).
     private func flat(width: CGFloat, height: CGFloat?, subviews: Subviews) -> Placement {
         let sizes = subviews.map { size($0, width: childWidth(in: width)) }
         let total = sizes.map(\.height).reduce(0, +) + spacing * CGFloat(max(sizes.count - 1, 0))
-        let container = CGRect(x: 0, y: 0, width: width, height: height ?? total)
-        // Top-down in a scroll view; centered when given a height.
-        var y = subviews.count == 1 ? max(0, (container.height - total) / 2) : 0
+        let container = CGRect(x: 0, y: 0, width: width, height: height ?? 0)
+        var y = max(margin, ((height ?? 0) - total) / 2)
+        let full = max(height ?? 0, y + total + margin)
         var frames: [CGRect] = []
         for child in sizes {
             frames.append(centered(child, inWidth: container, y: y))
             y += child.height + spacing
         }
-        return Placement(frames: frames, size: CGSize(width: width, height: height ?? total))
+        return Placement(frames: frames, size: CGSize(width: width, height: full))
     }
 
     /// One child per region, centered against each other.

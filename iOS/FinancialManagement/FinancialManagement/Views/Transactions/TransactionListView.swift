@@ -183,13 +183,23 @@ struct TransactionListView: View {
                 }
                 .discardChangesDialog(for: $selection)
                 // Nothing selected means no editor, so nothing can be dirty.
+                // The draft itself is only dropped by the editor (saved or
+                // cancelled) or by editing another row: a fold tears down the
+                // stacks, which writes nil here too (device test, build 144).
                 .onChange(of: selection.selection) { _, selected in
-                    if selected == nil {
-                        selection.isDirty = false
-                        drafts.discard()
-                    }
+                    if selected == nil { selection.isDirty = false }
                 }
+                // After a fold re-creates the list, reopen an unsaved draft.
+                .task { reopenUnsavedDraft() }
         }
+    }
+
+    /// Selects a draft that still has unsaved edits, if nothing is selected:
+    /// in the detail column when tiled, else pushed.
+    private func reopenUnsavedDraft() {
+        guard selection.selection == nil, let draft = drafts.unsavedTransaction else { return }
+        selection.selection = draft.id
+        selection.isDirty = true
     }
 
     /// The loaded rows, plus a kept draft whose row isn't loaded (yet), so the
@@ -210,7 +220,10 @@ struct TransactionListView: View {
                     for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces
                 ),
                 onSaved: { await viewModel.load() },
-                onClose: { selection.close() },
+                onClose: {
+                    drafts.discard()
+                    selection.close()
+                },
                 isDirty: $selection.isDirty
             )
         }
