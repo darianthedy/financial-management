@@ -42,6 +42,27 @@ extension View {
     }
 }
 
+// MARK: - Vertical bar
+
+extension View {
+    /// Keeps this stack's toolbar horizontal instead of the iPhone Duo's
+    /// vertical bar. A tiled split's list column needs it: in landscape on the
+    /// inner display its toolbar became a vertical capsule that reserved a
+    /// ~84 pt strip at the column's trailing edge, cutting its rows short
+    /// (device test, builds 143–148). No-op before iOS 27.1.
+    ///
+    /// UIKit forwards the preference up to the window, so this may turn the
+    /// whole window's bars horizontal while a split is tiled.
+    @ViewBuilder
+    func duoHorizontalToolbar() -> some View {
+        if #available(iOS 27.1, *) {
+            toolbarVerticalBehavior(.disabled)
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Fold context
 
 /// Where the iPhone Duo's fold (the `.division` reserved region) crosses the
