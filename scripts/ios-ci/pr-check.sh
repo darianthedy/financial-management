@@ -63,9 +63,14 @@ echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
 # real app, so they get the real ones.
 supabase_url="https://pr-check.invalid"
 supabase_key="pr-check"
+# Unsigned builds can't use the keychain, where Supabase keeps the session:
+# sign-in succeeds but every later request fails with "Auth session missing".
+# So the XCUITests build is ad-hoc signed, as Xcode's "Sign to Run Locally".
+signing=(CODE_SIGNING_ALLOWED=NO)
 if [ "${UITESTS:-0}" = "1" ]; then
   supabase_url="$SUPABASE_URL"
   supabase_key="$SUPABASE_ANON_KEY"
+  signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=-" DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=)
 fi
 common=(
   -project FinancialManagement.xcodeproj
@@ -73,7 +78,7 @@ common=(
   -destination "id=$udid"
   -derivedDataPath "$dd"
   -clonedSourcePackagesDirPath "$packages"
-  CODE_SIGNING_ALLOWED=NO
+  "${signing[@]}"
   "SUPABASE_URL=$supabase_url"
   "SUPABASE_ANON_KEY=$supabase_key"
 )
