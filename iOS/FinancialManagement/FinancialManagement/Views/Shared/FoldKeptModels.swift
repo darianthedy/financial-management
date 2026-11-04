@@ -2,8 +2,8 @@ import SwiftUI
 
 /// View models that outlive a fold, owned by `ContentRootView`.
 ///
-/// A fold / unfold re-creates these screens (`SplitRootContainer`, the
-/// More ⇄ sidebar swap), which would reset their month to the current one and
+/// A fold / unfold re-creates these screens' content (`.splitDetail` branches
+/// on size class), and switching sections re-creates the screens, which would reset their month to the current one and
 /// strand any sheet still open on the old view model.
 @MainActor
 final class FoldKeptModels {

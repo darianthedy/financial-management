@@ -4,7 +4,7 @@ import SwiftUI
 /// (iPhone Duo plan D3.1).
 ///
 /// A fold / unfold swaps the containers around the Transactions list
-/// (`SplitRootContainer`, `.splitDetail`), which re-creates the list and its
+/// (`.splitDetail`'s detail column vs push), which re-creates the list and its
 /// embedded form. The form's view model is therefore kept here, owned by
 /// `ContentRootView` above every size-class branch, so unsaved edits survive:
 /// the tiled detail column and the compact push both ask for the same model.

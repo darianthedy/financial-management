@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Transactions (S6). Compact edits a transaction in a sheet, as before. As the
-/// Transactions tab root on regular width (iPhone Duo plan D3.1) tapping a row
+/// Transactions section root on regular width (iPhone Duo plan D3.1) tapping a row
 /// opens it in the detail column as an embedded `TransactionFormView`;
 /// switching rows with unsaved edits asks "Discard changes?" first. New still
 /// opens a sheet. Drill-down embeddings (Budgets, Categories, …) never tile.

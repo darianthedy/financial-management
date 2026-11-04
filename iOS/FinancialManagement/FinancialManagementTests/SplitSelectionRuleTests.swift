@@ -90,10 +90,10 @@ final class SplitSelectionRuleTests: XCTestCase {
 
     func testColumnVisibilityFollowsTheSelection() {
         // Landscape: the list never goes away (build 150 hid it on each tap).
-        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: true), .all)
-        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: true), .all)
+        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: true), .doubleColumn)
+        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: true), .doubleColumn)
         // Portrait: the list until something is picked, then the detail.
-        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: false), .all)
+        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: false), .doubleColumn)
         XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: false), .detailOnly)
     }
 

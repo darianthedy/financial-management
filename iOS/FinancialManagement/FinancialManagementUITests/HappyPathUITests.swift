@@ -42,8 +42,8 @@ final class HappyPathUITests: XCTestCase {
 
         app.buttons["Sign in"].tap()
 
-        // 2. Land on the tab bar and open Accounts.
-        let accountsTab = tab("Accounts", in: app)
+        // 2. Land on the Dashboard and open Accounts from the sections.
+        let accountsTab = section("Accounts", in: app)
         waitFor(accountsTab, 15, in: app)
         accountsTab.tap()
 
@@ -65,7 +65,7 @@ final class HappyPathUITests: XCTestCase {
         waitFor(app.staticTexts[accountName], 10, in: app)
 
         // 4. Add a transaction.
-        tab("Transactions", in: app).tap()
+        section("Transactions", in: app).tap()
         app.buttons["Add"].firstMatch.tap()
         // Saving needs an account: pick the one just added.
         // A menu picker's label carries its value: "Account, Select Account".
@@ -86,16 +86,26 @@ final class HappyPathUITests: XCTestCase {
         XCTAssertTrue(save.waitForNonExistence(timeout: 10))
 
         // 5. Verify the dashboard renders its widgets.
-        tab("Dashboard", in: app).tap()
+        section("Dashboard", in: app).tap()
         waitFor(app.staticTexts["Planned Expenses"], 10, in: app)
     }
 
-    /// A root tab's button. On the Duo's outer display the tab bar is a
-    /// vertical rail, and with adaptive layouts on (D7.1) a regular-width
-    /// scene shows a sidebar instead, so fall back to any button of that name.
-    private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
-        let bar = app.tabBars.buttons[name]
-        return bar.exists ? bar : app.buttons[name].firstMatch
+    /// A section's row in the root's sidebar. The app opens on the Dashboard
+    /// with the sections out of sight: collapsed (outer display) they are
+    /// back one level, expanded (inner display) behind "Show Sidebar".
+    private func section(_ name: String, in app: XCUIApplication) -> XCUIElement {
+        let row = app.cells.containing(.staticText, identifier: name).firstMatch
+        for _ in 0..<3 where !(row.exists && row.isHittable) {
+            let showSidebar = app.buttons["Show Sidebar"].firstMatch
+            let back = app.navigationBars.buttons.firstMatch
+            if showSidebar.exists && showSidebar.isHittable {
+                showSidebar.tap()
+            } else if back.exists {
+                back.tap()
+            }
+            _ = row.waitForExistence(timeout: 2)
+        }
+        return row
     }
 
     /// Waits for `element`; on a miss, logs what was on screen (the CI log is
