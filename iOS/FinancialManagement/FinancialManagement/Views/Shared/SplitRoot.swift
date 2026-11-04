@@ -123,22 +123,22 @@ enum SplitColumns {
         width >= minimumListWidth + minimumDetailWidth
     }
 
-    /// The list column's width: on the fold in book posture, when both regions
-    /// fit a column, so neither column straddles it; else 40% of the space,
-    /// kept between 300 and 420 pt, so the detail column gets the larger share.
-    /// The split's column visibility after a selection change: the list with
-    /// nothing selected, else the system's choice (both in landscape, the
-    /// detail alone in portrait, where the list overlays it).
     /// Landscape: list | detail side by side. Portrait: the detail fills the
     /// screen and the list slides over it, as in Notes.
     static func sideBySide(_ size: CGSize) -> Bool {
         size.width > size.height
     }
 
-    static func visibility(selected: Bool) -> NavigationSplitViewVisibility {
-        selected ? .automatic : .all
+    /// The split's column visibility. Side by side, always both: handing it
+    /// to the system (`.automatic`) hid the list on every tap (build 150).
+    /// Portrait: the list over the detail until something is picked.
+    static func visibility(selected: Bool, sideBySide: Bool) -> NavigationSplitViewVisibility {
+        sideBySide || !selected ? .all : .detailOnly
     }
 
+    /// The list column's width: on the fold in book posture, when both regions
+    /// fit a column, so neither column straddles it; else 40% of the space,
+    /// kept between 300 and 420 pt, so the detail column gets the larger share.
     static func listWidth(for width: CGFloat, fold: FoldContext = .none) -> CGFloat {
         if case .book(let x) = fold, x >= minimumListWidth, width - x >= minimumDetailWidth {
             return x.rounded()
@@ -208,9 +208,6 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     /// dropped by its `NavigationStack`, which writes nil back and so clears
     /// the stored selection and the draft with it.
     @State private var hasAppeared = false
-    /// The list shows while nothing is selected; picking a row closes it where
-    /// it overlays the detail (portrait). Landscape keeps both either way.
-    @State private var columns: NavigationSplitViewVisibility = .all
 
     init(
         selection: Binding<Item?>, items: [Item], id: @escaping (Item) -> String,
@@ -234,7 +231,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                 // so its bar stays horizontal; two side-by-side stacks each
                 // took the vertical bar in landscape, which cut an 84 pt
                 // strip off the list (device test, builds 148–149).
-                SystemSplitColumns(visibility: $columns) {
+                SystemSplitColumns(selected: selection != nil) {
                     content
                         .environment(\.canTileSplitRoot, false)
                         .environment(\.isSplitListColumn, true)
@@ -267,13 +264,11 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         }
         .task {
             hasAppeared = true
-            columns = SplitColumns.visibility(selected: selection != nil)
             reconcile(items.map(id))
         }
         .onChange(of: selection) { _, new in
             storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
             if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
-            columns = SplitColumns.visibility(selected: new != nil)
         }
     }
 
@@ -297,7 +292,8 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
 /// says: on the fold in book posture, so each column gets a region.
 private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
     @Environment(\.foldContext) private var fold
-    @Binding var visibility: NavigationSplitViewVisibility
+    let selected: Bool
+    @State private var visibility: NavigationSplitViewVisibility = .all
     @ViewBuilder var list: ListColumn
     @ViewBuilder var detail: DetailColumn
 
@@ -318,10 +314,19 @@ private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
             // Explicit, because `.automatic` overlaid the list in landscape
             // too, e.g. in book posture. Rotating swaps the style, which rebuilds
             // the split; the selection and drafts live above it.
-            if SplitColumns.sideBySide(geo.size) {
-                split.navigationSplitViewStyle(.balanced)
-            } else {
-                split.navigationSplitViewStyle(.prominentDetail)
+            let sideBySide = SplitColumns.sideBySide(geo.size)
+            Group {
+                if sideBySide {
+                    split.navigationSplitViewStyle(.balanced)
+                } else {
+                    split.navigationSplitViewStyle(.prominentDetail)
+                }
+            }
+            .onChange(of: sideBySide, initial: true) { _, sideBySide in
+                visibility = SplitColumns.visibility(selected: selected, sideBySide: sideBySide)
+            }
+            .onChange(of: selected) { _, selected in
+                visibility = SplitColumns.visibility(selected: selected, sideBySide: sideBySide)
             }
         }
     }

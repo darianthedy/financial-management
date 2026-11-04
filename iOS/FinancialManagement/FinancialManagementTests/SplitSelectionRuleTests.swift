@@ -88,11 +88,13 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 347)
     }
 
-    /// Nothing selected shows the list; a selection hands the columns back to
-    /// the system, which closes the list where it overlays the detail.
     func testColumnVisibilityFollowsTheSelection() {
-        XCTAssertEqual(SplitColumns.visibility(selected: false), .all)
-        XCTAssertEqual(SplitColumns.visibility(selected: true), .automatic)
+        // Landscape: the list never goes away (build 150 hid it on each tap).
+        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: true), .all)
+        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: true), .all)
+        // Portrait: the list until something is picked, then the detail.
+        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: false), .all)
+        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: false), .detailOnly)
     }
 
     func testSideBySideOnlyInLandscape() {
