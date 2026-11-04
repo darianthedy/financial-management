@@ -561,22 +561,11 @@ struct TransactionListView: View {
             if AmountColumnView.keepsWholeAmount(
                 sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
             ) {
-                // The day's net never truncates. A narrow column drops the item
-                // count first, then the row-aligned amount column.
+                // The day's net never truncates and stays in the rows' aligned
+                // amount column; a narrow column drops the item count instead.
                 ViewThatFits(in: .horizontal) {
                     fullDateGroupHeader(group)
                     fullDateGroupHeader(group, showsCount: false)
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        dateLabel(group)
-                        Spacer(minLength: 8)
-                        AmountColumnView(
-                            minorUnits: group.net,
-                            sign: netSign(group.net),
-                            currencyCode: appState.defaultCurrency
-                        )
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(netColor(group.net))
-                    }
                 }
             } else {
                 fullDateGroupHeader(group)

@@ -52,32 +52,25 @@ struct TransactionRow: View {
 
     private var isPending: Bool { transaction.status == .pending }
 
-    /// Below this the one-line row would leave the title unreadable.
-    private static let minimumTitleWidth: CGFloat = 96
+    /// The title's floor in the one-line row: narrow enough that avatar,
+    /// title, an aligned "-Rp 2.147.230" and ⋮ fit a ~333 pt split column.
+    private static let minimumTitleWidth: CGFloat = 72
 
     var body: some View {
         Group {
             if AmountColumnView.keepsWholeAmount(
                 sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
             ) {
-                // The amount never truncates, so the row gives way around it:
-                // first the list-aligned digit slot (sized to the widest amount
-                // in the list, which pads small amounts out to millions), then
-                // the one-line layout itself: the amount moves under the title.
-                ViewThatFits(in: .horizontal) {
-                    oneLineRow(widestNumber: widestNumber)
-                    if widestNumber != nil {
-                        oneLineRow(widestNumber: nil)
-                    }
-                    HStack(spacing: 12) {
-                        avatar
-                        VStack(alignment: .leading, spacing: 4) {
-                            titleColumn
-                            amountColumn(widestNumber: nil)
-                        }
-                        Spacer(minLength: 0)
-                        actionsMenu
-                    }
+                // Always one line, with the amount in the list-aligned column
+                // (symbol left, digits right, sized to the widest amount). The
+                // amount never truncates; the title and subtitle give way.
+                HStack(spacing: 12) {
+                    avatar
+                    titleColumn
+                        .frame(minWidth: Self.minimumTitleWidth, maxWidth: .infinity, alignment: .leading)
+                    amountColumn(widestNumber: widestNumber)
+                        .layoutPriority(1)
+                    actionsMenu
                 }
             } else {
                 HStack(spacing: 12) {
@@ -90,21 +83,6 @@ struct TransactionRow: View {
             }
         }
         .padding(.vertical, 4)
-    }
-
-    private func oneLineRow(widestNumber: String?) -> some View {
-        HStack(spacing: 12) {
-            avatar
-            titleColumn
-                .frame(
-                    minWidth: Self.minimumTitleWidth, idealWidth: Self.minimumTitleWidth,
-                    maxWidth: .infinity, alignment: .leading
-                )
-            Spacer(minLength: 8)
-            amountColumn(widestNumber: widestNumber)
-                .layoutPriority(1)
-            actionsMenu
-        }
     }
 
     private var titleColumn: some View {
