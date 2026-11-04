@@ -46,8 +46,11 @@ final class RootColumnsTests: XCTestCase {
     /// As in Notes: the sections push the list aside in landscape and slide
     /// over everything in portrait.
     func testSplitBehavior() {
-        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: true), .displace)
-        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: false), .overlay)
-        XCTAssertNil(RootColumns.behavior(regular: false, sideBySide: true))
+        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: true, hasList: true), .displace)
+        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: false, hasList: true), .overlay)
+        // Dashboard and Settings stay full width: the sections slide over them.
+        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: true, hasList: false), .overlay)
+        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: false, hasList: false), .overlay)
+        XCTAssertNil(RootColumns.behavior(regular: false, sideBySide: true, hasList: true))
     }
 }

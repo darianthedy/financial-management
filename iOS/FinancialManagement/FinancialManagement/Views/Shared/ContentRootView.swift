@@ -8,6 +8,7 @@ import UIKit
 /// - Inner display, landscape: the list beside the detail. The sections slide
 ///   in from the leading edge, pushing the list and dimming the detail
 ///   (UIKit's displace behaviour, which SwiftUI's split styles don't offer).
+///   Dashboard and Settings stay full width, the sections over them.
 /// - Inner display, portrait: the detail full screen; the list, and the
 ///   sections, slide over it.
 /// - Outer display (compact): the split collapses into one stack, sections →
@@ -70,7 +71,10 @@ struct ContentRootView: View {
         }
         .navigationSplitViewStyle(.automatic)
         .background {
-            RootSplitBehavior(behavior: RootColumns.behavior(regular: isRegular, sideBySide: sideBySide))
+            RootSplitBehavior(
+                behavior: RootColumns.behavior(regular: isRegular, sideBySide: sideBySide, hasList: section.hasList),
+                section: section
+            )
         }
         .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
         // Picking a section closes the sections, as in Notes.
@@ -78,6 +82,9 @@ struct ContentRootView: View {
             compactColumnOverride = nil
             detailHost.hasSelection = false
             applyVisibility()
+            // Switching to or from Dashboard / Settings swaps the split, which
+            // takes its initial visibility: close the sections on it too.
+            Task { @MainActor in applyVisibility() }
         }
         .onChange(of: sideBySide, initial: true) { applyVisibility() }
         .onChange(of: isRegular) { applyVisibility() }
@@ -112,6 +119,9 @@ struct ContentRootView: View {
             }
         }
         .navigationTitle("Financial Management")
+        // One width with or without a list column (it was wider beside
+        // Dashboard and Settings).
+        .navigationSplitViewColumnWidth(RootColumns.sidebarWidth)
     }
 
     private func row(_ section: AppSection) -> some View {
@@ -170,16 +180,27 @@ enum RootColumns {
     /// How the sections come in on regular width, as in Notes: pushing the
     /// list aside in landscape, over everything in portrait. Nil (compact)
     /// leaves the system's.
-    static func behavior(regular: Bool, sideBySide: Bool) -> UISplitViewController.SplitBehavior? {
+    ///
+    /// Dashboard and Settings always open full width, so their sections only
+    /// ever slide over them.
+    static func behavior(
+        regular: Bool, sideBySide: Bool, hasList: Bool
+    ) -> UISplitViewController.SplitBehavior? {
         guard regular else { return nil }
-        return sideBySide ? .displace : .overlay
+        return hasList && sideBySide ? .displace : .overlay
     }
+
+    /// The sections' width, the system's for a three-column split.
+    static let sidebarWidth: CGFloat = 280
 }
 
 /// Sets the split behaviour of the `UISplitViewController` behind the root's
 /// `NavigationSplitView`, which SwiftUI's split styles can't express.
 private struct RootSplitBehavior: UIViewRepresentable {
     let behavior: UISplitViewController.SplitBehavior?
+    /// A section change can swap the split for a new one, which needs the
+    /// behaviour set again.
+    let section: AppSection
 
     func makeUIView(context: Context) -> BehaviorView {
         let view = BehaviorView()
@@ -190,6 +211,8 @@ private struct RootSplitBehavior: UIViewRepresentable {
     func updateUIView(_ uiView: BehaviorView, context: Context) {
         uiView.behavior = behavior
         uiView.apply()
+        // The swapped-in split may not exist until the next pass.
+        DispatchQueue.main.async { uiView.apply() }
     }
 
     final class BehaviorView: UIView {
