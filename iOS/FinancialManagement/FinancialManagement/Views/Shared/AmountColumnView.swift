@@ -12,6 +12,7 @@ import SwiftUI
 /// digits are made monospaced internally so they line up across rows.
 struct AmountColumnView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.isSplitListColumn) private var isSplitListColumn
     /// Amount in minor units; only its magnitude is shown (the sign is explicit).
     let minorUnits: Int64
     /// Leading sign to display: "", "+", or "-". Kept explicit so callers can use
@@ -41,15 +42,27 @@ struct AmountColumnView: View {
                 }
             }
             .monospacedDigit()
-            // Regular width: money never wraps or truncates in a narrow split
-            // column; its neighbours give way. Compact keeps its old sizing.
             .lineLimit(1)
-            .fixedSize(horizontal: horizontalSizeClass == .regular, vertical: false)
+            .fixedSize(horizontal: keepsWholeAmount, vertical: false)
         } else {
             Text(sign + parts.symbol + parts.number)
                 .monospacedDigit()
                 .lineLimit(1)
-                .fixedSize(horizontal: horizontalSizeClass == .regular, vertical: false)
+                .fixedSize(horizontal: keepsWholeAmount, vertical: false)
         }
+    }
+
+    /// Regular width, or any tiled split list column (which can report a
+    /// compact size class even on iPad): money never wraps or truncates; its
+    /// neighbours give way. A plain compact screen keeps its old sizing.
+    private var keepsWholeAmount: Bool {
+        AmountColumnView.keepsWholeAmount(
+            sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
+        )
+    }
+
+    /// Shared with the rows and headers that rearrange around a whole amount.
+    static func keepsWholeAmount(sizeClass: UserInterfaceSizeClass?, inSplitListColumn: Bool) -> Bool {
+        sizeClass == .regular || inSplitListColumn
     }
 }

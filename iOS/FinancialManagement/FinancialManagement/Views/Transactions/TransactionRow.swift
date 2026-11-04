@@ -10,6 +10,7 @@ import SwiftUI
 struct TransactionRow: View {
     @Environment(AppState.self) private var appState
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.isSplitListColumn) private var isSplitListColumn
     let transaction: Transaction
     /// The transaction's source account, used for the avatar. Falls back to a
     /// type glyph when unavailable.
@@ -56,20 +57,17 @@ struct TransactionRow: View {
 
     var body: some View {
         Group {
-            if horizontalSizeClass == .regular {
-                // A narrow split column (inner portrait) can't fit title,
-                // amount and ⋮ on one line, so the amount moves under the title.
+            if AmountColumnView.keepsWholeAmount(
+                sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
+            ) {
+                // The amount never truncates, so the row gives way around it:
+                // first the list-aligned digit slot (sized to the widest amount
+                // in the list, which pads small amounts out to millions), then
+                // the one-line layout itself: the amount moves under the title.
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) {
-                        avatar
-                        titleColumn
-                            .frame(
-                                minWidth: Self.minimumTitleWidth, idealWidth: Self.minimumTitleWidth,
-                                maxWidth: .infinity, alignment: .leading
-                            )
-                        Spacer(minLength: 8)
-                        amountColumn(widestNumber: widestNumber)
-                        actionsMenu
+                    oneLineRow(widestNumber: widestNumber)
+                    if widestNumber != nil {
+                        oneLineRow(widestNumber: nil)
                     }
                     HStack(spacing: 12) {
                         avatar
@@ -92,6 +90,21 @@ struct TransactionRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func oneLineRow(widestNumber: String?) -> some View {
+        HStack(spacing: 12) {
+            avatar
+            titleColumn
+                .frame(
+                    minWidth: Self.minimumTitleWidth, idealWidth: Self.minimumTitleWidth,
+                    maxWidth: .infinity, alignment: .leading
+                )
+            Spacer(minLength: 8)
+            amountColumn(widestNumber: widestNumber)
+                .layoutPriority(1)
+            actionsMenu
+        }
     }
 
     private var titleColumn: some View {
