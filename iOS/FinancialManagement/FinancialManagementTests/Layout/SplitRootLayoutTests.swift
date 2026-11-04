@@ -97,6 +97,10 @@ final class SplitRootLayoutTests: XCTestCase {
     /// D6.1 for list → detail: in book posture the list column ends on the
     /// fold, so neither column straddles it.
     func testBookPostureSplitsOnTheFold() async throws {
+        // The Duo simulator's 866 pt stand-in for the inner display leaves
+        // the system split too little detail beside a 475 pt list (G2); the
+        // iPad gate run checks it at full width.
+        try XCTSkipUnless(LayoutHarness.sceneFits(.innerLandscape), "scene narrower than the inner display")
         let snapshot = try await render(selected: "Bravo", at: .innerLandscape, fold: .book(divisionX: 475))
         attach(snapshot, name: "split-book")
         let list = try snapshot.frame("split.list")

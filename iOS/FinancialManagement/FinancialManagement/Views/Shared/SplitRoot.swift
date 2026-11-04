@@ -73,17 +73,22 @@ extension View {
     ///     `SplitSelectionRule`) — and cleared when it disappears from them
     ///     (deleted, or another month is shown).
     ///   - id: a stable, persistable identity for an item.
+    ///   - detailColumn: wraps the split's detail column, e.g. in an
+    ///     `.inspector`, which belongs inside the system split's detail column
+    ///     (wrapping the whole split overlaid the list). Only when split.
     func splitDetail<Item: Hashable, Detail: View>(
         selection: Binding<Item?>,
         in items: [Item],
         id: @escaping (Item) -> String,
         storageKey: String,
         placeholder: SplitPlaceholder,
+        detailColumn: @escaping (AnyView) -> AnyView = { $0 },
         @ViewBuilder detail: @escaping (Item) -> Detail
     ) -> some View {
         modifier(SplitDetailModifier(
             selection: selection, items: items, id: id,
-            storageKey: storageKey, placeholder: placeholder, detail: detail
+            storageKey: storageKey, placeholder: placeholder,
+            detailColumn: detailColumn, detail: detail
         ))
     }
 
@@ -199,6 +204,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     let items: [Item]
     let id: (Item) -> String
     let placeholder: SplitPlaceholder
+    let detailColumn: (AnyView) -> AnyView
     let detail: (Item) -> Detail
 
     @SceneStorage private var storedID: String?
@@ -214,13 +220,15 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
 
     init(
         selection: Binding<Item?>, items: [Item], id: @escaping (Item) -> String,
-        storageKey: String, placeholder: SplitPlaceholder, detail: @escaping (Item) -> Detail
+        storageKey: String, placeholder: SplitPlaceholder,
+        detailColumn: @escaping (AnyView) -> AnyView, detail: @escaping (Item) -> Detail
     ) {
         _selection = selection
         self.storageKey = storageKey
         self.items = items
         self.id = id
         self.placeholder = placeholder
+        self.detailColumn = detailColumn
         self.detail = detail
         _storedID = SceneStorage("split.\(storageKey)")
     }
@@ -239,7 +247,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                         .environment(\.canTileSplitRoot, false)
                         .environment(\.isSplitListColumn, true)
                 } detail: {
-                    NavigationStack {
+                    detailColumn(AnyView(NavigationStack {
                         if let selection {
                             detail(selection)
                                 .id(id(selection))
@@ -252,7 +260,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                             }
                             .layoutProbe("split.placeholder")
                         }
-                    }
+                    }))
                     .environment(\.canTileSplitRoot, false)
                 }
                 .readsFoldContext()
@@ -307,7 +315,11 @@ private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
             let split = NavigationSplitView(columnVisibility: $visibility) {
                 list
                     .layoutProbe("split.list")
-                    .navigationSplitViewColumnWidth(min: width, ideal: width, max: width)
+                    // May shrink to the minimum rather than overlay the
+                    // detail when both don't fit at the ideal width.
+                    .navigationSplitViewColumnWidth(
+                        min: min(width, SplitColumns.minimumListWidth), ideal: width, max: width
+                    )
             } detail: {
                 detail
             }

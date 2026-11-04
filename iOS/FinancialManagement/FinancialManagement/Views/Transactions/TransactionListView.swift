@@ -88,20 +88,18 @@ struct TransactionListView: View {
     @ViewBuilder
     var body: some View {
         if isTabRoot && horizontalSizeClass == .regular {
-            splitScreen
-                // Summary (F3, D3.2): a trailing inspector column beside the
-                // split on wide regular width, else a sheet exactly as before.
-                // Applied outside the split so the inspector spans the whole
-                // screen, and measured outside the inspector so opening it
-                // can't flip the style.
-                .inspector(isPresented: summaryBinding(.inspector)) {
-                    summaryView
-                        .inspectorColumnWidth(
-                            min: SummaryPresentation.inspectorWidth.min,
-                            ideal: SummaryPresentation.inspectorWidth.ideal,
-                            max: SummaryPresentation.inspectorWidth.max
-                        )
+            // Summary (F3, D3.2): a trailing inspector column on wide regular
+            // width, else a sheet exactly as before. Split, it sits inside the
+            // detail column (`summaryInspector`), as the system split wants;
+            // pushed, it wraps the screen. Measured outside the inspector so
+            // opening it can't flip the style.
+            Group {
+                if tilesDetail {
+                    splitScreen
+                } else {
+                    summaryInspector(splitScreen)
                 }
+            }
                 .sheet(isPresented: summaryBinding(.sheet)) { summaryView }
                 .onGeometryChange(for: Bool.self) {
                     $0.size.width >= SummaryPresentation.minimumInspectorScreenWidth
@@ -113,6 +111,18 @@ struct TransactionListView: View {
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
             screen.sheet(isPresented: showingSummaryBinding) { summaryView }
+        }
+    }
+
+    /// The Summary as a trailing inspector column, when it's shown that way.
+    private func summaryInspector(_ content: some View) -> some View {
+        content.inspector(isPresented: summaryBinding(.inspector)) {
+            summaryView
+                .inspectorColumnWidth(
+                    min: SummaryPresentation.inspectorWidth.min,
+                    ideal: SummaryPresentation.inspectorWidth.ideal,
+                    max: SummaryPresentation.inspectorWidth.max
+                )
         }
     }
 
@@ -177,7 +187,8 @@ struct TransactionListView: View {
                         title: "Select a Transaction",
                         systemImage: "arrow.left.arrow.right",
                         description: "Edit a transaction here."
-                    )
+                    ),
+                    detailColumn: { AnyView(summaryInspector($0)) }
                 ) { id in
                     detailEditor(for: id)
                 }
