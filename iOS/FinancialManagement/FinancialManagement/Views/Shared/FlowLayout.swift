@@ -21,7 +21,7 @@ struct FlowLayout: Layout {
         for row in rows {
             var x = bounds.minX
             for item in row.items {
-                let size = subviews[item].sizeThatFits(.unspecified)
+                let size = fittedSize(of: subviews[item], maxWidth: bounds.width)
                 subviews[item].place(
                     at: CGPoint(x: x, y: y),
                     anchor: .topLeading,
@@ -33,13 +33,22 @@ struct FlowLayout: Layout {
         }
     }
 
+    /// A subview's ideal size, or — when that is wider than the line — its size
+    /// at the line's width, so a long chip truncates instead of spilling past
+    /// the layout's bounds (and under a neighbouring view, e.g. a row's amount).
+    private func fittedSize(of subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard ideal.width > maxWidth, maxWidth.isFinite else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+    }
+
     private struct Row { var items: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
 
     private func arrange(subviews: Subviews, maxWidth: CGFloat) -> [Row] {
         var rows: [Row] = []
         var current = Row()
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            let size = fittedSize(of: subviews[index], maxWidth: maxWidth)
             let needed = current.items.isEmpty ? size.width : current.width + spacing + size.width
             if needed > maxWidth, !current.items.isEmpty {
                 rows.append(current)
