@@ -139,6 +139,7 @@ Each feature PR below adopts `SplitRoot` and adds layout tests for compact (unch
 
 **D3.2 Summary inspector** · S
 - **Scope:** `.inspector` on regular width; it falls back to a sheet on compact.
+- **Reverted (build 150):** with the system split, the inspector sat inside the detail column and covered the editor, and a fold closed it. Summary is a sheet everywhere again.
 - **After:** D3.1.
 
 **D3.3 Toolbar priority and Filters** · S

@@ -42,8 +42,8 @@ struct TransactionSummarySheet: View {
     let accountsById: [UUID: Account]
     let categoriesById: [UUID: Category]
     let tagsById: [UUID: Tag]
-    /// Closes the Summary when it is an inspector column (D3.2), which
-    /// `dismiss` doesn't reach on regular width. Defaults to `dismiss`.
+    /// Closes the Summary by clearing the list's own flag, so a fold can't
+    /// leave it half-dismissed. Defaults to `dismiss`.
     var onDone: (() -> Void)? = nil
 
     @State private var result: SummaryResult?

@@ -15,10 +15,6 @@ struct TransactionListView: View {
     @State private var editingTransaction: Transaction?
     @State private var installmentSource: Transaction?
     @State private var showingFilters = false
-    /// Whether the tab root is wide enough for the Summary inspector
-    /// (`SummaryPresentation`); nil until measured. A Bool rather than the
-    /// width, so only crossing the threshold re-renders the screen.
-    @State private var fitsSummaryInspector: Bool?
     @State private var searchText = ""
     /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
     /// and the trailing swipe so they share one confirmation alert.
@@ -88,41 +84,16 @@ struct TransactionListView: View {
     @ViewBuilder
     var body: some View {
         if isTabRoot && horizontalSizeClass == .regular {
-            // Summary (F3, D3.2): a trailing inspector column on wide regular
-            // width, else a sheet exactly as before. Split, it sits inside the
-            // detail column (`summaryInspector`), as the system split wants;
-            // pushed, it wraps the screen. Measured outside the inspector so
-            // opening it can't flip the style.
-            Group {
-                if tilesDetail {
-                    splitScreen
-                } else {
-                    summaryInspector(splitScreen)
-                }
-            }
-                .sheet(isPresented: summaryBinding(.sheet)) { summaryView }
-                .onGeometryChange(for: Bool.self) {
-                    $0.size.width >= SummaryPresentation.minimumInspectorScreenWidth
-                } action: { fitsSummaryInspector = $0 }
+            // Summary (F3) is a sheet everywhere: a side panel inside the
+            // system split covered the detail column's editor.
+            splitScreen
+                .sheet(isPresented: showingSummaryBinding) { summaryView }
                 .tentGlance { glance }
         } else if isTabRoot {
-            // Compact: the sheet, as before. No `.inspector` at all here.
             splitScreen.sheet(isPresented: showingSummaryBinding) { summaryView }
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
             screen.sheet(isPresented: showingSummaryBinding) { summaryView }
-        }
-    }
-
-    /// The Summary as a trailing inspector column, when it's shown that way.
-    private func summaryInspector(_ content: some View) -> some View {
-        content.inspector(isPresented: summaryBinding(.inspector)) {
-            summaryView
-                .inspectorColumnWidth(
-                    min: SummaryPresentation.inspectorWidth.min,
-                    ideal: SummaryPresentation.inspectorWidth.ideal,
-                    max: SummaryPresentation.inspectorWidth.max
-                )
         }
     }
 
@@ -137,29 +108,6 @@ struct TransactionListView: View {
             ))
         }
         return GlanceStats(stats: stats)
-    }
-
-    private var summaryStyle: SummaryPresentation {
-        SummaryPresentation.style(
-            isTabRoot: isTabRoot, sizeClass: horizontalSizeClass,
-            width: fitsSummaryInspector == true ? SummaryPresentation.minimumInspectorScreenWidth : 0
-        )
-    }
-
-    /// Shows the Summary in `style` only, so exactly one presentation is live.
-    private func summaryBinding(_ style: SummaryPresentation) -> Binding<Bool> {
-        Binding(
-            // Nothing until the width is measured, so a Summary open at launch
-            // never flashes as a sheet before it settles into the inspector.
-            get: { showingSummary && fitsSummaryInspector != nil && summaryStyle == style },
-            set: { isPresented in
-                if isPresented {
-                    showingSummary = true
-                } else if summaryStyle == style {
-                    showingSummary = false
-                }
-            }
-        )
     }
 
     private var summaryView: some View {
@@ -187,8 +135,7 @@ struct TransactionListView: View {
                         title: "Select a Transaction",
                         systemImage: "arrow.left.arrow.right",
                         description: "Edit a transaction here."
-                    ),
-                    detailColumn: { AnyView(summaryInspector($0)) }
+                    )
                 ) { id in
                     detailEditor(for: id)
                 }
