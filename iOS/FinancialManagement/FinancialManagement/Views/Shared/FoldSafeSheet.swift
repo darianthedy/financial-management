@@ -2,9 +2,8 @@ import SwiftUI
 
 // Sheets that survive a fold (iPhone Duo design §5.1, implementation plan D5.1).
 //
-// A fold / unfold can re-create the whole screen: `SplitRootContainer`, the
-// More ⇄ sidebar swap in `ContentRootView` and `.splitDetail` all branch on size
-// class. A plain `.sheet` on such a screen goes with it, and its draft is lost.
+// A fold / unfold can re-create a screen's content: `.splitDetail` branches on
+// size class (detail column vs push), as does `SplitRootContainer` in tests. A plain `.sheet` on such a screen goes with it, and its draft is lost.
 // So the screen hands its sheet to a `FoldSafeSheetHost`, which `ContentRootView`
 // presents from above every branch.
 //
