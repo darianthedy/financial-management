@@ -6,8 +6,9 @@ import UIKit
 // Shown, it floats over every tab's content as Notes' sidebar does: the screen
 // keeps its full width under it, dimmed, and a tap on the dimming hides it.
 // The system only reports the floating sidebar as the leading safe area, so
-// left alone each screen narrowed itself beside it instead — and a list →
-// detail split, too narrow then for two columns, fell back to a stack.
+// left alone each screen narrowed itself beside it instead. SwiftUI's
+// `ignoresSafeArea` doesn't reach the UIKit containers (split, stack) inside
+// a tab, so `TabSidebarBridge` cancels the inset on those too.
 
 /// Shows or hides the sidebar through the `UITabBarController` behind the
 /// `TabView`, which SwiftUI gives no binding for.
@@ -67,8 +68,8 @@ private struct FloatsTabSidebar: ViewModifier {
                     }
                 }
                 .animation(.default, value: width > 0)
+                .background { TabSidebarBridge(sidebar: sidebar, overlap: width) }
         }
-        .findsTabSidebar(sidebar)
     }
 }
 
@@ -102,42 +103,73 @@ struct TabSidebarToggle: View {
     }
 }
 
-extension View {
-    /// Points `sidebar` at the nearest `UITabBarController` above this view
-    /// once it is in a window.
-    fileprivate func findsTabSidebar(_ sidebar: TabSidebar) -> some View {
-        background { TabBarControllerFinder(sidebar: sidebar) }
-    }
-}
-
-private struct TabBarControllerFinder: UIViewRepresentable {
+/// The UIKit side of `.floatsTabSidebar()`.
+///
+/// It finds the `UITabBarController` for `TabSidebar`. It also cancels the
+/// sidebar's inset on the UIKit containers inside the tab, such as the split's
+/// `UISplitViewController` or a `NavigationStack`'s navigation controller.
+/// `ignoresSafeArea` moves their frames under the sidebar, but they take
+/// their safe area from UIKit, so the columns and bars stayed beside the
+/// sidebar (device test, TestFlight build from this branch).
+private struct TabSidebarBridge: UIViewRepresentable {
     let sidebar: TabSidebar
+    let overlap: CGFloat
 
-    func makeUIView(context: Context) -> FinderView {
-        let view = FinderView()
+    func makeUIView(context: Context) -> BridgeView {
+        let view = BridgeView()
         view.isUserInteractionEnabled = false
         view.sidebar = sidebar
+        view.overlap = overlap
         return view
     }
 
-    func updateUIView(_ uiView: FinderView, context: Context) {
+    func updateUIView(_ uiView: BridgeView, context: Context) {
         uiView.sidebar = sidebar
+        uiView.overlap = overlap
+        uiView.apply()
     }
 
-    final class FinderView: UIView {
+    final class BridgeView: UIView {
         weak var sidebar: TabSidebar?
+        var overlap: CGFloat = 0
+        /// The inset applied to each container, so only those are reset.
+        private var applied: [ObjectIdentifier: CGFloat] = [:]
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
             guard window != nil else { return }
-            var responder: UIResponder? = self
-            while let next = responder?.next {
-                if let controller = next as? UITabBarController {
-                    sidebar?.controller = controller
-                    return
+            sidebar?.controller = nearest(UITabBarController.self)
+            apply()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            apply()
+        }
+
+        /// Sets each container's leading additional safe area to minus the
+        /// overlap, which cancels the sidebar's inset and leaves the rest.
+        func apply() {
+            // The tab's own hosting controller: its children are the containers.
+            guard window != nil, let tabRoot = nearest(UIViewController.self) else { return }
+            for child in tabRoot.children {
+                let key = ObjectIdentifier(child)
+                let wanted = -overlap
+                if overlap == 0 && applied[key] == nil { continue }
+                if child.additionalSafeAreaInsets.left != wanted {
+                    child.additionalSafeAreaInsets.left = wanted
                 }
-                responder = next
+                applied[key] = overlap == 0 ? nil : wanted
             }
+        }
+
+        private func nearest<T>(_ type: T.Type) -> T? {
+            var responder: UIResponder? = next
+            while let current = responder {
+                if let match = current as? T { return match }
+                responder = current.next
+            }
+            return nil
         }
     }
 }
