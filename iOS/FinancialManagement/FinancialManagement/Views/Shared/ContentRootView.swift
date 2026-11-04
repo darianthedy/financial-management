@@ -29,8 +29,13 @@ struct ContentRootView: View {
     @State private var transactionList = TransactionListViewModel()
     /// Keeps the Budgets and Fixed Expenses month across a fold.
     @State private var keptModels = FoldKeptModels()
+    @AppStorage(SidebarPrototype.storageKey) private var usesSidebarPrototype = false // PROTOTYPE(sidebar-b1)
 
     var body: some View {
+        if usesSidebarPrototype { SidebarPrototypeView() } else { tabRoot } // PROTOTYPE(sidebar-b1)
+    }
+
+    private var tabRoot: some View { // PROTOTYPE(sidebar-b1): was `body`
         TabView(selection: $selection) {
             // Tab set / order / labels mirror web's nav-config.ts primary items
             // (Dashboard, Accounts, Transactions, Budgets); SF Symbols are chosen

@@ -2,6 +2,9 @@
 // `PROTOTYPE(sidebar-b1)` (`grep -rn "PROTOTYPE(sidebar-b1)" iOS`) once option
 // B1 (a Notes-style root) is decided.
 //
+// On: Settings › Open Sidebar Prototype swaps the app's root for this
+// (`ContentRootView`), as B1 would; "Close Prototype" swaps it back.
+//
 // Checks on the device, before the rewrite, how a three-column
 // `NavigationSplitView` root behaves: sidebar | list | detail, as in Notes.
 // - Inner display, landscape: does the sidebar slide over the list and detail
@@ -14,12 +17,18 @@
 
 import SwiftUI
 
+enum SidebarPrototype {
+    /// On: the prototype replaces the app's root, so it survives a fold.
+    static let storageKey = "prototype.sidebarB1"
+}
+
 struct SidebarPrototypeView: View {
-    @Environment(\.dismiss) private var dismiss
+    @AppStorage(SidebarPrototype.storageKey) private var isOn = false
+    @SceneStorage("prototype.rowStyle") private var rowStyle: PrototypeRowStyle = .selection
     @State private var section: PrototypeSection? = .transactions
     @State private var item: Int?
     @State private var visibility: NavigationSplitViewVisibility = .automatic
-    @State private var style: PrototypeStyle = .automatic
+    @SceneStorage("prototype.style") private var style: PrototypeStyle = .automatic
 
     var body: some View {
         Group {
@@ -52,29 +61,47 @@ struct SidebarPrototypeView: View {
                 ForEach(PrototypeSection.management) { row($0) }
             }
             Section {
-                Button("Close Prototype", systemImage: "xmark.circle") { dismiss() }
+                Button("Close Prototype", systemImage: "xmark.circle") { isOn = false }
             }
         }
         .navigationTitle("Prototype")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Menu("Split Style", systemImage: "ellipsis") {
+                Menu("Prototype Options", systemImage: "ellipsis") {
                     Picker("Split Style", selection: $style) {
                         ForEach(PrototypeStyle.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    Picker("Rows", selection: $rowStyle) {
+                        ForEach(PrototypeRowStyle.allCases) { Text($0.rawValue).tag($0) }
                     }
                 }
             }
         }
     }
 
+    @ViewBuilder
     private func row(_ section: PrototypeSection) -> some View {
-        Label(section.rawValue, systemImage: section.systemImage).tag(section)
+        switch rowStyle {
+        case .selection:
+            Label(section.rawValue, systemImage: section.systemImage).tag(section)
+        case .buttons:
+            Button { self.section = section } label: {
+                Label(section.rawValue, systemImage: section.systemImage)
+            }
+            .listRowBackground(self.section == section ? Color.accentColor.opacity(0.2) : nil)
+        }
     }
 
     private var list: some View {
         List(selection: $item) {
             ForEach(1...20, id: \.self) { index in
-                Text("\(section?.rawValue ?? "") \(index)").tag(index)
+                switch rowStyle {
+                case .selection:
+                    Text("\(section?.rawValue ?? "") \(index)").tag(index)
+                case .buttons:
+                    Button("\(section?.rawValue ?? "") \(index)") { item = index }
+                        .listRowBackground(item == index ? Color.accentColor.opacity(0.2) : nil)
+                }
             }
         }
         .navigationTitle(section?.rawValue ?? "")
@@ -131,6 +158,13 @@ private enum PrototypeSection: String, Identifiable, Hashable {
         case .settings: "gear"
         }
     }
+}
+
+/// The broken inner-display lists (build from this branch): selection rows
+/// vs plain buttons, to tell a selection bug from a layout one.
+private enum PrototypeRowStyle: String, CaseIterable, Identifiable {
+    case selection = "Selection", buttons = "Buttons"
+    var id: Self { self }
 }
 
 private enum PrototypeStyle: String, CaseIterable, Identifiable {

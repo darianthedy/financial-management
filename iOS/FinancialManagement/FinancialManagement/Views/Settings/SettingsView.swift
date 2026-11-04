@@ -13,7 +13,7 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var defaultCurrency = "USD"
     @State private var defaultAccountId: UUID?
-    @State private var showsSidebarPrototype = false // PROTOTYPE(sidebar-b1)
+    @AppStorage(SidebarPrototype.storageKey) private var usesSidebarPrototype = false // PROTOTYPE(sidebar-b1)
 
     var body: some View {
         @Bindable var themeManager = themeManager
@@ -62,12 +62,11 @@ struct SettingsView: View {
 
             // PROTOTYPE(sidebar-b1): entry to the throwaway root prototype.
             Section { // PROTOTYPE(sidebar-b1)
-                Button("Open Sidebar Prototype") { showsSidebarPrototype = true } // PROTOTYPE(sidebar-b1)
+                Button("Open Sidebar Prototype") { usesSidebarPrototype = true } // PROTOTYPE(sidebar-b1)
             } footer: { // PROTOTYPE(sidebar-b1)
                 Text("Test build only: a Notes-style sidebar with placeholder screens.") // PROTOTYPE(sidebar-b1)
             } // PROTOTYPE(sidebar-b1)
         }
-        .fullScreenCover(isPresented: $showsSidebarPrototype) { SidebarPrototypeView() } // PROTOTYPE(sidebar-b1)
         .readableContentMargins()
         .navigationTitle("Settings")
         .task {
