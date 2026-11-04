@@ -22,6 +22,9 @@ struct AmountColumnView: View {
     /// The widest number body in the list (see `CurrencyUtils.numberBody`), used
     /// as an invisible spacer to size the digit slot. Omit for a standalone amount.
     var widestNumber: String?
+    /// Never wrap or truncate, even on a plain compact screen (lists whose
+    /// rows give way around the amount, e.g. the transaction rows).
+    var alwaysWhole = false
 
     var body: some View {
         let parts = CurrencyUtils.currencyParts(minorUnits, currency: currencyCode)
@@ -56,7 +59,7 @@ struct AmountColumnView: View {
     /// compact size class even on iPad): money never wraps or truncates; its
     /// neighbours give way. A plain compact screen keeps its old sizing.
     private var keepsWholeAmount: Bool {
-        AmountColumnView.keepsWholeAmount(
+        alwaysWhole || AmountColumnView.keepsWholeAmount(
             sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
         )
     }

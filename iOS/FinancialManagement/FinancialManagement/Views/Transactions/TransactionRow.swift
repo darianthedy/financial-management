@@ -9,7 +9,6 @@ import SwiftUI
 /// amount (success/danger/foreground per type) over the date.
 struct TransactionRow: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.isSplitListColumn) private var isSplitListColumn
     let transaction: Transaction
     /// The transaction's source account, used for the avatar. Falls back to a
@@ -57,30 +56,16 @@ struct TransactionRow: View {
     private static let minimumTitleWidth: CGFloat = 72
 
     var body: some View {
-        Group {
-            if AmountColumnView.keepsWholeAmount(
-                sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
-            ) {
-                // Always one line, with the amount in the list-aligned column
-                // (symbol left, digits right, sized to the widest amount). The
-                // amount never truncates; the title and subtitle give way.
-                HStack(spacing: 12) {
-                    avatar
-                    titleColumn
-                        .frame(minWidth: Self.minimumTitleWidth, maxWidth: .infinity, alignment: .leading)
-                    amountColumn(widestNumber: widestNumber)
-                        .layoutPriority(1)
-                    actionsMenu
-                }
-            } else {
-                HStack(spacing: 12) {
-                    avatar
-                    titleColumn
-                    Spacer(minLength: 8)
-                    amountColumn(widestNumber: widestNumber)
-                    actionsMenu
-                }
-            }
+        // Always one line, with the amount in the list-aligned column (symbol
+        // left, digits right, sized to the widest amount). The amount never
+        // truncates on either display; the title and subtitle give way.
+        HStack(spacing: 12) {
+            avatar
+            titleColumn
+                .frame(minWidth: Self.minimumTitleWidth, maxWidth: .infinity, alignment: .leading)
+            amountColumn(widestNumber: widestNumber)
+                .layoutPriority(1)
+            actionsMenu
         }
         .padding(.vertical, 4)
     }
@@ -109,7 +94,11 @@ struct TransactionRow: View {
                         .lineLimit(1)
                 }
 
-                chips
+                // The split list column sits beside the detail, which shows
+                // everything, so its rows stay at two lines: no chip row.
+                if !isSplitListColumn {
+                    chips
+                }
         }
     }
 
@@ -119,7 +108,8 @@ struct TransactionRow: View {
                 minorUnits: transaction.amount,
                 sign: amountSign,
                 currencyCode: appState.defaultCurrency,
-                widestNumber: widestNumber
+                widestNumber: widestNumber,
+                alwaysWhole: true
             )
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(amountColor)
@@ -311,7 +301,12 @@ struct TransactionRow: View {
                             usedCategory: false, usedFixed: false, titleIsDescription: false)
     }
 
+    /// The second line. In the split list column a transfer shows its
+    /// destination there (plain text, not a chip) instead of the description.
     private var subtitle: String? {
+        if isSplitListColumn, transaction.type == .transfer, let transferAccountName {
+            return "→ \(transferAccountName)"
+        }
         guard let description = transaction.description,
               !description.isEmpty, !derived.titleIsDescription else { return nil }
         return description

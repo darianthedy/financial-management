@@ -10,7 +10,6 @@ struct TransactionListView: View {
     @Environment(\.canTileSplitRoot) private var canTileSplitRoot
     @Environment(\.transactionDrafts) private var sharedDrafts
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.isSplitListColumn) private var isSplitListColumn
     @State private var viewModel: TransactionListViewModel
     @State private var showingForm = false
     @State private var editingTransaction: Transaction?
@@ -469,6 +468,7 @@ struct TransactionListView: View {
             }
         }
         .listStyle(.plain)
+        .staysClearOfTrailingBar()
         .layoutProbe("transactions.list")
         .overlay {
             if viewModel.transactions.isEmpty && !viewModel.isLoading {
@@ -505,6 +505,10 @@ struct TransactionListView: View {
             onDelete: { pendingDelete = txn }
         )
             .layoutProbe("transactions.row.\(txn.description ?? txn.type.rawValue)", interactive: true)
+            // The header's own 16 pt inset, so the rows' amount column and the
+            // day's net share one trailing edge on every display (the system
+            // row margin differs from it, e.g. beside the Duo's vertical bar).
+            .listRowInsets(EdgeInsets(top: 6, leading: Self.rowInset, bottom: 6, trailing: Self.rowInset))
             .listRowBackground(rowBackground(for: txn))
             .contentShape(Rectangle())
             .onTapGesture { edit(txn) }
@@ -543,6 +547,9 @@ struct TransactionListView: View {
             }
     }
 
+    /// The horizontal inset shared by the rows and the day headers.
+    private static let rowInset: CGFloat = 16
+
     /// Pending rows are muted; in a tiled split the selected row is
     /// highlighted instead (as `.splitRowSelected` does for other lists).
     private func rowBackground(for txn: Transaction) -> Color {
@@ -557,25 +564,17 @@ struct TransactionListView: View {
     /// Sticky per-day heading: the absolute date on the left, the item count and
     /// the day's net (green/red, muted when it nets to zero) on the right.
     private func dateGroupHeader(_ group: TransactionDateGroup) -> some View {
-        Group {
-            if AmountColumnView.keepsWholeAmount(
-                sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
-            ) {
-                // The day's net never truncates and stays in the rows' aligned
-                // amount column; a narrow column drops the item count instead.
-                ViewThatFits(in: .horizontal) {
-                    fullDateGroupHeader(group)
-                    fullDateGroupHeader(group, showsCount: false)
-                }
-            } else {
-                fullDateGroupHeader(group)
-            }
+        // The day's net never truncates and stays in the rows' aligned amount
+        // column; a narrow list drops the item count instead.
+        ViewThatFits(in: .horizontal) {
+            fullDateGroupHeader(group)
+            fullDateGroupHeader(group, showsCount: false)
         }
         .textCase(nil)
         // Match the rows' horizontal inset (we zero the header's list insets in
         // the Section so the background can reach the edges) plus a little
         // vertical breathing room.
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Self.rowInset)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Opaque backdrop so the pinned header doesn't let the rows scrolling
@@ -621,7 +620,8 @@ struct TransactionListView: View {
                     minorUnits: group.net,
                     sign: netSign(group.net),
                     currencyCode: appState.defaultCurrency,
-                    widestNumber: widestAmountBody
+                    widestNumber: widestAmountBody,
+                    alwaysWhole: true
                 )
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(netColor(group.net))
