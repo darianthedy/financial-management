@@ -16,7 +16,7 @@ struct TransactionListView: View {
     @State private var installmentSource: Transaction?
     @State private var showingFilters = false
     @State private var searchText = ""
-    /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
+    /// The transaction awaiting delete confirmation. Set by both the row's long-press menu
     /// and the trailing swipe so they share one confirmation alert.
     @State private var pendingDelete: Transaction?
     /// The tiled split's selection (transaction ID), guarded against dropping
@@ -251,7 +251,7 @@ struct TransactionListView: View {
             .task { await viewModel.load() }
             .reloadsAfterFoldedSheet { await viewModel.load() }
             .refreshable { await viewModel.load() }
-            // Shared delete confirmation for both the row ⋮ menu and the swipe
+            // Shared delete confirmation for both the row's long-press menu and the swipe
             // action (HIG: confirm permanent deletes).
             .alert(
                 "Delete transaction?",
@@ -468,7 +468,6 @@ struct TransactionListView: View {
             }
         }
         .listStyle(.plain)
-        .staysClearOfTrailingBar()
         .layoutProbe("transactions.list")
         .overlay {
             if viewModel.transactions.isEmpty && !viewModel.isLoading {
@@ -512,34 +511,12 @@ struct TransactionListView: View {
             .listRowBackground(rowBackground(for: txn))
             .contentShape(Rectangle())
             .onTapGesture { edit(txn) }
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                if txn.status == .pending {
-                    Button {
-                        Task { await viewModel.setStatus(txn, to: .confirmed) }
-                    } label: {
-                        Label("Confirm", systemImage: "checkmark")
-                    }
-                    .tint(Color.appSuccess)
-                }
-            }
-            // allowsFullSwipe:false so the destructive action can't auto-fire on a
-            // long swipe — it reveals the button, which then routes through the
-            // shared confirmation alert (consistent with FixedExpenses).
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    pendingDelete = txn
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                if txn.status == .pending {
-                    Button {
-                        Task { await viewModel.setStatus(txn, to: .dismissed) }
-                    } label: {
-                        Label("Dismiss", systemImage: "xmark")
-                    }
-                    .tint(Color.appWarning)
-                }
-            }
+            .modifier(RowSwipeActions(
+                isPending: txn.status == .pending,
+                onConfirm: { Task { await viewModel.setStatus(txn, to: .confirmed) } },
+                onDismiss: { Task { await viewModel.setStatus(txn, to: .dismissed) } },
+                onDelete: { pendingDelete = txn }
+            ))
             .onAppear {
                 if txn.id == viewModel.transactions.last?.id {
                     Task { await viewModel.loadMore() }
@@ -611,22 +588,16 @@ struct TransactionListView: View {
             }
             // Same component + shared width as the rows, so symbol and digits
             // align into one column through the header. The net carries an
-            // explicit +/− sign; a day that nets to zero shows neither. The
-            // trailing spacer mirrors the row's ⋮ actions button (44pt hit area)
-            // and its 12pt gap, so the net lines up with the amount column above
-            // the menu.
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                AmountColumnView(
-                    minorUnits: group.net,
-                    sign: netSign(group.net),
-                    currencyCode: appState.defaultCurrency,
-                    widestNumber: widestAmountBody,
-                    alwaysWhole: true
-                )
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(netColor(group.net))
-                Color.clear.frame(width: 44, height: 0)
-            }
+            // explicit +/− sign; a day that nets to zero shows neither.
+            AmountColumnView(
+                minorUnits: group.net,
+                sign: netSign(group.net),
+                currencyCode: appState.defaultCurrency,
+                widestNumber: widestAmountBody,
+                alwaysWhole: true
+            )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(netColor(group.net))
         }
     }
 
@@ -714,4 +685,49 @@ struct TransactionListView: View {
         f.timeStyle = .none
         return f
     }()
+}
+
+/// The row's swipe actions. Each edge gets only the buttons it has: an `if`
+/// that renders nothing inside `.swipeActions` still reserves an empty slot,
+/// so a confirmed row's lone Delete slid the row twice as far as it needed
+/// (and its leading edge revealed a blank action).
+private struct RowSwipeActions: ViewModifier {
+    let isPending: Bool
+    let onConfirm: () -> Void
+    let onDismiss: () -> Void
+    let onDelete: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isPending {
+            content
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button(action: onConfirm) {
+                        Label("Confirm", systemImage: "checkmark")
+                    }
+                    .tint(Color.appSuccess)
+                }
+                // allowsFullSwipe:false so the destructive action can't
+                // auto-fire on a long swipe — it reveals the button, which then
+                // routes through the shared confirmation alert.
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    deleteButton
+                    Button(action: onDismiss) {
+                        Label("Dismiss", systemImage: "xmark")
+                    }
+                    .tint(Color.appWarning)
+                }
+        } else {
+            content
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    deleteButton
+                }
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(role: .destructive, action: onDelete) {
+            Label("Delete", systemImage: "trash")
+        }
+    }
 }

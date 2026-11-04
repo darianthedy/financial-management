@@ -40,8 +40,8 @@ struct TransactionRow: View {
     /// Opens the edit form (web: the row's "Edit" menu item; the row tap also edits).
     var onEdit: (() -> Void)?
     /// Requests deletion (web: the "Delete" menu item). The owning list presents the
-    /// shared confirmation alert and performs the delete, so the row's ⋮ menu and the
-    /// list's swipe action go through the same guard.
+    /// shared confirmation alert and performs the delete, so the row's long-press
+    /// menu and the list's swipe action go through the same guard.
     var onDelete: (() -> Void)?
 
     /// Eligible only for an expense that is not already spread.
@@ -52,7 +52,7 @@ struct TransactionRow: View {
     private var isPending: Bool { transaction.status == .pending }
 
     /// The title's floor in the one-line row: narrow enough that avatar,
-    /// title, an aligned "-Rp 2.147.230" and ⋮ fit a ~333 pt split column.
+    /// title and an aligned "-Rp 2.147.230" fit a ~333 pt split column.
     private static let minimumTitleWidth: CGFloat = 72
 
     var body: some View {
@@ -65,9 +65,17 @@ struct TransactionRow: View {
                 .frame(minWidth: Self.minimumTitleWidth, maxWidth: .infinity, alignment: .leading)
             amountColumn(widestNumber: widestNumber)
                 .layoutPriority(1)
-            actionsMenu
         }
         .padding(.vertical, 4)
+        // Long-press (or secondary click) lifts a preview of the transaction
+        // with its actions above it, as Notes does; tap still edits and the
+        // list's swipe still deletes.
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12))
+        .contextMenu {
+            actions
+        } preview: {
+            previewCard
+        }
     }
 
     private var titleColumn: some View {
@@ -123,12 +131,14 @@ struct TransactionRow: View {
         }
     }
 
-    // MARK: - Actions menu (web: the row's trailing MoreVertical dropdown —
+    // MARK: - Long-press actions (web: the row's MoreVertical dropdown —
     // Edit / Create virtual installment / Delete)
 
+    /// A control group renders as the menu's top row of icons (Notes' Share /
+    /// Move / Delete).
     @ViewBuilder
-    private var actionsMenu: some View {
-        Menu {
+    private var actions: some View {
+        ControlGroup {
             if let onEdit {
                 Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
             }
@@ -136,7 +146,7 @@ struct TransactionRow: View {
                 Button {
                     onCreateInstallment?()
                 } label: {
-                    Label("Create virtual installment", systemImage: "square.grid.2x2")
+                    Label("Virtual Installment", systemImage: "square.grid.2x2")
                 }
             }
             if let onDelete {
@@ -146,22 +156,105 @@ struct TransactionRow: View {
                     Label("Delete", systemImage: "trash")
                 }
             }
-        } label: {
-            // Vertical dots to match web's MoreVertical (no vertical SF symbol).
-            // The glyph stays compact, but the tappable frame is the 44pt HIG
-            // minimum (the day-header net column mirrors this width — keep them
-            // in sync, see `dateGroupHeader`).
-            Image(systemName: "ellipsis")
-                .font(.subheadline)
-                .rotationEffect(.degrees(90))
-                .foregroundStyle(Color.appMutedForeground)
-                // 44×44 hit area (HIG minimum). The glyph stays visually small;
-                // the frame just enlarges the tappable region.
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
+
+    // MARK: - Long-press preview
+
+    /// The lifted card: the full picture of the transaction that the row
+    /// itself trims (account, amount, description, date, links, chips).
+    private var previewCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                avatar
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(derived.title)
+                        .font(.headline)
+                        .foregroundStyle(Color.appForeground)
+                        .lineLimit(2)
+                    if let accountLine {
+                        Text(accountLine)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.appMutedForeground)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+                if isPending { pendingBadge }
+            }
+
+            AmountColumnView(
+                minorUnits: transaction.amount,
+                sign: amountSign,
+                currencyCode: appState.defaultCurrency,
+                alwaysWhole: true
+            )
+            .font(.title.weight(.bold))
+            .foregroundStyle(amountColor)
+
+            if let description = transaction.description, !description.isEmpty {
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.appForeground)
+                    .lineLimit(3)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                previewDetail(Self.previewDateFormatter.string(from: transaction.transactionDate),
+                              systemImage: "calendar")
+                if let budgetName, transaction.type != .transfer {
+                    previewDetail(budgetName, systemImage: "chart.pie")
+                }
+                if let fixedExpenseName {
+                    previewDetail(fixedExpenseName, systemImage: "receipt")
+                }
+                if let category {
+                    previewDetail(category.name, systemImage: "folder")
+                }
+            }
+
+            if !tags.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(tags) { tag in
+                        chip(tag.name, systemImage: "tag",
+                             fill: Color.appCard,
+                             foreground: Color.appMutedForeground,
+                             border: Color.appBorder)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 320, alignment: .leading)
+        .background(Color.appCard)
+    }
+
+    /// "BCA → BCA VISA SQ Infinite" for a transfer, else the account's name.
+    private var accountLine: String? {
+        guard let account else { return transferAccountName.map { "→ \($0)" } }
+        if transaction.type == .transfer, let transferAccountName {
+            return "\(account.name) → \(transferAccountName)"
+        }
+        return account.name
+    }
+
+    private func previewDetail(_ text: String, systemImage: String) -> some View {
+        Label {
+            Text(text).lineLimit(1)
+        } icon: {
+            Image(systemName: systemImage).frame(width: 18)
+        }
+        .font(.subheadline)
+        .foregroundStyle(Color.appMutedForeground)
+    }
+
+    /// "Wednesday, Nov 4, 2026".
+    private static let previewDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEEE, MMM d, yyyy"
+        return f
+    }()
 
     // MARK: - Avatar
 
