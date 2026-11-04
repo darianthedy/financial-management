@@ -15,10 +15,6 @@ struct TransactionListView: View {
     @State private var editingTransaction: Transaction?
     @State private var installmentSource: Transaction?
     @State private var showingFilters = false
-    /// Whether the tab root is wide enough for the Summary inspector
-    /// (`SummaryPresentation`); nil until measured. A Bool rather than the
-    /// width, so only crossing the threshold re-renders the screen.
-    @State private var fitsSummaryInspector: Bool?
     @State private var searchText = ""
     /// The transaction awaiting delete confirmation. Set by both the row's ⋮ menu
     /// and the trailing swipe so they share one confirmation alert.
@@ -88,27 +84,12 @@ struct TransactionListView: View {
     @ViewBuilder
     var body: some View {
         if isTabRoot && horizontalSizeClass == .regular {
+            // Summary (F3) is a sheet everywhere: a side panel inside the
+            // system split covered the detail column's editor.
             splitScreen
-                // Summary (F3, D3.2): a trailing inspector column beside the
-                // split on wide regular width, else a sheet exactly as before.
-                // Applied outside the split so the inspector spans the whole
-                // screen, and measured outside the inspector so opening it
-                // can't flip the style.
-                .inspector(isPresented: summaryBinding(.inspector)) {
-                    summaryView
-                        .inspectorColumnWidth(
-                            min: SummaryPresentation.inspectorWidth.min,
-                            ideal: SummaryPresentation.inspectorWidth.ideal,
-                            max: SummaryPresentation.inspectorWidth.max
-                        )
-                }
-                .sheet(isPresented: summaryBinding(.sheet)) { summaryView }
-                .onGeometryChange(for: Bool.self) {
-                    $0.size.width >= SummaryPresentation.minimumInspectorScreenWidth
-                } action: { fitsSummaryInspector = $0 }
+                .sheet(isPresented: showingSummaryBinding) { summaryView }
                 .tentGlance { glance }
         } else if isTabRoot {
-            // Compact: the sheet, as before. No `.inspector` at all here.
             splitScreen.sheet(isPresented: showingSummaryBinding) { summaryView }
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
@@ -127,29 +108,6 @@ struct TransactionListView: View {
             ))
         }
         return GlanceStats(stats: stats)
-    }
-
-    private var summaryStyle: SummaryPresentation {
-        SummaryPresentation.style(
-            isTabRoot: isTabRoot, sizeClass: horizontalSizeClass,
-            width: fitsSummaryInspector == true ? SummaryPresentation.minimumInspectorScreenWidth : 0
-        )
-    }
-
-    /// Shows the Summary in `style` only, so exactly one presentation is live.
-    private func summaryBinding(_ style: SummaryPresentation) -> Binding<Bool> {
-        Binding(
-            // Nothing until the width is measured, so a Summary open at launch
-            // never flashes as a sheet before it settles into the inspector.
-            get: { showingSummary && fitsSummaryInspector != nil && summaryStyle == style },
-            set: { isPresented in
-                if isPresented {
-                    showingSummary = true
-                } else if summaryStyle == style {
-                    showingSummary = false
-                }
-            }
-        )
     }
 
     private var summaryView: some View {

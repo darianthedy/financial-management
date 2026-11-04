@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import FinancialManagement
 
 /// D2.0: the selection rule behind `.splitDetail` — restore, clear, keep.
@@ -85,5 +86,17 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 0)), 347)
         XCTAssertEqual(SplitColumns.listWidth(for: 700, fold: .book(divisionX: 500)), 300)
         XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 347)
+    }
+
+    /// Nothing selected shows the list; a selection hands the columns back to
+    /// the system, which closes the list where it overlays the detail.
+    func testColumnVisibilityFollowsTheSelection() {
+        XCTAssertEqual(SplitColumns.visibility(selected: false), .all)
+        XCTAssertEqual(SplitColumns.visibility(selected: true), .automatic)
+    }
+
+    func testSideBySideOnlyInLandscape() {
+        XCTAssertTrue(SplitColumns.sideBySide(CGSize(width: 951, height: 669)))
+        XCTAssertFalse(SplitColumns.sideBySide(CGSize(width: 669, height: 951)))
     }
 }

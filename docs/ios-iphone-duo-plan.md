@@ -107,7 +107,7 @@ The probe is the `iOS Duo probe` workflow (`.github/workflows/ios-duo-probe.yml`
 
 - **Inner display (I-L, I-P):** regular width. `.defaultTabBarPlacement(.sidebar)` **does** show a sidebar, which the user can show or hide. When it floats, content extends under it, and the sidebar becomes the leading safe area.
   - Flat with the sidebar open, about **585 pt** is left beside it. That is too narrow for the 300 pt list plus a usable detail, so list → detail tiles only when both columns fit (300 + 360 pt) and otherwise pushes, as on compact.
-  - In **landscape**, a tiled list column's content ends **84 pt** short of the column, where its toolbar sits. In portrait it doesn't. Each tiled `NavigationStack` appears to reserve a vertical-bar strip. SwiftUI's `.toolbarVerticalBehavior(.disabled)` (iOS 27.1) opts the list column out; it awaits a device recheck.
+  - In **landscape**, a tiled list column's content ends **84 pt** short of the column, where its toolbar sits. In portrait it doesn't. Each tiled `NavigationStack` appears to reserve a vertical-bar strip. Disabling the vertical bar on that stack had no effect. The fix is the system `NavigationSplitView`, as in Notes: the leading column keeps a horizontal bar, and only the trailing column gets the vertical bar. In portrait the list slides over a full-screen detail.
 - **Book posture (I-B):** with the sidebar open, the system widens it to fill the leading region, leaving about **390 pt** beside it, so the splits push. With the sidebar hidden, the list column ends on the fold.
 - **Tent posture (I-T):** checked on the inner display in portrait. The glances sit above the fold, with controls and lists below it. Rows of scrolling lists and forms may cross the fold, as the HIG allows.
 - **Outer display:** the top edge has no safe area when flat or closed, so full-screen content such as Login needs its own top margin.
@@ -213,7 +213,7 @@ On compact width the current behavior stays, so the outer display has **no regre
 
 ### 3.3 Supporting surfaces
 
-- **Summary (F3)** becomes an `.inspector` on Transactions. On regular width it is a trailing column. On compact width the system shows it as a sheet, the same as today.
+- **Summary (F3)** stays a sheet on every width. A trailing `.inspector` was tried (D3.2) and reverted: inside the system split it covered the editor.
 - **Sheets**: add `.presentationSizing(.form)` to F1–F10 so they are centered on the inner display and the system displaces them at the fold. Do not use fixed widths or `.frame(width:)`.
 - **Alerts, confirmation dialogs, context menus and swipe actions** are system components, so they adapt to the fold automatically. No code change.
 - **Toolbars**: keep the icon-only items (+, filter, summary) vertical-friendly. Give **Add** `.visibilityPriority(.high)` and Summary `.low` (iOS 27.1). The probe showed Add is otherwise the first item to fall into "…": on the vertical bar, `primaryAction` items go last. A badged Filter stays visible because the HIG says badged items overflow last. The measured rail is **84 pt** wide and sits on the camera side (right in portrait, left in landscape), so the content column on the outer display is 382 pt wide.
@@ -266,7 +266,7 @@ This tab becomes a `NavigationSplitView`. On regular width the detail column sho
 Canvas board: **S6 · Transactions (+ states)**.
 
 - **Compact:** today's layout: a plain list, sticky day headers, search with filter tokens, and the toolbar (S) (F) (+).
-- **Regular:** list | detail. The detail is the embedded transaction form with Save and Cancel. **Summary** becomes `.inspector` in a trailing column that the (S) button toggles. Filters stay a sheet, which the system centers.
+- **Regular:** list | detail. The detail is the embedded transaction form with Save and Cancel. **Summary** opens as a sheet from the (S) button, as on compact. Filters stay a sheet, which the system centers.
 - **Vertical rail order:** `<` Back (on drill-down), then **(+)** as the prominent action, then a gap, then (F) and (S). Overflow drops (S) first.
 - The day header's amount column and the 44 pt menu spacer stay as they are. Rows keep `lineLimit(1)` and get wider, so no truncation problems appear.
 
@@ -345,7 +345,7 @@ Canvas boards: **F1 · Sheet pattern & Transaction form**, **F2–F4 · Filters,
 
 On I-L, put facet sections in an even, 2-column reflow inside the page sheet. The order is kept by reading down the left column first.
 
-**F3 Summary** is an inspector on regular width and a sheet on compact (§S6). States: `ProgressView("Summarizing…")`, `ContentUnavailableView("Couldn't Summarize")`, and a loaded view with Totals plus the Pending projection.
+**F3 Summary** is a sheet on every width (§S6). States: `ProgressView("Summarizing…")`, `ContentUnavailableView("Couldn't Summarize")`, and a loaded view with Totals plus the Pending projection.
 
 **F4 Virtual installment.** The start month is a segmented control (horizontal), followed by a Months stepper and an allocation grid. On regular width with `.page` sizing, the per-budget allocation sections show as a 2-column grid. The amount field's `maxWidth: 140` stays.
 
@@ -370,7 +370,7 @@ On I-L, put facet sections in an even, 2-column reflow inside the page sheet. Th
 | S2 Login | ✓ idle/load/err/keyboard | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | typed email kept |
 | S3 Dashboard | ✓ load/loaded/partial | ✓ | ✓ 2-col | ✓ 2-col | ✓ col per region | ✓ glance/controls | ✓ 1-col | ✓ 2-col | month + scroll offset kept |
 | S4/S5 Accounts | ✓ empty/list/detail | ✓ | ✓ split | ✓ | ✓ | ✓ | ✓ stack | ✓ split | selection ↔ pushed detail |
-| S6 Transactions | ✓ all §S6 states | ✓ | ✓ + inspector | ✓ | ✓ | ✓ | ✓ | ✓ | search, tokens, dirty detail kept |
+| S6 Transactions | ✓ all §S6 states | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | search, tokens, dirty detail kept |
 | S7 Budgets | ✓ empty/list/installments | ✓ | ✓ split | ✓ | ✓ | ✓ | ✓ | ✓ | month + selection kept |
 | S8 More | ✓ | ✓ | hidden → sidebar | hidden | hidden | hidden | ✓ | — | tab mapping §S8 |
 | S9 Tags | ✓ | ✓ 4-col | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | selection kept |

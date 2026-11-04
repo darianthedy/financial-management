@@ -17,7 +17,7 @@ extension XCTestCase {
             let list = try snapshot.frame("split.list", file: file, line: line)
             let empty = try snapshot.frame("split.placeholder", file: file, line: line)
             XCTAssertLessThanOrEqual(list.maxX, empty.minX + 1, "list | placeholder must tile at \(size)", file: file, line: line)
-        } else {
+        } else if LayoutHarness.pushesSplit(size) {
             XCTAssertNil(snapshot.frames["split.list"], "compact must not split at \(size)", file: file, line: line)
             try assertInsideSafeArea(snapshot, probe: rowProbe, file: file, line: line)
         }
