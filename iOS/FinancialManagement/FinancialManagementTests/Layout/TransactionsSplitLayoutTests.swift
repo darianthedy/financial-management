@@ -75,6 +75,8 @@ final class TransactionsSplitLayoutTests: XCTestCase {
             let amount = try snapshot.frame("transactionRow.amount.Top up Jenius")
             XCTAssertLessThanOrEqual(amount.height, 30, "amount wrapped: \(amount) at \(size)")
             XCTAssertLessThanOrEqual(amount.maxX, rowFrame.maxX + 0.5, "amount \(amount) in row \(rowFrame) at \(size)")
+            // Beside the title, never dropped under it.
+            XCTAssertGreaterThanOrEqual(amount.minX, title.maxX, "amount \(amount) under title \(title) at \(size)")
         }
     }
 
