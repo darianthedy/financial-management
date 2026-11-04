@@ -97,6 +97,13 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: false), .detailOnly)
     }
 
+    /// Side by side the list can't be dismissed; portrait keeps the toggle
+    /// that slides it over the detail.
+    func testColumnToggleOnlyInPortrait() {
+        XCTAssertFalse(SplitColumns.hasColumnToggle(sideBySide: true))
+        XCTAssertTrue(SplitColumns.hasColumnToggle(sideBySide: false))
+    }
+
     func testSideBySideOnlyInLandscape() {
         XCTAssertTrue(SplitColumns.sideBySide(CGSize(width: 951, height: 669)))
         XCTAssertFalse(SplitColumns.sideBySide(CGSize(width: 669, height: 951)))

@@ -32,9 +32,9 @@ extension EnvironmentValues {
 /// compact width (exactly as before), and on regular width no stack at all,
 /// because the screen's tiled columns bring their own.
 ///
-/// Regular width that is still too narrow for two columns (the inner display in
-/// book posture with the sidebar filling the leading region leaves ~390 pt)
-/// gets the compact stack too, rather than a crushed detail column.
+/// Regular width that is still too narrow for two columns (Split View) gets
+/// the compact stack too, rather than a crushed detail column. The tab sidebar
+/// floats over the split rather than narrowing it (`.floatsTabSidebar()`).
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ViewBuilder var content: Content
@@ -117,8 +117,8 @@ enum SplitColumns {
     static let minimumDetailWidth: CGFloat = 360
 
     /// Whether `width` fits a list and a detail column at their minimums
-    /// (660 pt): the inner display in landscape or portrait, but not beside an
-    /// open sidebar.
+    /// (660 pt): the inner display in landscape or portrait, with the sidebar
+    /// floating over it or not, but not a narrow Split View.
     static func tiles(width: CGFloat) -> Bool {
         width >= minimumListWidth + minimumDetailWidth
     }
@@ -134,6 +134,12 @@ enum SplitColumns {
     /// Portrait: the list over the detail until something is picked.
     static func visibility(selected: Bool, sideBySide: Bool) -> NavigationSplitViewVisibility {
         sideBySide || !selected ? .all : .detailOnly
+    }
+
+    /// Whether the system's column toggle shows. Only in portrait, where it
+    /// slides the list over the detail; side by side it would hide the list.
+    static func hasColumnToggle(sideBySide: Bool) -> Bool {
+        !sideBySide
     }
 
     /// The list column's width: on the fold in book posture, when both regions
@@ -300,9 +306,20 @@ private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
     var body: some View {
         GeometryReader { geo in
             let width = SplitColumns.listWidth(for: geo.size.width, fold: fold)
+            let sideBySide = SplitColumns.sideBySide(geo.size)
             let split = NavigationSplitView(columnVisibility: $visibility) {
                 list
                     .layoutProbe("split.list")
+                    // The tab sidebar puts its toggle in a tab's stack bar,
+                    // which a split doesn't have, so the list carries it.
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) { TabSidebarToggle() }
+                            .duoVisibilityPriority(.high)
+                    }
+                    // Side by side the list stays: the system's column toggle
+                    // only hid it (and took the tab sidebar toggle's place).
+                    // Portrait keeps it, to slide the list over the detail.
+                    .toolbar(removing: SplitColumns.hasColumnToggle(sideBySide: sideBySide) ? nil : .sidebarToggle)
                     // May shrink to the minimum rather than overlay the
                     // detail when both don't fit at the ideal width.
                     .navigationSplitViewColumnWidth(
@@ -314,7 +331,6 @@ private struct SystemSplitColumns<ListColumn: View, DetailColumn: View>: View {
             // Explicit, because `.automatic` overlaid the list in landscape
             // too, e.g. in book posture. Rotating swaps the style, which rebuilds
             // the split; the selection and drafts live above it.
-            let sideBySide = SplitColumns.sideBySide(geo.size)
             Group {
                 if sideBySide {
                     split.navigationSplitViewStyle(.balanced)

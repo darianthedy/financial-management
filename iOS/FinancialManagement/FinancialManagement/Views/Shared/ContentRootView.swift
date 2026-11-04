@@ -8,6 +8,9 @@ import SwiftUI
 /// where More's destinations become their own tabs and Sign Out moves to the
 /// sidebar footer.
 ///
+/// Every tab root lets the sidebar float over it (`.floatsTabSidebar()`), as
+/// Notes does, rather than narrow beside it.
+///
 /// Tabs are chosen by size class rather than `.defaultVisibility(.hidden, for:)`,
 /// which the probe showed doesn't hide tabs on compact width (design §1.3 #5).
 struct ContentRootView: View {
@@ -35,19 +38,20 @@ struct ContentRootView: View {
 
             // web LayoutDashboard (grid)
             Tab("Dashboard", systemImage: "square.grid.2x2", value: AppTab.dashboard) {
-                NavigationStack { DashboardView() }
+                NavigationStack { DashboardView() }.floatsTabSidebar()
             }
             // web Wallet
             Tab("Accounts", systemImage: "wallet.bifold", value: AppTab.accounts) {
-                SplitRootContainer { AccountListView() }
+                SplitRootContainer { AccountListView() }.floatsTabSidebar()
             }
             // web ArrowLeftRight
             Tab("Transactions", systemImage: "arrow.left.arrow.right", value: AppTab.transactions) {
                 SplitRootContainer { TransactionListView(model: transactionList, isTabRoot: true) }
+                    .floatsTabSidebar()
             }
             // web PiggyBank (no SF piggy-bank symbol; target reads as a budget goal)
             Tab("Budgets", systemImage: "target", value: AppTab.budgets) {
-                SplitRootContainer { BudgetListView() }
+                SplitRootContainer { BudgetListView() }.floatsTabSidebar()
             }
 
             if horizontalSizeClass == .regular {
@@ -57,7 +61,7 @@ struct ContentRootView: View {
                 TabSection("Management") {
                     ForEach(MoreDestination.allCases, id: \.self) { destination in
                         Tab(destination.title, systemImage: destination.systemImage, value: destination.tab) {
-                            destination.sidebarTabRoot
+                            destination.sidebarTabRoot.floatsTabSidebar()
                         }
                     }
                 }
