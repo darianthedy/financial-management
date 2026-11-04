@@ -67,9 +67,12 @@ struct ContentRootView: View {
                 } detail: {
                     NavigationStack { screen(section) }
                 }
+                // Full width, the sections over it, in both orientations.
+                // SwiftUI's own style: on two columns it overrode the UIKit
+                // behaviour below (device test).
+                .navigationSplitViewStyle(.prominentDetail)
             }
         }
-        .navigationSplitViewStyle(.automatic)
         .background {
             RootSplitBehavior(
                 behavior: RootColumns.behavior(regular: isRegular, sideBySide: sideBySide, hasList: section.hasList),
@@ -181,13 +184,13 @@ enum RootColumns {
     /// list aside in landscape, over everything in portrait. Nil (compact)
     /// leaves the system's.
     ///
-    /// Dashboard and Settings always open full width, so their sections only
-    /// ever slide over them.
+    /// Nil for Dashboard and Settings, which get the overlay from SwiftUI's
+    /// `.prominentDetail` style instead: they always open full width.
     static func behavior(
         regular: Bool, sideBySide: Bool, hasList: Bool
     ) -> UISplitViewController.SplitBehavior? {
-        guard regular else { return nil }
-        return hasList && sideBySide ? .displace : .overlay
+        guard regular, hasList else { return nil }
+        return sideBySide ? .displace : .overlay
     }
 
     /// The sections' width, the system's for a three-column split.

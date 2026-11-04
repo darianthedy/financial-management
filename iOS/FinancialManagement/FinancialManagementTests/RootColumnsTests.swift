@@ -48,9 +48,9 @@ final class RootColumnsTests: XCTestCase {
     func testSplitBehavior() {
         XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: true, hasList: true), .displace)
         XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: false, hasList: true), .overlay)
-        // Dashboard and Settings stay full width: the sections slide over them.
-        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: true, hasList: false), .overlay)
-        XCTAssertEqual(RootColumns.behavior(regular: true, sideBySide: false, hasList: false), .overlay)
+        // Dashboard and Settings: `.prominentDetail` overlays them instead.
+        XCTAssertNil(RootColumns.behavior(regular: true, sideBySide: true, hasList: false))
+        XCTAssertNil(RootColumns.behavior(regular: true, sideBySide: false, hasList: false))
         XCTAssertNil(RootColumns.behavior(regular: false, sideBySide: true, hasList: true))
     }
 }
