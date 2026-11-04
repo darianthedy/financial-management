@@ -10,6 +10,7 @@ struct TransactionListView: View {
     @Environment(\.canTileSplitRoot) private var canTileSplitRoot
     @Environment(\.transactionDrafts) private var sharedDrafts
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.isSplitListColumn) private var isSplitListColumn
     @State private var viewModel: TransactionListViewModel
     @State private var showingForm = false
     @State private var editingTransaction: Transaction?
@@ -557,11 +558,14 @@ struct TransactionListView: View {
     /// the day's net (green/red, muted when it nets to zero) on the right.
     private func dateGroupHeader(_ group: TransactionDateGroup) -> some View {
         Group {
-            if horizontalSizeClass == .regular {
-                // A narrow split column drops the count and the row-aligned
-                // amount column rather than wrapping the day's net.
+            if AmountColumnView.keepsWholeAmount(
+                sizeClass: horizontalSizeClass, inSplitListColumn: isSplitListColumn
+            ) {
+                // The day's net never truncates. A narrow column drops the item
+                // count first, then the row-aligned amount column.
                 ViewThatFits(in: .horizontal) {
                     fullDateGroupHeader(group)
+                    fullDateGroupHeader(group, showsCount: false)
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         dateLabel(group)
                         Spacer(minLength: 8)
@@ -606,13 +610,17 @@ struct TransactionListView: View {
             .fixedSize(horizontal: true, vertical: false)
     }
 
-    private func fullDateGroupHeader(_ group: TransactionDateGroup) -> some View {
+    private func fullDateGroupHeader(_ group: TransactionDateGroup, showsCount: Bool = true) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             dateLabel(group)
             Spacer()
-            Text("\(group.count) \(group.count == 1 ? "item" : "items")")
-                .font(.caption)
-                .foregroundStyle(Color.appMutedForeground)
+            if showsCount {
+                Text("\(group.count) \(group.count == 1 ? "item" : "items")")
+                    .font(.caption)
+                    .foregroundStyle(Color.appMutedForeground)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
             // Same component + shared width as the rows, so symbol and digits
             // align into one column through the header. The net carries an
             // explicit +/− sign; a day that nets to zero shows neither. The
