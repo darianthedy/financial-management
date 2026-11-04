@@ -77,8 +77,8 @@ private struct SidebarDimming: View {
     let hide: () -> Void
 
     var body: some View {
-        Color.black.opacity(0.3)
-            .contentShape(Rectangle())
+        Rectangle()
+            .fill(.black.opacity(0.3))
             .onTapGesture(perform: hide)
             .accessibilityElement()
             .accessibilityLabel("Hide Sidebar")
