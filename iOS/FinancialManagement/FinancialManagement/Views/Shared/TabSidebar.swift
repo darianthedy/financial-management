@@ -83,7 +83,7 @@ private struct SidebarDimming: View {
             .accessibilityElement()
             .accessibilityLabel("Hide Sidebar")
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction(perform: hide)
+            .accessibilityAction(.default, hide)
     }
 }
 
