@@ -66,7 +66,7 @@ struct TransactionRow: View {
             amountColumn(widestNumber: widestNumber)
                 .layoutPriority(1)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         // Long-press (or secondary click) lifts a preview of the transaction
         // with its actions above it, as Notes does; tap still edits and the
         // list's swipe still deletes.
@@ -79,7 +79,7 @@ struct TransactionRow: View {
     }
 
     private var titleColumn: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(derived.title)
                         .font(.subheadline.weight(.semibold))
@@ -329,7 +329,7 @@ struct TransactionRow: View {
                          border: Color.appBorder)
                 }
             }
-            .padding(.top, 2)
+            .padding(.top, 4)
         }
     }
 

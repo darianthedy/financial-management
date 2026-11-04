@@ -468,6 +468,7 @@ struct TransactionListView: View {
             }
         }
         .listStyle(.plain)
+        .staysClearOfTrailingBar()
         .layoutProbe("transactions.list")
         .overlay {
             if viewModel.transactions.isEmpty && !viewModel.isLoading {
@@ -507,7 +508,7 @@ struct TransactionListView: View {
             // The header's own 16 pt inset, so the rows' amount column and the
             // day's net share one trailing edge on every display (the system
             // row margin differs from it, e.g. beside the Duo's vertical bar).
-            .listRowInsets(EdgeInsets(top: 6, leading: Self.rowInset, bottom: 6, trailing: Self.rowInset))
+            .listRowInsets(EdgeInsets(top: 8, leading: Self.rowInset, bottom: 8, trailing: Self.rowInset))
             .listRowBackground(rowBackground(for: txn))
             .contentShape(Rectangle())
             .onTapGesture { edit(txn) }
@@ -552,7 +553,7 @@ struct TransactionListView: View {
         // the Section so the background can reach the edges) plus a little
         // vertical breathing room.
         .padding(.horizontal, Self.rowInset)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Opaque backdrop so the pinned header doesn't let the rows scrolling
         // underneath it show through.
