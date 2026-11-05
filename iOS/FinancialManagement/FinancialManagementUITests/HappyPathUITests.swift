@@ -42,7 +42,7 @@ final class HappyPathUITests: XCTestCase {
 
         app.buttons["Sign in"].tap()
 
-        // 2. Land on the Dashboard and open Accounts from the sections.
+        // 2. Land on the Dashboard and open the Accounts tab.
         let accountsTab = section("Accounts", in: app)
         waitFor(accountsTab, 15, in: app)
         accountsTab.tap()
@@ -90,22 +90,10 @@ final class HappyPathUITests: XCTestCase {
         waitFor(app.staticTexts["Planned Expenses"], 10, in: app)
     }
 
-    /// A section's row in the root's sidebar. The app opens on the Dashboard
-    /// with the sections out of sight: collapsed (outer display) they are
-    /// back one level, expanded (inner display) behind "Show Sidebar".
+    /// A section's button in the root's tab bar, the same five tabs on every
+    /// display (docs/ios-tab-root-plan.md).
     private func section(_ name: String, in app: XCUIApplication) -> XCUIElement {
-        let row = app.cells.containing(.staticText, identifier: name).firstMatch
-        for _ in 0..<3 where !(row.exists && row.isHittable) {
-            let showSidebar = app.buttons["Show Sidebar"].firstMatch
-            let back = app.navigationBars.buttons.firstMatch
-            if showSidebar.exists && showSidebar.isHittable {
-                showSidebar.tap()
-            } else if back.exists {
-                back.tap()
-            }
-            _ = row.waitForExistence(timeout: 2)
-        }
-        return row
+        app.tabBars.buttons[name]
     }
 
     /// Waits for `element`; on a miss, logs what was on screen (the CI log is
