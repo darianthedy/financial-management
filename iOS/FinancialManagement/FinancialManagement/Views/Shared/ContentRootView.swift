@@ -80,13 +80,11 @@ struct ContentRootView: View {
             RootSplitBehavior(
                 behavior: RootColumns.behavior(regular: isRegular, sideBySide: sideBySide, hasList: section.hasList),
                 section: section,
-                listWidth: isRegular && section.hasList ? splitListWidth : nil
+                listWidth: rootListWidth
             )
         }
         .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
-        .onGeometryChange(for: CGFloat.self) {
-            $0.size.width + $0.safeAreaInsets.leading + $0.safeAreaInsets.trailing
-        } action: { fullWidth = $0 }
+        .onGeometryChange(for: CGFloat.self, of: Self.edgeToEdgeWidth) { fullWidth = $0 }
         // Picking a section closes the sections, as in Notes.
         .onChange(of: section) { _, section in
             compactColumnOverride = nil
@@ -144,6 +142,18 @@ struct ContentRootView: View {
     /// screen (the safe width left it at ~420 pt of 951, device build).
     private func halvedListWidth(_ width: CGFloat) -> CGFloat {
         SplitColumns.listWidth(for: width, fold: fold, halves: true)
+    }
+
+    /// The width including the safe areas on either side.
+    private static func edgeToEdgeWidth(_ proxy: GeometryProxy) -> CGFloat {
+        proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing
+    }
+
+    /// What the split is told its list column's width is: on regular width,
+    /// for the sections with a list.
+    private var rootListWidth: ((CGFloat) -> CGFloat)? {
+        guard isRegular, section.hasList else { return nil }
+        return splitListWidth
     }
 
     /// The list column's width given the split's own width, which the split
