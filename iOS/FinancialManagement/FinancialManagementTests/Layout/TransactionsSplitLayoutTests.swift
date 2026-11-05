@@ -2,8 +2,9 @@ import SwiftUI
 import XCTest
 @testable import FinancialManagement
 
-/// D3.1: Transactions keeps its compact list (edit in a sheet) and, as the tab
-/// root on regular width, edits the selected transaction in the detail column.
+/// D3.1: Transactions pushes the selected transaction's detail on compact and,
+/// as the tab root on regular width, shows it in the detail column: read-only
+/// until Edit, or still editing when a fold kept unsaved edits.
 @MainActor
 final class TransactionsSplitLayoutTests: XCTestCase {
     private let row = "transactions.row.Top up Jenius"
@@ -16,21 +17,25 @@ final class TransactionsSplitLayoutTests: XCTestCase {
 
     private func render(
         selected: UUID? = nil, drafts: TransactionEditorDrafts? = nil,
-        showsSummary: Bool = false, at size: LayoutSize
+        model: TransactionListViewModel? = nil,
+        showsSummary: Bool = false, detailProbe: String? = nil, at size: LayoutSize
     ) async throws -> LayoutSnapshot {
         let appState = AppState()
         await appState.loadCurrencyData()
         let row = row
         let drafts = drafts ?? TransactionEditorDrafts()
         return try await LayoutHarness.render(
-            SplitRootContainer { TransactionListView(isTabRoot: true, selectedTransactionId: selected, showsSummary: showsSummary) }
+            SplitRootContainer {
+                TransactionListView(model: model, isTabRoot: true, selectedTransactionId: selected, showsSummary: showsSummary)
+            }
                 .environment(\.transactionDrafts, drafts)
                 .environment(appState)
                 .environment(ThemeManager()),
             at: size,
-            until: {
-                $0[row] != nil && (selected == nil || $0["split.detail"] != nil)
-                    && (!showsSummary || $0["transactions.summary"] != nil)
+            until: { frames in
+                frames[row] != nil && (selected == nil || frames["split.detail"] != nil)
+                    && (!showsSummary || frames["transactions.summary"] != nil)
+                    && (detailProbe.map { frames[$0] != nil } ?? true)
             }
         )
     }
@@ -43,11 +48,16 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         }
     }
 
-    func testRegularEditsTheTransactionInTheDetailColumn() async throws {
+    func testRegularShowsTheTransactionInTheDetailColumn() async throws {
         for size in LayoutSize.all where LayoutHarness.tilesSplit(size) {
-            let snapshot = try await render(selected: topUp, at: size)
+            let snapshot = try await render(selected: topUp, detailProbe: "transactionDetail", at: size)
             attach(snapshot, name: "transactions-detail")
             try assertSplitTiled(snapshot)
+            // Read-only until Edit: the card, not the form.
+            let detail = try snapshot.frame("split.detail")
+            let amount = try snapshot.frame("transactionDetail.amount")
+            XCTAssertTrue(detail.contains(CGPoint(x: amount.midX, y: amount.midY)), "amount \(amount) outside \(detail) at \(size)")
+            XCTAssertNil(snapshot.frames["transactionDetail.editor"], "the detail opened editing at \(size)")
         }
     }
 
@@ -80,19 +90,24 @@ final class TransactionsSplitLayoutTests: XCTestCase {
         }
     }
 
-    /// Unfold → edit → fold: the compact push re-opens the same draft.
+    /// Unfold → edit → fold: the compact push re-opens the same draft, still
+    /// editing.
     func testDirtyDetailIsKeptAcrossAFold() async throws {
         let drafts = TransactionEditorDrafts()
-        let tiled = try await render(selected: topUp, drafts: drafts, at: .innerLandscape)
+        let list = TransactionListViewModel()
+        let tiled = try await render(selected: topUp, drafts: drafts, model: list, at: .innerLandscape)
         try assertSplitTiled(tiled)
-        let model = try XCTUnwrap(drafts.transaction(withId: topUp).map {
-            drafts.model(for: $0, currency: "IDR", decimalPlaces: 0)
-        })
+        // Edit, then type: what the detail's Edit button starts.
+        let topUpRow = try XCTUnwrap(list.transactions.first { $0.id == topUp })
+        let model = drafts.model(for: topUpRow, currency: "IDR", decimalPlaces: 0)
         model.description = "Top up (October)"
 
-        let folded = try await render(selected: topUp, drafts: drafts, at: .outerPortrait)
+        let folded = try await render(
+            selected: topUp, drafts: drafts, model: list, detailProbe: "transactionDetail.editor", at: .outerPortrait
+        )
         attach(folded, name: "transactions-folded")
         XCTAssertNotNil(folded.frames["split.detail"], "the draft wasn't pushed on compact")
+        XCTAssertNotNil(folded.frames["transactionDetail.editor"], "the kept draft didn't reopen editing")
         XCTAssertNil(folded.frames["split.list"])
         let kept = try XCTUnwrap(drafts.transaction(withId: topUp).map {
             drafts.model(for: $0, currency: "IDR", decimalPlaces: 0)

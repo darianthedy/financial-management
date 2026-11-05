@@ -136,7 +136,7 @@ struct ContentRootView: View {
     /// The section's list: tiled beside the detail on regular width.
     @ViewBuilder
     private var listColumn: some View {
-        let width = SplitColumns.listWidth(for: size.width, fold: fold)
+        let width = SplitColumns.listWidth(for: size.width, fold: fold, halves: section.halvesSplit)
         let list = screen(section).id(section)
         Group {
             if isRegular {

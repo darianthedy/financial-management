@@ -204,9 +204,16 @@ enum SplitColumns {
     /// The list column's width: on the fold in book posture, when both regions
     /// fit a column, so neither column straddles it; else 40% of the space,
     /// kept between 300 and 420 pt, so the detail column gets the larger share.
-    static func listWidth(for width: CGFloat, fold: FoldContext = .none) -> CGFloat {
+    ///
+    /// `halves`: half the space, as Contacts splits it, for a list whose rows
+    /// need the room (Transactions' title beside an aligned amount), as long
+    /// as the detail keeps its minimum.
+    static func listWidth(for width: CGFloat, fold: FoldContext = .none, halves: Bool = false) -> CGFloat {
         if case .book(let x) = fold, x >= minimumListWidth, width - x >= minimumDetailWidth {
             return x.rounded()
+        }
+        if halves {
+            return max(minimumListWidth, min((width / 2).rounded(), width - minimumDetailWidth))
         }
         return min(420, max(minimumListWidth, (width * 0.4).rounded()))
     }
