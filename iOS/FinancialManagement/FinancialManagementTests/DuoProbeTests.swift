@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import XCTest
+@testable import FinancialManagement
 
 /// iPhone Duo layout probe (docs/ios-iphone-duo-plan.md §1.3). Not a
 /// correctness test: it records what the system actually does on the current
@@ -72,9 +73,49 @@ final class DuoProbeTests: XCTestCase {
         try await Task.sleep(for: .seconds(2))
     }
 
+    /// Why a swiped plain-list row overshoots on the outer display: where the
+    /// list's collection view and its cells sit relative to the vertical bar,
+    /// per list style and per attempted clearance.
+    func test7_swipeList() async throws {
+        for variant in ProbeSwipeList.Variant.allCases {
+            try await probe("swipe-\(variant.rawValue)", ProbeSwipeList(variant: variant), extra: collectionViews)
+        }
+    }
+
+    /// Every collection view (SwiftUI List) with its insets and first cells.
+    private func collectionViews(in window: UIWindow) -> [String: Any] {
+        var out: [[String: Any]] = []
+        walk(window, depth: 0) { view in
+            guard let cv = view as? UICollectionView else { return }
+            var entry = describe(view: cv, in: window)
+            entry["contentInset"] = insets(cv.contentInset)
+            entry["adjustedContentInset"] = insets(cv.adjustedContentInset)
+            entry["layoutMargins"] = insets(cv.layoutMargins)
+            entry["insetsLayoutMarginsFromSafeArea"] = cv.insetsLayoutMarginsFromSafeArea
+            entry["contentInsetAdjustment"] = cv.contentInsetAdjustmentBehavior.rawValue
+            entry["superviews"] = sequence(first: cv.superview, next: { $0?.superview })
+                .prefix(6).compactMap { $0.map { describe(view: $0, in: window) } }
+            entry["cells"] = cv.visibleCells.prefix(3).map { cell -> [String: Any] in
+                var c = describe(view: cell, in: window)
+                c["contentView"] = describe(view: cell.contentView, in: window)
+                c["layoutMargins"] = insets(cell.layoutMargins)
+                c["contentViewLayoutMargins"] = insets(cell.contentView.layoutMargins)
+                if let list = cell as? UICollectionViewListCell {
+                    c["separatorLayoutGuide"] = rect(list.separatorLayoutGuide.layoutFrame)
+                }
+                return c
+            }
+            out.append(entry)
+        }
+        return ["collectionViews": out]
+    }
+
     // MARK: - Probe runner
 
-    private func probe<V: View>(_ name: String, _ view: V, settle: Double = 2) async throws {
+    private func probe<V: View>(
+        _ name: String, _ view: V, settle: Double = 2,
+        extra: ((UIWindow) -> [String: Any])? = nil
+    ) async throws {
         ProbeFrames.shared.reset()
         let scene = try activeScene()
         let window = UIWindow(windowScene: scene)
@@ -85,7 +126,7 @@ final class DuoProbeTests: XCTestCase {
         try await Task.sleep(for: .seconds(settle))
         window.layoutIfNeeded()
 
-        let report: [String: Any] = [
+        var report: [String: Any] = [
             "scene": describe(scene: scene),
             "window": describe(view: window, in: window),
             "windowSafeArea": insets(window.safeAreaInsets),
@@ -96,6 +137,7 @@ final class DuoProbeTests: XCTestCase {
             "reservedRegions": reservedRegions(window),
             "hinge": hinge.updates,
         ]
+        if let extra { report.merge(extra(window)) { $1 } }
         let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
@@ -500,5 +542,49 @@ private struct ProbeSheetHost: View {
                 }
                 .presentationSizing(.form)
             }
+    }
+}
+
+/// A plain list of swipeable rows on a navigation screen with a toolbar (so
+/// the outer display shows its vertical bar), in each layout under test.
+private struct ProbeSwipeList: View {
+    enum Variant: String, CaseIterable {
+        case plain, plainClearance, plainPadded, insetGrouped, plainContentMargin
+    }
+    let variant: Variant
+
+    var body: some View {
+        NavigationStack {
+            styled
+                .probe("swipe.list")
+                .navigationTitle("Transactions")
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Add", systemImage: "plus") {}
+                    }
+                }
+        }
+    }
+
+    private var list: some View {
+        List(0..<8, id: \.self) { i in
+            Text("Row \(i)")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .probe("swipe.row.\(i)")
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {} label: { Label("Delete", systemImage: "trash") }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var styled: some View {
+        switch variant {
+        case .plain: list.listStyle(.plain)
+        case .plainClearance: list.listStyle(.plain).staysClearOfTrailingBar()
+        case .plainPadded: list.listStyle(.plain).padding(.trailing, 1)
+        case .insetGrouped: list.listStyle(.insetGrouped)
+        case .plainContentMargin: list.listStyle(.plain).contentMargins(.trailing, 0, for: .scrollContent)
+        }
     }
 }
