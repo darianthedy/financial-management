@@ -4,7 +4,7 @@ import XCTest
 
 /// D5.1: a sheet survives a trait flip with its draft intact, even though the
 /// flip re-creates the screen that opened it (`SplitRootContainer` branches on
-/// size class). The control shows a plain `.sheet` doesn't.
+/// size class, in landscape). The control shows a plain `.sheet` doesn't.
 @MainActor
 final class SheetFoldLayoutTests: XCTestCase {
     /// Drives the flip and records what the sheet saw.
@@ -81,6 +81,9 @@ final class SheetFoldLayoutTests: XCTestCase {
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         )
         let window = UIWindow(windowScene: scene)
+        // Landscape, as the inner display: only there does regular width tile,
+        // so only there does the flip swap the container.
+        window.frame = CGRect(origin: .zero, size: LayoutSize.innerLandscape.size)
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
