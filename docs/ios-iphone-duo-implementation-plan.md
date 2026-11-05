@@ -98,6 +98,8 @@ Each task is one PR. Fields: **Scope** (files), **Done when** (merge criteria), 
 
 ### Phase 1: Root navigation
 
+> **Superseded (2026-11-06):** see `docs/ios-tab-root-plan.md`. The root is now five tabs on every display, and list | detail tiles only on the inner display in landscape.
+
 **D1.1 Tab model and selection persistence** · S
 - **Scope:** an `AppTab` enum, a `@SceneStorage` selection, and a pure function mapping a tab between compact and regular width. For example, `.tags` on compact becomes `.more` with Tags pushed.
 - **Done when:** the mapping covers every tab both ways.

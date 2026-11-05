@@ -160,6 +160,8 @@ Layout risks found in the audit:
 
 ### 3.1 Root: an adaptable tab bar that becomes a sidebar
 
+> **Superseded (2026-11-06), see `docs/ios-tab-root-plan.md`.** The root is a plain tab bar (`.tabBarOnly`) with the same five tabs on every display (Dashboard, Accounts, Transactions, Budgets, More), as Music on the iPhone Duo. There's no sidebar and no size-class tab mapping. The Notes-style sections sidebar that replaced this design in between needed a view-controller walk (`RootSplitBehavior`) and was removed. List | detail tiles only on the inner display in landscape; it pushes everywhere else.
+
 Replace `ContentRootView` with the `Tab` API, `.tabViewStyle(.sidebarAdaptable)`, and an opt-in `.defaultTabBarPlacement(.sidebar)` on iOS 27.1 or later. The HIG lists the sidebar as the recommended inner-display option for information-dense apps.
 
 ```swift
