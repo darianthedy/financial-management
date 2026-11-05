@@ -27,21 +27,6 @@ extension ToolbarContent {
     }
 }
 
-// MARK: - Tab bar placement
-
-extension View {
-    /// Opts a `.sidebarAdaptable` `TabView` into the sidebar on regular width.
-    /// No-op before iOS 27.1.
-    @ViewBuilder
-    func duoSidebarTabPlacement() -> some View {
-        if #available(iOS 27.1, *) {
-            defaultTabBarPlacement(.sidebar)
-        } else {
-            self
-        }
-    }
-}
-
 // MARK: - Fold context
 
 /// Where the iPhone Duo's fold (the `.division` reserved region) crosses the

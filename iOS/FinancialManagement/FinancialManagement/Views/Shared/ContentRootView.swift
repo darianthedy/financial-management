@@ -1,36 +1,31 @@
 import SwiftUI
-import UIKit
 
-/// The signed-in root: one Notes-style `NavigationSplitView` on every display
-/// (iPhone Duo design §3.1). Sections | list | detail, where Dashboard and
-/// Settings, which have no list, fill the detail column beside the sections.
+/// The signed-in root: a tab bar with the same five tabs on every display,
+/// as in Music (docs/ios-tab-root-plan.md).
 ///
-/// - Inner display, landscape: the list beside the detail. The sections slide
-///   in from the leading edge, pushing the list and dimming the detail
-///   (UIKit's displace behaviour, which SwiftUI's split styles don't offer).
-///   Dashboard and Settings stay full width, the sections over them.
-/// - Inner display, portrait: the detail full screen; the list, and the
-///   sections, slide over it.
-/// - Outer display (compact): the split collapses into one stack, sections →
-///   list → detail, as Notes does. It's the same root, so a fold or unfold
-///   keeps the screen, its selection and its state.
+/// - Dashboard is a plain stack.
+/// - Accounts, Transactions and Budgets are list → detail screens: side by
+///   side on the inner display in landscape, pushed everywhere else
+///   (`SplitRootContainer`).
+/// - More lists the management screens and Settings; each pushes, and pushes
+///   its own detail.
+///
+/// The tabs never change with the size class, so a fold or a rotation keeps
+/// the tab. What a fold or rotation re-creates inside a tab is restored by the
+/// state owned here and by `.splitDetail`'s `@SceneStorage` selection.
 struct ContentRootView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.foldContext) private var fold
+    /// Restored per scene (window). Holds a `RootTab` raw value, or, from
+    /// builds with the sections sidebar, an `AppSection` one (`RootRoute`).
+    @SceneStorage("root.tab") private var storedTab = RootTab.dashboard.rawValue
+    /// The screen pushed on More's stack, as an `AppSection` raw value.
+    @SceneStorage("root.more") private var storedMore = ""
 
-    /// Restored per scene (window), so the app reopens on the last section.
-    /// The key and raw values are the former tabs', so it carries over.
-    @SceneStorage("root.tab") private var section: AppSection = .dashboard
-    @State private var visibility: NavigationSplitViewVisibility = .doubleColumn
-    /// Collapsed (compact), the column on top, once the user has moved off
-    /// the section's own (`RootColumns.compactColumn`), e.g. back to the
-    /// section list. Cleared when the section changes.
-    @State private var compactColumnOverride: NavigationSplitViewColumn?
-    @State private var size: CGSize = .zero
-    /// Whether the list column's screen has something in the detail column.
-    @State private var detailHost = SplitDetailHost()
-    /// The Transactions detail form's draft, owned above the screens so a fold
-    /// / unfold keeps unsaved edits (D3.1).
+    @State private var tab: RootTab = .dashboard
+    @State private var morePath: [AppSection] = []
+    @State private var hasRestored = false
+
+    /// The Transactions detail form's draft, owned above the tabs so a fold /
+    /// unfold or a rotation keeps unsaved edits (D3.1).
     @State private var transactionDrafts = TransactionEditorDrafts()
     /// The Transactions list, owned here for the same reason: a fold keeps its
     /// filters and search, and a Filters sheet left open through the fold
@@ -39,213 +34,136 @@ struct ContentRootView: View {
     /// Keeps the Budgets and Fixed Expenses month across a fold.
     @State private var keptModels = FoldKeptModels()
 
-    private var isRegular: Bool { horizontalSizeClass == .regular }
-    private var sideBySide: Bool { SplitColumns.sideBySide(size) }
-
-    /// The app opens on the section's screen rather than on the section list.
-    private var compactColumn: Binding<NavigationSplitViewColumn> {
-        Binding(
-            get: { compactColumnOverride ?? RootColumns.compactColumn(for: section) },
-            set: { compactColumnOverride = $0 }
-        )
-    }
-
     var body: some View {
-        Group {
-            if section.hasList {
-                NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: compactColumn) {
-                    sidebar
-                } content: {
-                    listColumn
-                } detail: {
-                    // Filled by the list's `.splitDetail`.
-                    Color.clear
+        TabView(selection: $tab) {
+            Tab(AppSection.dashboard.title, systemImage: AppSection.dashboard.systemImage, value: RootTab.dashboard) {
+                NavigationStack { DashboardView() }
+            }
+            Tab(AppSection.accounts.title, systemImage: AppSection.accounts.systemImage, value: RootTab.accounts) {
+                SplitRootContainer { AccountListView() }
+            }
+            Tab(AppSection.transactions.title, systemImage: AppSection.transactions.systemImage, value: RootTab.transactions) {
+                SplitRootContainer(halves: AppSection.transactions.halvesSplit) {
+                    TransactionListView(model: transactionList, isTabRoot: true)
                 }
-            } else {
-                NavigationSplitView(columnVisibility: $visibility, preferredCompactColumn: compactColumn) {
-                    sidebar
-                } detail: {
-                    NavigationStack { screen(section) }
+            }
+            Tab(AppSection.budgets.title, systemImage: AppSection.budgets.systemImage, value: RootTab.budgets) {
+                SplitRootContainer { BudgetListView() }
+            }
+            Tab("More", systemImage: "ellipsis", value: RootTab.more) {
+                NavigationStack(path: $morePath) {
+                    MoreView()
+                        .navigationDestination(for: AppSection.self) { section in
+                            MoreDestinationView(section: section)
+                        }
                 }
-                // Full width, the sections over it, in both orientations.
-                // SwiftUI's own style: on two columns it overrode the UIKit
-                // behaviour below (device test).
-                .navigationSplitViewStyle(.prominentDetail)
             }
         }
-        .background {
-            RootSplitBehavior(
-                behavior: RootColumns.behavior(regular: isRegular, sideBySide: sideBySide, hasList: section.hasList),
-                section: section
-            )
-        }
-        .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
-        // Picking a section closes the sections, as in Notes.
-        .onChange(of: section) { _, section in
-            compactColumnOverride = nil
-            detailHost.hasSelection = false
-            applyVisibility()
-            // Switching to or from Dashboard / Settings swaps the split, which
-            // takes its initial visibility: close the sections on it too.
-            Task { @MainActor in applyVisibility() }
-        }
-        .onChange(of: sideBySide, initial: true) { applyVisibility() }
-        .onChange(of: isRegular) { applyVisibility() }
-        .onChange(of: detailHost.hasSelection) { applyVisibility() }
-        // Above every screen, so an open sheet and its draft survive a fold (D5.1).
+        // A tab bar on every display, never a sidebar: the bottom bar in
+        // portrait, the Duo's vertical bar in landscape and on the outer
+        // display, as in Music.
+        .tabViewStyle(.tabBarOnly)
+        .onAppear(perform: restore)
+        .onChange(of: tab) { _, tab in storedTab = tab.rawValue }
+        .onChange(of: morePath) { _, path in storedMore = path.first?.rawValue ?? "" }
+        // Above every tab, so an open sheet and its draft survive a fold or
+        // a rotation (D5.1).
         .hostsFoldSafeSheets()
         // Outside the sheet host too, so the sheets inherit it.
         .environment(\.transactionDrafts, transactionDrafts)
         .environment(\.foldKeptModels, keptModels)
     }
 
-    private func applyVisibility() {
-        visibility = RootColumns.visibility(
-            hasList: section.hasList, selected: detailHost.hasSelection, sideBySide: sideBySide
-        )
+    private func restore() {
+        guard !hasRestored else { return }
+        hasRestored = true
+        let route = RootRoute(storedTab: storedTab, storedMore: storedMore)
+        tab = route.tab
+        morePath = route.morePath
+    }
+}
+
+/// The root's tabs. The raw values are persisted in `@SceneStorage`, so don't
+/// rename them; the first four match the `AppSection`s they show.
+enum RootTab: String, CaseIterable, Hashable {
+    case dashboard
+    case accounts
+    case transactions
+    case budgets
+    case more
+
+    /// The section a primary tab shows; nil for More.
+    var section: AppSection? { AppSection(rawValue: rawValue) }
+}
+
+/// Where the root opens, from what the scene stored. Pure, so it is unit
+/// tested directly.
+struct RootRoute: Equatable {
+    var tab: RootTab
+    var morePath: [AppSection]
+
+    /// - `storedTab`: a `RootTab` raw value, or an `AppSection` one stored by
+    ///   the sections sidebar (a management section opens More with it pushed).
+    /// - `storedMore`: the `AppSection` pushed on More, if any.
+    init(storedTab: String, storedMore: String) {
+        if let tab = RootTab(rawValue: storedTab) {
+            self.tab = tab
+            let pushed = AppSection(rawValue: storedMore).flatMap { AppSection.more.contains($0) ? $0 : nil }
+            morePath = tab == .more ? pushed.map { [$0] } ?? [] : []
+        } else if let section = AppSection(rawValue: storedTab), AppSection.more.contains(section) {
+            tab = .more
+            morePath = [section]
+        } else {
+            tab = .dashboard
+            morePath = []
+        }
     }
 
-    private var sectionSelection: Binding<AppSection?> {
-        Binding(get: { section }, set: { if let new = $0 { section = new } })
+    init(tab: RootTab, morePath: [AppSection]) {
+        self.tab = tab
+        self.morePath = morePath
     }
+}
 
-    private var sidebar: some View {
-        List(selection: sectionSelection) {
-            Section {
-                ForEach(AppSection.primary) { row($0) }
-            }
+/// The More tab's list: the management screens, Settings, then Sign Out.
+struct MoreView: View {
+    var body: some View {
+        List {
             Section("Management") {
                 ForEach(AppSection.management) { row($0) }
+            }
+            Section {
+                row(.settings)
             }
             Section {
                 SignOutButton()
             }
         }
-        .navigationTitle("Financial Management")
-        // One width with or without a list column (it was wider beside
-        // Dashboard and Settings).
-        .navigationSplitViewColumnWidth(RootColumns.sidebarWidth)
+        .readableContentMargins()
+        .navigationTitle("More")
     }
 
     private func row(_ section: AppSection) -> some View {
-        Label(section.title, systemImage: section.systemImage)
-            .tag(section)
-            .layoutProbe("root.section.\(section.rawValue)", interactive: true)
-    }
-
-    /// The section's list: tiled beside the detail on regular width.
-    @ViewBuilder
-    private var listColumn: some View {
-        let width = SplitColumns.listWidth(for: size.width, fold: fold, halves: section.halvesSplit)
-        let list = screen(section).id(section)
-        Group {
-            if isRegular {
-                list.splitListColumn(detailHost)
-            } else {
-                list
-            }
+        NavigationLink(value: section) {
+            Label(section.title, systemImage: section.systemImage)
         }
-        .navigationSplitViewColumnWidth(min: min(width, SplitColumns.minimumListWidth), ideal: width, max: width)
+        .layoutProbe("more.\(section.rawValue)", interactive: true)
     }
+}
 
-    @ViewBuilder
-    private func screen(_ section: AppSection) -> some View {
+/// A screen pushed from More. Its detail pushes too: list | detail only tiles
+/// at a tab's root.
+private struct MoreDestinationView: View {
+    let section: AppSection
+
+    var body: some View {
         switch section {
-        case .dashboard: DashboardView()
-        case .accounts: AccountListView()
-        case .transactions: TransactionListView(model: transactionList, isTabRoot: true)
-        case .budgets: BudgetListView()
         case .tags: TagsListView()
         case .categories: CategoryListView()
         case .fixedExpenses: FixedExpenseListView()
         case .scheduled: ScheduledListView()
         case .settings: SettingsView()
-        }
-    }
-}
-
-/// The root split's column rules. Pure, so they are unit-tested directly.
-enum RootColumns {
-    /// What shows, the sections aside (they slide in on demand):
-    /// - a list section: as `SplitColumns.visibility` (the list beside the
-    ///   detail in landscape; the detail alone in portrait once picked);
-    /// - Dashboard and Settings: their screen alone.
-    static func visibility(hasList: Bool, selected: Bool, sideBySide: Bool) -> NavigationSplitViewVisibility {
-        hasList ? SplitColumns.visibility(selected: selected, sideBySide: sideBySide) : .detailOnly
-    }
-
-    /// Collapsed, the column the app opens on: the section's list, or its
-    /// screen for Dashboard and Settings.
-    static func compactColumn(for section: AppSection) -> NavigationSplitViewColumn {
-        section.hasList ? .content : .detail
-    }
-
-    /// How the sections come in on regular width, as in Notes: pushing the
-    /// list aside in landscape, over everything in portrait. Nil (compact)
-    /// leaves the system's.
-    ///
-    /// Nil for Dashboard and Settings, which get the overlay from SwiftUI's
-    /// `.prominentDetail` style instead: they always open full width.
-    static func behavior(
-        regular: Bool, sideBySide: Bool, hasList: Bool
-    ) -> UISplitViewController.SplitBehavior? {
-        guard regular, hasList else { return nil }
-        return sideBySide ? .displace : .overlay
-    }
-
-    /// The sections' width, the system's for a three-column split.
-    static let sidebarWidth: CGFloat = 280
-}
-
-/// Sets the split behaviour of the `UISplitViewController` behind the root's
-/// `NavigationSplitView`, which SwiftUI's split styles can't express.
-private struct RootSplitBehavior: UIViewRepresentable {
-    let behavior: UISplitViewController.SplitBehavior?
-    /// A section change can swap the split for a new one, which needs the
-    /// behaviour set again.
-    let section: AppSection
-
-    func makeUIView(context: Context) -> BehaviorView {
-        let view = BehaviorView()
-        view.isUserInteractionEnabled = false
-        return view
-    }
-
-    func updateUIView(_ uiView: BehaviorView, context: Context) {
-        uiView.behavior = behavior
-        uiView.apply()
-        // The swapped-in split may not exist until the next pass.
-        DispatchQueue.main.async { uiView.apply() }
-    }
-
-    final class BehaviorView: UIView {
-        var behavior: UISplitViewController.SplitBehavior?
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            apply()
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            apply()
-        }
-
-        func apply() {
-            guard let behavior, let split = rootSplit(), split.preferredSplitBehavior != behavior else { return }
-            split.preferredSplitBehavior = behavior
-        }
-
-        /// The first split in this window. This view is the split's sibling,
-        /// not inside it, so it searches down from the window's root.
-        private func rootSplit() -> UISplitViewController? {
-            var queue: [UIViewController] = window?.rootViewController.map { [$0] } ?? []
-            while !queue.isEmpty {
-                let controller = queue.removeFirst()
-                if let split = controller as? UISplitViewController { return split }
-                queue += controller.children
-            }
-            return nil
+        case .dashboard, .accounts, .transactions, .budgets: EmptyView()
         }
     }
 }

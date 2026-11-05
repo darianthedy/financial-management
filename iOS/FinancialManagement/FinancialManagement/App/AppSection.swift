@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// The root's sections, listed in its sidebar (iPhone Duo design §3.1, as in
-/// Notes): the primary screens, then Management. Order, labels and icons mirror
-/// web's nav-config.ts. The raw values are persisted in `@SceneStorage` (they
-/// match the former tabs'), so don't rename them.
+/// The app's screens: the primary ones are tabs (`RootTab`), the rest are
+/// listed in More. Order, labels and icons mirror web's nav-config.ts. The raw
+/// values are persisted in `@SceneStorage`, so don't rename them.
 enum AppSection: String, CaseIterable, Hashable, Identifiable {
     case dashboard
     case accounts
@@ -16,8 +15,10 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
     case settings
 
     static let primary: [AppSection] = [.dashboard, .accounts, .transactions, .budgets]
-    /// Settings closes the Management section, as in the mockups.
-    static let management: [AppSection] = [.tags, .categories, .fixedExpenses, .scheduled, .settings]
+    /// More's Management section.
+    static let management: [AppSection] = [.tags, .categories, .fixedExpenses, .scheduled]
+    /// Everything More pushes: Management, then Settings.
+    static let more: [AppSection] = management + [.settings]
 
     var id: Self { self }
 
@@ -54,15 +55,6 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         // web CalendarClock
         case .scheduled: "calendar.badge.clock"
         case .settings: "gear"
-        }
-    }
-
-    /// Whether the section is a list → detail screen, shown as the root's list
-    /// and detail columns. Dashboard and Settings fill the detail column alone.
-    var hasList: Bool {
-        switch self {
-        case .dashboard, .settings: false
-        default: true
         }
     }
 
