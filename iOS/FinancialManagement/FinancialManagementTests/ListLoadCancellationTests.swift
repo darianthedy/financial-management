@@ -49,4 +49,38 @@ final class ListLoadCancellationTests: XCTestCase {
         XCTAssertNil(vm.errorMessage)
         XCTAssertFalse(vm.isLoading)
     }
+
+    // MARK: - Load failed
+
+    /// A failed load says so (with Try Again) instead of "No accounts yet",
+    /// and a retry once back online fills the list.
+    func testAccountsLoadFailureOffersRetryThenRecovers() async {
+        let vm = AccountListViewModel()
+        FixtureURLProtocol.failsRESTRequests = true
+        defer { FixtureURLProtocol.failsRESTRequests = false }
+        await vm.load()
+        XCTAssertTrue(vm.failedToLoad)
+        XCTAssertNotNil(vm.errorMessage)
+
+        FixtureURLProtocol.failsRESTRequests = false
+        await vm.load()
+        XCTAssertFalse(vm.failedToLoad)
+        XCTAssertNil(vm.errorMessage)
+        XCTAssertFalse(vm.accounts.isEmpty)
+    }
+
+    func testTransactionsLoadFailureOffersRetryThenRecovers() async {
+        let vm = TransactionListViewModel()
+        FixtureURLProtocol.failsRESTRequests = true
+        defer { FixtureURLProtocol.failsRESTRequests = false }
+        await vm.load()
+        XCTAssertTrue(vm.failedToLoad)
+        XCTAssertNotNil(vm.errorMessage)
+
+        FixtureURLProtocol.failsRESTRequests = false
+        await vm.load()
+        XCTAssertFalse(vm.failedToLoad)
+        XCTAssertNil(vm.errorMessage)
+        XCTAssertFalse(vm.transactions.isEmpty)
+    }
 }

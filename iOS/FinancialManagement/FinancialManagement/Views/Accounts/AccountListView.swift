@@ -60,7 +60,11 @@ struct AccountListView: View {
             }
         }
         .overlay {
-            if viewModel.accounts.isEmpty && !viewModel.isLoading {
+            if viewModel.failedToLoad {
+                LoadFailedView(title: "Couldn't Load Accounts", message: viewModel.errorMessage) {
+                    await viewModel.load()
+                }
+            } else if viewModel.accounts.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     title: "No accounts yet",
                     message: "Add your first account to start tracking your finances.",
@@ -87,6 +91,7 @@ struct AccountListView: View {
             await viewModel.load()
             await viewModel.subscribeToChanges()
         }
+        .refreshable { await viewModel.load() }
     }
 }
 

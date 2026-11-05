@@ -32,7 +32,16 @@ nonisolated final class FixtureURLProtocol: URLProtocol {
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    /// While set, every REST request fails as if offline (auth still
+    /// answers, so the fake session stays signed in). Tests use it to reach a
+    /// screen's load-failed state.
+    nonisolated(unsafe) static var failsRESTRequests = false
+
     override func startLoading() {
+        if Self.failsRESTRequests, request.url?.path.hasPrefix("/rest/v1/") == true {
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
         let (status, body) = Self.respond(to: request)
         let response = HTTPURLResponse(
             url: request.url!,
