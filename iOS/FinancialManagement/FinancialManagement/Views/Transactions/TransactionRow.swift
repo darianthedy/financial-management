@@ -9,7 +9,6 @@ import SwiftUI
 /// amount (success/danger/foreground per type) over the date.
 struct TransactionRow: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.isSplitListColumn) private var isSplitListColumn
     let transaction: Transaction
     /// The transaction's source account, used for the avatar. Falls back to a
     /// type glyph when unavailable.
@@ -113,11 +112,10 @@ struct TransactionRow: View {
                         .lineLimit(1)
                 }
 
-                // The split list column sits beside the detail, which shows
-                // everything, so its rows stay at two lines: no chip row.
-                if !isSplitListColumn {
-                    chips
-                }
+                // Everywhere, the split column included now that it takes
+                // half the screen: chips wrap and truncate in the title
+                // column, never under the amount.
+                chips
         }
     }
 
@@ -381,12 +379,9 @@ struct TransactionRow: View {
 
     private var derived: TransactionPresentation.DerivedTitle { presentation.derived }
 
-    /// The second line. In the split list column a transfer shows its
-    /// destination there (plain text, not a chip) instead of the description.
+    /// The second line: the description, unless it is already the title.
+    /// (A transfer's destination is a chip.)
     private var subtitle: String? {
-        if isSplitListColumn, transaction.type == .transfer, let transferAccountName {
-            return "→ \(transferAccountName)"
-        }
         guard let description = transaction.description,
               !description.isEmpty, !derived.titleIsDescription else { return nil }
         return description

@@ -498,6 +498,10 @@ struct TransactionListView: View {
             }
         }
         .listStyle(.plain)
+        // One background behind the rows, the sticky day headers and the
+        // detail: the selected row's pill is the only fill in the list.
+        .scrollContentBackground(.hidden)
+        .background(Color.appBackground)
         .staysClearOfTrailingBar()
         .layoutProbe("transactions.list")
         .overlay {
@@ -569,8 +573,9 @@ struct TransactionListView: View {
         tilesDetail && selection.selection == txn.id
     }
 
-    /// Pending rows are muted; in a tiled split the selected row is an
-    /// accent-filled rounded pill instead, as in Contacts.
+    /// In a tiled split the selected row is an accent-filled rounded pill, as
+    /// in Contacts. Nothing else is filled: a pending row is marked by its
+    /// badge alone, so the list has one background and one highlight.
     @ViewBuilder
     private func rowBackground(for txn: Transaction) -> some View {
         if isSelected(txn) {
@@ -578,7 +583,7 @@ struct TransactionListView: View {
                 .fill(Color.appPrimary)
                 .padding(.horizontal, 8)
         } else {
-            txn.status == .pending ? Color.appMuted : Color.clear
+            Color.clear
         }
     }
 
