@@ -27,9 +27,6 @@ struct ContentRootView: View {
     /// section list. Cleared when the section changes.
     @State private var compactColumnOverride: NavigationSplitViewColumn?
     @State private var size: CGSize = .zero
-    /// The width edge to edge, safe areas included: the split's columns are
-    /// laid out across all of it (e.g. under the Duo's vertical bar).
-    @State private var fullWidth: CGFloat = 0
     /// Whether the list column's screen has something in the detail column.
     @State private var detailHost = SplitDetailHost()
     /// The Transactions detail form's draft, owned above the screens so a fold
@@ -79,12 +76,10 @@ struct ContentRootView: View {
         .background {
             RootSplitBehavior(
                 behavior: RootColumns.behavior(regular: isRegular, sideBySide: sideBySide, hasList: section.hasList),
-                section: section,
-                listWidth: rootListWidth
+                section: section
             )
         }
         .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
-        .onGeometryChange(for: CGFloat.self, of: Self.edgeToEdgeWidth) { fullWidth = $0 }
         // Picking a section closes the sections, as in Notes.
         .onChange(of: section) { _, section in
             compactColumnOverride = nil
@@ -138,39 +133,10 @@ struct ContentRootView: View {
             .layoutProbe("root.section.\(section.rawValue)", interactive: true)
     }
 
-    /// Half the split, measured edge to edge so it is half of what's on
-    /// screen (the safe width left it at ~420 pt of 951, device build).
-    private func halvedListWidth(_ width: CGFloat) -> CGFloat {
-        SplitColumns.listWidth(for: width, fold: fold, halves: true)
-    }
-
-    /// The width including the safe areas on either side.
-    private static func edgeToEdgeWidth(_ proxy: GeometryProxy) -> CGFloat {
-        proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing
-    }
-
-    /// What the split is told its list column's width is: on regular width,
-    /// for the sections with a list.
-    private var rootListWidth: ((CGFloat) -> CGFloat)? {
-        guard isRegular, section.hasList else { return nil }
-        return splitListWidth
-    }
-
-    /// The list column's width given the split's own width, which the split
-    /// is told directly. Every list section sets it, so leaving Transactions
-    /// doesn't leave its half width behind on the next section.
-    private func splitListWidth(_ splitWidth: CGFloat) -> CGFloat {
-        section.halvesSplit
-            ? halvedListWidth(splitWidth)
-            : SplitColumns.listWidth(for: size.width, fold: fold)
-    }
-
     /// The section's list: tiled beside the detail on regular width.
     @ViewBuilder
     private var listColumn: some View {
-        let width = section.halvesSplit
-            ? halvedListWidth(fullWidth)
-            : SplitColumns.listWidth(for: size.width, fold: fold)
+        let width = SplitColumns.listWidth(for: size.width, fold: fold, halves: section.halvesSplit)
         let list = screen(section).id(section)
         Group {
             if isRegular {
@@ -238,10 +204,6 @@ private struct RootSplitBehavior: UIViewRepresentable {
     /// A section change can swap the split for a new one, which needs the
     /// behaviour set again.
     let section: AppSection
-    /// The list column's width for the split's own width, set on the split
-    /// directly: UIKit's default maximum held the list under ~420 pt whatever
-    /// SwiftUI asked for. Nil leaves the widths to SwiftUI.
-    let listWidth: ((CGFloat) -> CGFloat)?
 
     func makeUIView(context: Context) -> BehaviorView {
         let view = BehaviorView()
@@ -251,7 +213,6 @@ private struct RootSplitBehavior: UIViewRepresentable {
 
     func updateUIView(_ uiView: BehaviorView, context: Context) {
         uiView.behavior = behavior
-        uiView.listWidth = listWidth
         uiView.apply()
         // The swapped-in split may not exist until the next pass.
         DispatchQueue.main.async { uiView.apply() }
@@ -259,7 +220,6 @@ private struct RootSplitBehavior: UIViewRepresentable {
 
     final class BehaviorView: UIView {
         var behavior: UISplitViewController.SplitBehavior?
-        var listWidth: ((CGFloat) -> CGFloat)?
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -272,25 +232,8 @@ private struct RootSplitBehavior: UIViewRepresentable {
         }
 
         func apply() {
-            guard let split = rootSplit() else { return }
-            if let behavior, split.preferredSplitBehavior != behavior {
-                split.preferredSplitBehavior = behavior
-            }
-            if let listWidth, split.view.bounds.width > 0 {
-                let width = listWidth(split.view.bounds.width)
-                // As SwiftUI's `navigationSplitViewColumnWidth` would: up to
-                // `width`, giving way to 300 pt when the split is tight.
-                let minimum = min(width, SplitColumns.minimumListWidth)
-                if split.maximumSupplementaryColumnWidth != width || split.minimumSupplementaryColumnWidth != minimum {
-                    // Raise the maximum first, so min ≤ max holds throughout.
-                    split.maximumSupplementaryColumnWidth = max(width, split.minimumSupplementaryColumnWidth)
-                    split.minimumSupplementaryColumnWidth = minimum
-                    split.maximumSupplementaryColumnWidth = width
-                }
-                if split.preferredSupplementaryColumnWidth != width {
-                    split.preferredSupplementaryColumnWidth = width
-                }
-            }
+            guard let behavior, let split = rootSplit(), split.preferredSplitBehavior != behavior else { return }
+            split.preferredSplitBehavior = behavior
         }
 
         /// The first split in this window. This view is the split's sibling,
