@@ -66,6 +66,16 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.listWidth(for: 500), 300)
     }
 
+    /// Transactions takes half, as Contacts does, while the detail keeps 360.
+    func testHalvedListColumnWidth() {
+        XCTAssertEqual(SplitColumns.listWidth(for: 951, halves: true), 476)   // inner landscape
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, halves: true), 434)
+        XCTAssertEqual(SplitColumns.listWidth(for: 669, halves: true), 309)   // detail keeps 360
+        XCTAssertEqual(SplitColumns.listWidth(for: 500, halves: true), 300)
+        // The fold still wins in book posture.
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 475.5), halves: true), 476)
+    }
+
     /// Device test (build 143): in book posture the sidebar fills the leading
     /// region, leaving ~392 pt, and the detail column was crushed to ~90 pt.
     func testTilesOnlyWhenBothColumnsFit() {

@@ -65,4 +65,8 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         default: true
         }
     }
+
+    /// Whether the list takes half the split, as in Contacts: Transactions'
+    /// rows keep a readable title beside their aligned amounts.
+    var halvesSplit: Bool { self == .transactions }
 }

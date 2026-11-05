@@ -187,7 +187,6 @@ struct TransactionListView: View {
     private func detailView(for id: UUID) -> some View {
         if let txn = viewModel.transactions.first(where: { $0.id == id }) ?? drafts.transaction(withId: id) {
             let shown = presentation(for: txn)
-            let spread: (() -> Void)? = shown.canCreateInstallment ? { installmentSource = txn } : nil
             TransactionDetailView(
                 presentation: shown,
                 startsEditing: editOnOpen == id || drafts.unsavedTransaction?.id == id,
@@ -201,7 +200,6 @@ struct TransactionListView: View {
                     if editOnOpen == id { editOnOpen = nil }
                 },
                 onSetStatus: { await viewModel.setStatus(txn, to: $0) },
-                onCreateInstallment: spread,
                 onDelete: {
                     await viewModel.deleteTransaction(txn)
                     // A failed delete keeps the row (and its error); stay put.

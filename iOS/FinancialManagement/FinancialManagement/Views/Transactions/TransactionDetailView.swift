@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One transaction, read-only, laid out like a Contacts card: the account
-/// avatar, amount and title on top, a row of round actions, then the fields
+/// avatar, amount and title on top, Confirm / Dismiss while pending, then the fields
 /// in rounded cards, and Delete at the bottom.
 ///
 /// **Edit** turns the same screen into the form in place (Cancel / Save on
@@ -22,8 +22,6 @@ struct TransactionDetailView: View {
     var onEditingEnded: () -> Void
     /// Confirm / dismiss a pending transaction.
     var onSetStatus: ((TransactionStatus) async -> Void)?
-    /// Starts the "spread across budgets" flow.
-    var onCreateInstallment: (() -> Void)?
     /// Deletes the transaction and closes this screen.
     var onDelete: () async -> Void
 
@@ -38,7 +36,6 @@ struct TransactionDetailView: View {
         onSaved: @escaping () async -> Void,
         onEditingEnded: @escaping () -> Void,
         onSetStatus: ((TransactionStatus) async -> Void)? = nil,
-        onCreateInstallment: (() -> Void)? = nil,
         onDelete: @escaping () async -> Void
     ) {
         self.presentation = presentation
@@ -47,7 +44,6 @@ struct TransactionDetailView: View {
         self.onSaved = onSaved
         self.onEditingEnded = onEditingEnded
         self.onSetStatus = onSetStatus
-        self.onCreateInstallment = onCreateInstallment
         self.onDelete = onDelete
         _editor = State(initialValue: startsEditing ? draft() : nil)
     }
@@ -89,7 +85,7 @@ struct TransactionDetailView: View {
         ScrollView {
             VStack(spacing: 20) {
                 hero
-                actions
+                if presentation.isPending, onSetStatus != nil { actions }
                 fieldsCard
                 if hasLinks { linksCard }
                 if !presentation.tags.isEmpty { tagsCard }
@@ -179,25 +175,16 @@ struct TransactionDetailView: View {
         }
     }
 
-    // MARK: Actions (Share is always there, so the row never empties)
+    // MARK: Actions (a pending transaction's Confirm / Dismiss)
 
     private var actions: some View {
         HStack(alignment: .top, spacing: 12) {
-            if presentation.isPending, let onSetStatus {
-                actionButton("Confirm", systemImage: "checkmark", tint: .appSuccess) {
-                    Task { await onSetStatus(.confirmed) }
-                }
-                actionButton("Dismiss", systemImage: "xmark", tint: .appWarning) {
-                    Task { await onSetStatus(.dismissed) }
-                }
+            actionButton("Confirm", systemImage: "checkmark", tint: .appSuccess) {
+                Task { await onSetStatus?(.confirmed) }
             }
-            if presentation.canCreateInstallment, let onCreateInstallment {
-                actionButton("Spread", systemImage: "square.grid.2x2", tint: .appPrimary, action: onCreateInstallment)
+            actionButton("Dismiss", systemImage: "xmark", tint: .appWarning) {
+                Task { await onSetStatus?(.dismissed) }
             }
-            ShareLink(item: shareText) {
-                actionLabel("Share", systemImage: "square.and.arrow.up", tint: .appPrimary)
-            }
-            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
     }
@@ -206,51 +193,36 @@ struct TransactionDetailView: View {
         _ title: String, systemImage: String, tint: Color, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            actionLabel(title, systemImage: systemImage, tint: tint)
+            VStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 56, height: 56)
+                    .background(Circle().fill(Color.appCard))
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(Color.appForeground)
+            }
+            .frame(minWidth: 64)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private func actionLabel(_ title: String, systemImage: String, tint: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(Color.appCard))
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(Color.appForeground)
-        }
-        .frame(minWidth: 64)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
-    }
-
-    /// "Food · -Rp 50.000 · Nov 4, 2026 · BCA", for Share.
-    private var shareText: String {
-        let amount = CurrencyUtils.format(
-            abs(transaction.amount), currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces
-        )
-        var parts = [presentation.title, presentation.amountSign + amount, Self.dateFormatter.string(from: transaction.transactionDate)]
-        if let accountLine = presentation.accountLine { parts.append(accountLine) }
-        if let note { parts.append(note) }
-        return parts.joined(separator: " · ")
     }
 
     // MARK: Fields
 
     private var fieldsCard: some View {
         CardSection {
-            field("type", presentation.typeName)
-            field("date", Self.dateFormatter.string(from: transaction.transactionDate))
+            field("Type", presentation.typeName)
+            field("Date", Self.dateFormatter.string(from: transaction.transactionDate))
             if transaction.type == .transfer {
-                field("from", presentation.account?.name ?? "—")
-                field("to", presentation.transferAccountName ?? "—")
+                field("From", presentation.account?.name ?? "—")
+                field("To", presentation.transferAccountName ?? "—")
             } else {
-                field("account", presentation.account?.name ?? "—")
+                field("Account", presentation.account?.name ?? "—")
             }
         }
     }
@@ -264,13 +236,13 @@ struct TransactionDetailView: View {
     private var linksCard: some View {
         CardSection {
             if transaction.type != .transfer, let budgetName = presentation.budgetName {
-                field("budget", budgetName)
+                field("Budget", budgetName)
             }
             if let category = presentation.category {
-                field("category", category.name, dot: category.color.flatMap { Color(hex: $0) })
+                field("Category", category.name, dot: category.color.flatMap { Color(hex: $0) })
             }
             if let fixed = presentation.fixedExpenseName {
-                field("fixed expense", fixed)
+                field("Fixed expense", fixed)
             }
         }
     }
@@ -278,7 +250,7 @@ struct TransactionDetailView: View {
     private var tagsCard: some View {
         CardSection {
             VStack(alignment: .leading, spacing: 8) {
-                fieldLabel("tags")
+                fieldLabel("Tags")
                 FlowLayout(spacing: 6) {
                     ForEach(presentation.tags) { tag in
                         Label(tag.name, systemImage: "tag")
@@ -303,7 +275,7 @@ struct TransactionDetailView: View {
 
     private func noteCard(_ note: String) -> some View {
         CardSection {
-            field("description", note)
+            field("Description", note)
         }
     }
 

@@ -54,8 +54,8 @@ struct TransactionRow: View {
 
     private var isPending: Bool { presentation.isPending }
 
-    /// The avatar's size: Contacts' list size, which sets the row's height.
-    static let avatarSize: CGFloat = 44
+    /// The avatar's size, which sets the row's height.
+    static let avatarSize: CGFloat = 40
 
     private var titleColor: Color { isSelected ? .white : .appForeground }
     private var secondaryColor: Color { isSelected ? .white.opacity(0.85) : .appMutedForeground }
@@ -93,7 +93,7 @@ struct TransactionRow: View {
         VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(derived.title)
-                        .font(.body.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(titleColor)
                         .lineLimit(1)
                         .layoutProbe("transactionRow.title.\(derived.title)")
@@ -108,7 +108,7 @@ struct TransactionRow: View {
 
                 if let subtitle {
                     Text(subtitle)
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(secondaryColor)
                         .lineLimit(1)
                 }
@@ -130,13 +130,15 @@ struct TransactionRow: View {
                 widestNumber: widestNumber,
                 alwaysWhole: true
             )
-                .font(.body.weight(.semibold))
+                // The day header's net uses the same font, so the two share
+                // one aligned amount column down the list.
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(amountColor)
                 .lineLimit(1)
                 .layoutProbe("transactionRow.amount.\(derived.title)")
             if showDate {
                 Text(Self.dateFormatter.string(from: transaction.transactionDate))
-                    .font(.footnote)
+                    .font(.caption)
                     .foregroundStyle(secondaryColor)
             }
         }
@@ -269,7 +271,7 @@ struct TransactionRow: View {
                 .overlay(alignment: .bottomTrailing) { typeBadge }
         } else {
             Image(systemName: typeIcon)
-                .font(.title2)
+                .font(.title3)
                 .foregroundStyle(amountColor)
                 .frame(width: Self.avatarSize)
         }
