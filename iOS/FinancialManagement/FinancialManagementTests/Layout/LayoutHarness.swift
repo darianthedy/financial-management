@@ -62,12 +62,6 @@ struct LayoutSnapshot {
     let size: LayoutSize
     let fold: FoldContext
     let frames: [String: LayoutProbeRecorder.Record]
-    /// Accessibility labels of every visible UIKit view, e.g. system tab bar
-    /// items and sidebar rows, which `.layoutProbe` can't reach.
-    let labels: Set<String>
-    /// Visible `UITab` titles in order, depth-first (a section's title, then
-    /// its tabs), from the tab bar controller SwiftUI's `TabView` is built on.
-    let tabTitles: [String]
     let image: UIImage
 
     func frame(_ id: String, file: StaticString = #filePath, line: UInt = #line) throws -> CGRect {
@@ -92,21 +86,20 @@ enum LayoutHarness {
         return bounds.width >= size.size.width && bounds.height >= size.size.height
     }
 
-    /// How a list → detail screen shows at `size`:
-    /// - `.tiled`: side by side, in landscape. Regular width alone isn't
-    ///   enough: `SplitColumns` needs 660 pt, and on the Duo simulator the
-    ///   hosted scene's 84 pt rail leaves inner portrait 585 pt, which pushes,
-    ///   as beside an open sidebar on the device.
-    /// - `.overlay`: the system split in portrait, the list sliding over a
-    ///   full-screen detail, as in Notes (only the iPad gate run sees it).
-    /// - `.push`: compact, or too narrow to split.
-    enum SplitMode { case tiled, overlay, push }
+    /// How a list → detail screen shows at `size`, as `SplitColumns.tiles`:
+    /// - `.tiled`: side by side, on regular width in landscape. On the Duo
+    ///   simulator the hosted scene's 84 pt rail narrows the width, which still
+    ///   has to fit both columns.
+    /// - `.push`: portrait, compact, or too narrow to split.
+    enum SplitMode { case tiled, push }
 
     static func splitMode(_ size: LayoutSize) -> SplitMode {
-        guard size.horizontal == .regular else { return .push }
         let fits = (try? sceneFits(size)) ?? false
-        guard SplitColumns.tiles(width: size.size.width - (fits ? 0 : 84)) else { return .push }
-        return size.size.width > size.size.height ? .tiled : .overlay
+        let width = size.size.width - (fits ? 0 : 84)
+        let tiles = SplitColumns.tiles(
+            CGSize(width: width, height: size.size.height), regular: size.horizontal == .regular
+        )
+        return tiles ? .tiled : .push
     }
 
     static func tilesSplit(_ size: LayoutSize) -> Bool { splitMode(size) == .tiled }
@@ -166,57 +159,8 @@ enum LayoutHarness {
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
         return LayoutSnapshot(
-            size: size, fold: fold, frames: frames, labels: labels(in: window),
-            tabTitles: tabTitles(in: window), image: image
+            size: size, fold: fold, frames: frames, image: image
         )
-    }
-
-    /// Labels from three sources, because system bars aren't plain labelled
-    /// UIViews: view `accessibilityLabel`s, the accessibility element tree
-    /// (where SwiftUI and the Liquid Glass tab bar expose their items), and the
-    /// titles of the visible `UITab`s of any tab bar controller.
-    private static func labels(in window: UIWindow) -> Set<String> {
-        var out: Set<String> = []
-        var seen: Set<ObjectIdentifier> = []
-
-        func visit(_ object: NSObject, depth: Int) {
-            guard depth < 80, out.count < 2000, seen.insert(ObjectIdentifier(object)).inserted else { return }
-            if let view = object as? UIView, view.isHidden || view.alpha < 0.01 { return }
-            if let label = object.accessibilityLabel, !label.isEmpty { out.insert(label) }
-            if let elements = object.accessibilityElements {
-                for case let element as NSObject in elements { visit(element, depth: depth + 1) }
-            } else {
-                let count = object.accessibilityElementCount()
-                if count != NSNotFound, count > 0 {
-                    for i in 0..<min(count, 500) {
-                        if let element = object.accessibilityElement(at: i) as? NSObject { visit(element, depth: depth + 1) }
-                    }
-                }
-            }
-            if let view = object as? UIView {
-                for sub in view.subviews { visit(sub, depth: depth + 1) }
-            }
-        }
-        visit(window, depth: 0)
-
-        out.formUnion(tabTitles(in: window))
-        return out
-    }
-
-    private static func tabTitles(in window: UIWindow) -> [String] {
-        var out: [String] = []
-        func walk(_ tabs: [UITab]) {
-            for tab in tabs where !tab.isHidden {
-                out.append(tab.title)
-                if let group = tab as? UITabGroup { walk(group.children) }
-            }
-        }
-        func controllers(_ vc: UIViewController) {
-            if let tabs = (vc as? UITabBarController)?.tabs { walk(tabs) }
-            vc.children.forEach(controllers)
-        }
-        if let root = window.rootViewController { controllers(root) }
-        return out
     }
 
     private static func topUp(_ wanted: UIEdgeInsets, from actual: UIEdgeInsets) -> UIEdgeInsets {

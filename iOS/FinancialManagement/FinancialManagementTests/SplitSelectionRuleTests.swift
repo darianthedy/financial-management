@@ -98,17 +98,13 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 347)
     }
 
-    func testColumnVisibilityFollowsTheSelection() {
-        // Landscape: the list never goes away (build 150 hid it on each tap).
-        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: true), .doubleColumn)
-        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: true), .doubleColumn)
-        // Portrait: the list until something is picked, then the detail.
-        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: false), .doubleColumn)
-        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: false), .detailOnly)
-    }
-
-    func testSideBySideOnlyInLandscape() {
-        XCTAssertTrue(SplitColumns.sideBySide(CGSize(width: 951, height: 669)))
-        XCTAssertFalse(SplitColumns.sideBySide(CGSize(width: 669, height: 951)))
+    /// As in Music: list | detail only on regular width in landscape, with
+    /// room for both columns; portrait and compact push.
+    func testTilesOnlyInRegularLandscape() {
+        XCTAssertTrue(SplitColumns.tiles(CGSize(width: 951, height: 669), regular: true))
+        XCTAssertTrue(SplitColumns.tiles(CGSize(width: 867, height: 669), regular: true))
+        XCTAssertFalse(SplitColumns.tiles(CGSize(width: 669, height: 951), regular: true))
+        XCTAssertFalse(SplitColumns.tiles(CGSize(width: 951, height: 669), regular: false))
+        XCTAssertFalse(SplitColumns.tiles(CGSize(width: 640, height: 400), regular: true))
     }
 }

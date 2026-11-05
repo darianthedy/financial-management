@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Sign Out with its confirmation, at the end of the root's sidebar.
+/// Sign Out with its confirmation, at the end of the More list.
 struct SignOutButton: View {
     @State private var showingConfirm = false
 

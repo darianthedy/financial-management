@@ -1,26 +1,29 @@
 import SwiftUI
 import UIKit
 
-// List → detail scaffold (iPhone Duo design §3.2, implementation plan D2.0).
+// List → detail scaffold (iPhone Duo design §3.2, implementation plan D2.0,
+// docs/ios-tab-root-plan.md).
 //
-// The app's root (`ContentRootView`) is one Notes-style `NavigationSplitView`:
-// sections | list | detail. A list screen sits in its list column and applies
-// `.splitDetail(selection:…)` where it used `.navigationDestination(item:)`,
-// after its title, toolbar and overlay.
+// Accounts, Transactions and Budgets each sit in a `SplitRootContainer` at the
+// root of their tab. A list screen applies `.splitDetail(selection:…)` where
+// it used `.navigationDestination(item:)`, after its title, toolbar and
+// overlay.
 //
-// On regular width (`canTileSplitRoot`) the modifier fills the split's detail
-// column: the selected item, or a placeholder while nothing is selected. On
-// compact width the split collapses into one stack, and the modifier is the
-// same `navigationDestination(item:)` push as before. A screen pushed further
-// (e.g. inside a detail) always pushes.
+// As in Music, list | detail tiles only on the inner display in landscape:
+// regular width, wider than tall, and room for both columns. There the
+// modifier fills the split's detail column with the selected item, or a
+// placeholder while nothing is selected. Everywhere else (portrait, the outer
+// display, a narrow Split View, and screens pushed from More) the container
+// is a plain stack and the modifier is the same `navigationDestination(item:)`
+// push as before. A screen pushed further (e.g. inside a detail) always pushes.
 //
 // The modifier sits *inside* the screen, so the screen's own state (its view
-// model, the selection) lives above the modifier's switch. A fold flips the
-// switch, which re-creates the screen's content, which is why the selection is
-// restored from `@SceneStorage` and sheets use `.foldSafeSheet`.
+// model, the selection) lives above the modifier's switch. A fold or a rotation
+// flips the container, which re-creates the screen, which is why the selection
+// is restored from `@SceneStorage` and sheets use `.foldSafeSheet`.
 
 extension EnvironmentValues {
-    /// Set in the root split's list column on regular width: the next
+    /// Set in a tiled split's list column: the next
     /// `.splitDetail` below it fills the detail column. Reset in the detail, so
     /// nested screens push.
     @Entry var canTileSplitRoot = false
@@ -28,7 +31,7 @@ extension EnvironmentValues {
     /// highlighted (`.splitRowSelected(_:)`).
     @Entry var isSplitListColumn = false
     /// The split around a tiled list column, told whether something is
-    /// selected (portrait hides the list then).
+    /// selected.
     @Entry var splitDetailHost: SplitDetailHost? = nil
 }
 
@@ -39,47 +42,43 @@ final class SplitDetailHost {
     var hasSelection = false
 }
 
-/// Hosts one list screen the way the root's list and detail columns do: a
-/// two-column split on regular width, a stack on compact. Layout tests render
-/// screens in it; the app's root is `ContentRootView`.
-///
-/// Regular width that is still too narrow for two columns gets the compact
-/// stack too, rather than a crushed detail column.
+/// Hosts a tab's list screen: list | detail side by side when
+/// `SplitColumns.tiles(_:regular:)`, else a stack where the detail pushes.
+/// The app's tabs and the layout tests both use it.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The list takes half the width (`SplitColumns.listWidth(halves:)`).
+    var halves = false
     @ViewBuilder var content: Content
 
     var body: some View {
-        if horizontalSizeClass == .regular {
-            GeometryReader { geo in
-                if SplitColumns.tiles(width: geo.size.width) {
-                    ListDetailSplit { content }
-                } else {
-                    NavigationStack { content }
-                }
+        GeometryReader { geo in
+            if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
+                ListDetailSplit(halves: halves) { content }
+            } else {
+                NavigationStack { content }
             }
-        } else {
-            NavigationStack { content }
         }
     }
 }
 
-/// A list column beside a detail column, as in the root split without its
-/// sections: side by side in landscape; in portrait the detail fills the
-/// screen and the list slides over it until something is picked.
+/// A list column beside a detail column, both always on screen, as Music's
+/// Artists | artist on the inner display in landscape.
 private struct ListDetailSplit<ListColumn: View>: View {
     @Environment(\.foldContext) private var fold
     @State private var host = SplitDetailHost()
+    /// Both columns, always: the system toggle that hides the list is removed.
     @State private var visibility: NavigationSplitViewVisibility = .doubleColumn
+    let halves: Bool
     @ViewBuilder var list: ListColumn
 
     var body: some View {
         GeometryReader { geo in
-            let width = SplitColumns.listWidth(for: geo.size.width, fold: fold)
-            let sideBySide = SplitColumns.sideBySide(geo.size)
-            let split = NavigationSplitView(columnVisibility: $visibility) {
+            let width = SplitColumns.listWidth(for: geo.size.width, fold: fold, halves: halves)
+            NavigationSplitView(columnVisibility: $visibility) {
                 list
                     .splitListColumn(host)
+                    .toolbar(removing: .sidebarToggle)
                     .navigationSplitViewColumnWidth(
                         min: min(width, SplitColumns.minimumListWidth), ideal: width, max: width
                     )
@@ -87,19 +86,7 @@ private struct ListDetailSplit<ListColumn: View>: View {
                 // Filled by the list's `.splitDetail`.
                 Color.clear
             }
-            Group {
-                if sideBySide {
-                    split.navigationSplitViewStyle(.balanced)
-                } else {
-                    split.navigationSplitViewStyle(.prominentDetail)
-                }
-            }
-            .onChange(of: sideBySide, initial: true) { _, sideBySide in
-                visibility = SplitColumns.visibility(selected: host.hasSelection, sideBySide: sideBySide)
-            }
-            .onChange(of: host.hasSelection) { _, selected in
-                visibility = SplitColumns.visibility(selected: selected, sideBySide: sideBySide)
-            }
+            .navigationSplitViewStyle(.balanced)
         }
         .readsFoldContext()
     }
@@ -125,8 +112,8 @@ struct SplitPlaceholder: Equatable {
 }
 
 extension View {
-    /// Shows `detail(item)` for the selected item: in a tiled detail column on
-    /// regular width (see `SplitRootContainer`), else pushed, like
+    /// Shows `detail(item)` for the selected item: in a tiled detail column
+    /// (see `SplitRootContainer`), else pushed, like
     /// `navigationDestination(item:)`.
     ///
     /// - Parameters:
@@ -180,25 +167,16 @@ enum SplitColumns {
     static let minimumDetailWidth: CGFloat = 360
 
     /// Whether `width` fits a list and a detail column at their minimums
-    /// (660 pt): the inner display in landscape or portrait, but not a narrow
-    /// Split View.
+    /// (660 pt).
     static func tiles(width: CGFloat) -> Bool {
         width >= minimumListWidth + minimumDetailWidth
     }
 
-    /// Landscape: list | detail side by side. Portrait: the detail fills the
-    /// screen and the list slides over it, as in Notes.
-    static func sideBySide(_ size: CGSize) -> Bool {
-        size.width > size.height
-    }
-
-    /// The list's visibility beside the detail. Side by side, always both:
-    /// handing it to the system (`.automatic`) hid the list on every tap
-    /// (build 150). Portrait: the list over the detail until something is
-    /// picked. `.doubleColumn` is the list and the detail in both the root's
-    /// three columns (its sections hidden) and a two-column split.
-    static func visibility(selected: Bool, sideBySide: Bool) -> NavigationSplitViewVisibility {
-        sideBySide || !selected ? .doubleColumn : .detailOnly
+    /// Whether list | detail tiles at `size`, as in Music: regular width, in
+    /// landscape, with room for both columns. Portrait, the outer display and
+    /// a narrow Split View push instead.
+    static func tiles(_ size: CGSize, regular: Bool) -> Bool {
+        regular && size.width > size.height && tiles(width: size.width)
     }
 
     /// The list column's width: on the fold in book posture, when both regions
