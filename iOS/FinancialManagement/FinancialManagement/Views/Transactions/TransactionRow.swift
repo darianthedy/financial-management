@@ -35,6 +35,9 @@ struct TransactionRow: View {
     /// aligns its symbol/digits with the others (see `AmountColumnView`). Omit for
     /// a standalone row.
     var widestNumber: String?
+    /// The selected row of a tiled split, drawn as Contacts does: an accent
+    /// pill (the list's row background) with white text on it.
+    var isSelected = false
     /// Starts the spread flow. Offered only for un-spread expenses.
     var onCreateInstallment: (() -> Void)?
     /// Opens the edit form (web: the row's "Edit" menu item; the row tap also edits).
@@ -46,10 +49,16 @@ struct TransactionRow: View {
 
     /// Eligible only for an expense that is not already spread.
     private var canCreateInstallment: Bool {
-        transaction.type == .expense && !isSpread && onCreateInstallment != nil
+        presentation.canCreateInstallment && onCreateInstallment != nil
     }
 
-    private var isPending: Bool { transaction.status == .pending }
+    private var isPending: Bool { presentation.isPending }
+
+    /// The avatar's size: Contacts' list size, which sets the row's height.
+    static let avatarSize: CGFloat = 44
+
+    private var titleColor: Color { isSelected ? .white : .appForeground }
+    private var secondaryColor: Color { isSelected ? .white.opacity(0.85) : .appMutedForeground }
 
     /// The title's floor in the one-line row: narrow enough that avatar,
     /// title and an aligned "-Rp 2.147.230" fit a ~333 pt split column.
@@ -67,6 +76,8 @@ struct TransactionRow: View {
                 .layoutPriority(1)
         }
         .padding(.vertical, 6)
+        // Separators start under the title, past the avatar, as in Contacts.
+        .alignmentGuide(.listRowSeparatorLeading) { _ in Self.avatarSize + 12 }
         // Long-press (or secondary click) lifts a preview of the transaction
         // with its actions above it, as Notes does; tap still edits and the
         // list's swipe still deletes.
@@ -82,23 +93,23 @@ struct TransactionRow: View {
         VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(derived.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.appForeground)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(titleColor)
                         .lineLimit(1)
                         .layoutProbe("transactionRow.title.\(derived.title)")
                     if isPending { pendingBadge }
                     if isSpread {
                         Image(systemName: "square.grid.2x2.fill")
                             .font(.caption2)
-                            .foregroundStyle(Color.appPrimary)
+                            .foregroundStyle(isSelected ? Color.white : Color.appPrimary)
                             .accessibilityLabel("Spread across budgets")
                     }
                 }
 
                 if let subtitle {
                     Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(Color.appMutedForeground)
+                        .font(.subheadline)
+                        .foregroundStyle(secondaryColor)
                         .lineLimit(1)
                 }
 
@@ -119,14 +130,14 @@ struct TransactionRow: View {
                 widestNumber: widestNumber,
                 alwaysWhole: true
             )
-                .font(.subheadline.weight(.semibold))
+                .font(.body.weight(.semibold))
                 .foregroundStyle(amountColor)
                 .lineLimit(1)
                 .layoutProbe("transactionRow.amount.\(derived.title)")
             if showDate {
                 Text(Self.dateFormatter.string(from: transaction.transactionDate))
-                    .font(.caption)
-                    .foregroundStyle(Color.appMutedForeground)
+                    .font(.footnote)
+                    .foregroundStyle(secondaryColor)
             }
         }
     }
@@ -190,7 +201,7 @@ struct TransactionRow: View {
                 alwaysWhole: true
             )
             .font(.title.weight(.bold))
-            .foregroundStyle(amountColor)
+            .foregroundStyle(presentation.amountColor)
 
             if let description = transaction.description, !description.isEmpty {
                 Text(description)
@@ -229,14 +240,7 @@ struct TransactionRow: View {
         .background(Color.appCard)
     }
 
-    /// "BCA → BCA VISA SQ Infinite" for a transfer, else the account's name.
-    private var accountLine: String? {
-        guard let account else { return transferAccountName.map { "→ \($0)" } }
-        if transaction.type == .transfer, let transferAccountName {
-            return "\(account.name) → \(transferAccountName)"
-        }
-        return account.name
-    }
+    private var accountLine: String? { presentation.accountLine }
 
     private func previewDetail(_ text: String, systemImage: String) -> some View {
         Label {
@@ -261,20 +265,20 @@ struct TransactionRow: View {
     @ViewBuilder
     private var avatar: some View {
         if let account {
-            AccountAvatar(imageUrl: account.imageUrl, accountType: account.type, size: 40)
+            AccountAvatar(imageUrl: account.imageUrl, accountType: account.type, size: Self.avatarSize)
                 .overlay(alignment: .bottomTrailing) { typeBadge }
         } else {
             Image(systemName: typeIcon)
-                .font(.title3)
+                .font(.title2)
                 .foregroundStyle(amountColor)
-                .frame(width: 40)
+                .frame(width: Self.avatarSize)
         }
     }
 
     private var typeBadge: some View {
         Image(systemName: typeIcon)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(amountColor)
+            .foregroundStyle(presentation.amountColor)
             .padding(2)
             .background(Circle().fill(Color.appCard))
             .overlay(Circle().strokeBorder(Color.appBorder, lineWidth: 1))
@@ -363,36 +367,17 @@ struct TransactionRow: View {
         .overlay(Capsule().strokeBorder(border, lineWidth: 1))
     }
 
-    // MARK: - Title derivation (web: deriveTitle)
+    // MARK: - Presentation (shared with the detail view)
 
-    private struct DerivedTitle {
-        let title: String
-        /// The category was promoted to the title, so drop its chip.
-        let usedCategory: Bool
-        /// The fixed expense was promoted to the title, so drop its chip.
-        let usedFixed: Bool
-        /// The description became the title, so don't repeat it as a subtitle.
-        let titleIsDescription: Bool
+    private var presentation: TransactionPresentation {
+        TransactionPresentation(
+            transaction: transaction, account: account, category: category,
+            transferAccountName: transferAccountName, tags: tags,
+            budgetName: budgetName, fixedExpenseName: fixedExpenseName, isSpread: isSpread
+        )
     }
 
-    /// Title precedence: budget (non-transfer) → fixed expense → category →
-    /// description → the type word.
-    private var derived: DerivedTitle {
-        if let budgetName, transaction.type != .transfer {
-            return DerivedTitle(title: budgetName, usedCategory: false, usedFixed: false, titleIsDescription: false)
-        }
-        if let fixedExpenseName {
-            return DerivedTitle(title: fixedExpenseName, usedCategory: false, usedFixed: true, titleIsDescription: false)
-        }
-        if let category {
-            return DerivedTitle(title: category.name, usedCategory: true, usedFixed: false, titleIsDescription: false)
-        }
-        if let description = transaction.description, !description.isEmpty {
-            return DerivedTitle(title: description, usedCategory: false, usedFixed: false, titleIsDescription: true)
-        }
-        return DerivedTitle(title: transaction.type.rawValue.capitalized,
-                            usedCategory: false, usedFixed: false, titleIsDescription: false)
-    }
+    private var derived: TransactionPresentation.DerivedTitle { presentation.derived }
 
     /// The second line. In the split list column a transfer shows its
     /// destination there (plain text, not a chip) instead of the description.
@@ -407,38 +392,12 @@ struct TransactionRow: View {
 
     // MARK: - Type styling
 
-    private var typeIcon: String {
-        switch transaction.type {
-        case .income: return "arrow.down.circle.fill"
-        case .expense: return "arrow.up.circle.fill"
-        case .transfer: return "arrow.left.arrow.right.circle.fill"
-        }
-    }
+    private var typeIcon: String { presentation.typeIcon }
 
-    /// Amount/direction color, matching web `amountColor`: income → success,
-    /// expense → danger, transfer → foreground.
-    private var amountColor: Color {
-        switch transaction.type {
-        case .income: return .appSuccess
-        case .expense: return .appDanger
-        case .transfer: return .appForeground
-        }
-    }
+    /// The type color, or white on the selected (accent-filled) row.
+    private var amountColor: Color { isSelected ? .white : presentation.amountColor }
 
-    /// The leading sign for the amount (the magnitude is rendered by
-    /// `AmountColumnView`). Transfers are unsigned; income is `+` (a negative
-    /// income reduces cash, so `-`); an expense is `-` (a negative expense — a
-    /// refund — adds cash back, so `+`).
-    private var amountSign: String {
-        switch transaction.type {
-        case .transfer:
-            return ""
-        case .income:
-            return transaction.amount < 0 ? "-" : "+"
-        case .expense:
-            return transaction.amount < 0 ? "+" : "-"
-        }
-    }
+    private var amountSign: String { presentation.amountSign }
 
     /// Web date format: "MMM d, yyyy" (e.g. "Jun 3, 2026").
     private static let dateFormatter: DateFormatter = {
