@@ -471,7 +471,11 @@ struct TransactionListView: View {
         .staysClearOfTrailingBar()
         .layoutProbe("transactions.list")
         .overlay {
-            if viewModel.transactions.isEmpty && !viewModel.isLoading {
+            if viewModel.failedToLoad {
+                LoadFailedView(title: "Couldn't Load Transactions", message: viewModel.errorMessage) {
+                    await viewModel.load()
+                }
+            } else if viewModel.transactions.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     title: "No Transactions",
                     message: viewModel.filters.isEmpty

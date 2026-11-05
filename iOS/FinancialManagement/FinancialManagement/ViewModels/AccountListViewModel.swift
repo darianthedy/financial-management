@@ -14,17 +14,38 @@ final class AccountListViewModel {
     private let supabase = SupabaseService.shared.client
     private let realtime = RealtimeTableWatch()
 
+    /// Bumped on every load so a slower, older load can't overwrite a newer one.
+    private var loadGeneration = 0
+
     func load() async {
-        isLoading = true
-        defer { isLoading = false }
+        loadGeneration += 1
+        let gen = loadGeneration
+        if accounts.isEmpty { isLoading = true }
+        // Unstructured, so cancelling the caller can't abort the load: on the
+        // outer display the collapsed split can start the list's `.task` and
+        // cancel it straight away, which left the list empty (device report).
+        await Task { await self.performLoad(generation: gen) }.value
+    }
+
+    private func performLoad(generation gen: Int) async {
+        defer { if gen == loadGeneration { isLoading = false } }
         do {
-            accounts = try await repository.getAll()
-            let allBalances = try await loadCurrentBalances()
-            balances = Dictionary(uniqueKeysWithValues: allBalances.map { ($0.accountId, $0.currentBalance) })
+            async let fetchedBalances = loadCurrentBalances()
+            let fetched = try await repository.getAll()
+            let allBalances = try await fetchedBalances
+            guard gen == loadGeneration else { return }
+            accounts = fetched
+            balances = Dictionary(allBalances.map { ($0.accountId, $0.currentBalance) }, uniquingKeysWith: { a, _ in a })
+            errorMessage = nil
         } catch {
+            guard gen == loadGeneration else { return }
             errorMessage = error.localizedDescription
         }
     }
+
+    /// Loading failed and nothing is on screen: the list offers a retry rather
+    /// than claiming there are no accounts.
+    var failedToLoad: Bool { accounts.isEmpty && !isLoading && errorMessage != nil }
 
     private func loadCurrentBalances() async throws -> [CurrentBalanceRow] {
         try await supabase

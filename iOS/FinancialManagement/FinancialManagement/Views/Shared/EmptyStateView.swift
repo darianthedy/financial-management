@@ -34,3 +34,21 @@ struct EmptyStateView<Actions: View>: View {
         }
     }
 }
+
+/// A list's first load failed: says so and offers a retry, instead of the
+/// screen's "nothing here yet" state, which would be wrong.
+struct LoadFailedView: View {
+    let title: String
+    let message: String?
+    let retry: () async -> Void
+
+    var body: some View {
+        EmptyStateView(
+            title: title,
+            message: message ?? "Check your connection and try again.",
+            systemImage: "exclamationmark.triangle"
+        ) {
+            Button("Try Again") { Task { await retry() } }
+        }
+    }
+}

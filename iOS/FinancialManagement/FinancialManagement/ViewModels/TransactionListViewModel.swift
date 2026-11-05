@@ -145,6 +145,14 @@ final class TransactionListViewModel {
         loadGeneration += 1
         let gen = loadGeneration
         if transactions.isEmpty { isLoading = true }
+        // Unstructured, so cancelling the caller can't abort the load. On the
+        // outer display the collapsed split can start the list's `.task` and
+        // cancel it straight away; that cancelled load was the newest, so it
+        // discarded the good one and left the list empty (device report).
+        await Task { await self.performLoad(generation: gen) }.value
+    }
+
+    private func performLoad(generation gen: Int) async {
         defer { if gen == loadGeneration { isLoading = false } }
 
         do {
@@ -156,12 +164,17 @@ final class TransactionListViewModel {
             guard gen == loadGeneration else { return }
             transactions = result.rows
             totalCount = result.total
+            errorMessage = nil
             await refreshSpreadFlags(generation: gen)
         } catch {
             guard gen == loadGeneration else { return }
             errorMessage = error.localizedDescription
         }
     }
+
+    /// The first page failed and nothing is on screen: the list offers a retry
+    /// rather than claiming there are no transactions.
+    var failedToLoad: Bool { transactions.isEmpty && !isLoading && errorMessage != nil }
 
     func loadMore() async {
         guard canLoadMore, !isLoadingMore, !isLoading else { return }
