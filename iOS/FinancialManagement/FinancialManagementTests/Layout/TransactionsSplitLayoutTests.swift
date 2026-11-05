@@ -32,10 +32,10 @@ final class TransactionsSplitLayoutTests: XCTestCase {
                 .environment(appState)
                 .environment(ThemeManager()),
             at: size,
-            until: {
-                $0[row] != nil && (selected == nil || $0["split.detail"] != nil)
-                    && (!showsSummary || $0["transactions.summary"] != nil)
-                    && (detailProbe.map { probe in $0[probe] != nil } ?? true)
+            until: { frames in
+                frames[row] != nil && (selected == nil || frames["split.detail"] != nil)
+                    && (!showsSummary || frames["transactions.summary"] != nil)
+                    && (detailProbe.map { frames[$0] != nil } ?? true)
             }
         )
     }
