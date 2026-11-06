@@ -46,12 +46,12 @@ struct AmountColumnView: View {
             }
             .monospacedDigit()
             .lineLimit(1)
-            .fixedSize(horizontal: keepsWholeAmount, vertical: false)
+            .modifier(WholeAmount(isOn: keepsWholeAmount))
         } else {
             Text(sign + parts.symbol + parts.number)
                 .monospacedDigit()
                 .lineLimit(1)
-                .fixedSize(horizontal: keepsWholeAmount, vertical: false)
+                .modifier(WholeAmount(isOn: keepsWholeAmount))
         }
     }
 
@@ -67,5 +67,23 @@ struct AmountColumnView: View {
     /// Shared with the rows and headers that rearrange around a whole amount.
     static func keepsWholeAmount(sizeClass: UserInterfaceSizeClass?, inSplitListColumn: Bool) -> Bool {
         sizeClass == .regular || inSplitListColumn
+    }
+}
+
+/// Regular width: the amount is drawn at its full size, always. A call site's
+/// `minimumScaleFactor` would otherwise let each row shrink by a different
+/// amount whenever its card is laid out tight, so a column of amounts comes
+/// out in mixed sizes with the symbol and digits out of line.
+private struct WholeAmount: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content
+                .minimumScaleFactor(1)
+                .fixedSize()
+        } else {
+            content
+        }
     }
 }

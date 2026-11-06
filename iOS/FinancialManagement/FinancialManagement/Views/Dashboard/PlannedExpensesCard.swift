@@ -10,6 +10,7 @@ import SwiftUI
 /// uppercase-captioned Budgets section (bars colored `primary`/`danger`) and a
 /// Fixed Expenses section. Budgets are ordered by urgency (most-over first).
 struct PlannedExpensesCard: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let budgets: [BudgetProgress]
     let fixedExpenses: [FixedExpense]
     /// Actual amount paid per fixed expense (Σ linked transactions), keyed by id.
@@ -159,23 +160,17 @@ struct PlannedExpensesCard: View {
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1)
                 Spacer()
-                HStack(spacing: 2) {
-                    AmountColumnView(
-                        minorUnits: budget.spent,
-                        currencyCode: currencyCode,
-                        widestNumber: widestAmountBody
-                    )
-                    Text("/")
-                    AmountColumnView(
-                        minorUnits: eff,
-                        currencyCode: currencyCode,
-                        widestNumber: widestAmountBody
-                    )
-                }
-                .font(.caption)
-                .foregroundStyle(overspent ? Color.appDanger : Color.appMutedForeground)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                // A spent-of-budget fraction, not a column: the two amounts sit
+                // snugly around the slash rather than in padded column slots
+                // (which left a wide gap before a small spend like "0").
+                Text("\(budget.spent.asCurrency(code: currencyCode)) / \(eff.asCurrency(code: currencyCode))")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(overspent ? Color.appDanger : Color.appMutedForeground)
+                    .lineLimit(1)
+                    .minimumScaleFactor(horizontalSizeClass == .regular ? 1 : 0.7)
+                    // The budget name truncates before the money does.
+                    .layoutPriority(1)
             }
 
             paceBar(
