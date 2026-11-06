@@ -42,8 +42,10 @@ final class FoldRestoreLayoutTests: XCTestCase {
     /// Selects `storedID` in the tiled split, then folds and unfolds
     /// `times` times, checking after each fold that the outer display shows
     /// the detail. Failures carry the restore's trace.
-    private func foldRepeatedly<Content: View>(
-        selecting storedID: String, key: String, times: Int = 4, @ViewBuilder _ content: () -> Content
+    private func foldRepeatedly<Content: View, Detail: View>(
+        selecting storedID: String, key: String, times: Int = 4,
+        @ViewBuilder detail: @escaping (String, @escaping () -> Void) -> Detail,
+        @ViewBuilder _ content: () -> Content
     ) async throws {
         let appState = AppState()
         await appState.loadCurrencyData()
@@ -54,7 +56,7 @@ final class FoldRestoreLayoutTests: XCTestCase {
 
         let host = UIHostingController(
             rootView: Root(display: display) {
-                SplitRootContainer(storageKey: key, content: content)
+                SplitRootContainer(storageKey: key, detail: detail, content: content)
             }
             .environment(\.splitSelectionStore, store)
             .environment(\.transactionDrafts, TransactionEditorDrafts())
@@ -109,14 +111,21 @@ final class FoldRestoreLayoutTests: XCTestCase {
     }
 
     func testAccountsOpensOnTheDetailAfterAFold() async throws {
-        try await foldRepeatedly(selecting: "t:\(bca.uuidString)", key: "accounts") {
+        try await foldRepeatedly(selecting: "t:\(bca.uuidString)", key: "accounts") { id, _ in
+            if let accountId = UUID(uuidString: id) { AccountDetailView(accountId: accountId) }
+        } _: {
             AccountListView()
         }
     }
 
     func testTransactionsOpensOnTheDetailAfterAFold() async throws {
         let model = TransactionListViewModel()
-        try await foldRepeatedly(selecting: "t:\(topUp.uuidString)", key: "transactions") {
+        let drafts = TransactionEditorDrafts()
+        try await foldRepeatedly(selecting: "t:\(topUp.uuidString)", key: "transactions") { id, close in
+            if let transactionId = UUID(uuidString: id) {
+                TransactionDetailScreen(id: transactionId, model: model, drafts: drafts, onClose: close)
+            }
+        } _: {
             TransactionListView(model: model, isTabRoot: true)
         }
     }

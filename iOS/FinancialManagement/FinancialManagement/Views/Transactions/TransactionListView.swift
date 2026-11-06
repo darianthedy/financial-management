@@ -82,6 +82,11 @@ struct TransactionListView: View {
     /// `editing` opens it straight into the form (the row menu's Edit).
     private func open(_ txn: Transaction, editing: Bool = false) {
         editOnOpen = editing ? txn.id : nil
+        // The draft marks the editor open, which is how a detail the tab's
+        // stack builds itself (`TransactionDetailScreen`) knows to start in it.
+        if editing, isTabRoot {
+            _ = drafts.model(for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
+        }
         hasPickedHere = true
         if isTabRoot {
             selection.request(txn.id)
@@ -199,48 +204,16 @@ struct TransactionListView: View {
         return ids + [draft.id]
     }
 
-    /// The selected transaction's detail. Its editor works on the shared
-    /// draft, so a fold / unfold keeps the edits (and reopens it editing).
-    @ViewBuilder
+    /// The selected transaction's detail (`TransactionDetailScreen`).
     private func detailView(for id: UUID) -> some View {
-        if let txn = viewModel.transactions.first(where: { $0.id == id }) ?? drafts.transaction(withId: id) {
-            let shown = presentation(for: txn)
-            TransactionDetailView(
-                presentation: shown,
-                // The editor was open (a draft exists until it closes), so a
-                // fold or a rotation reopens it, with or without edits.
-                startsEditing: editOnOpen == id || drafts.transaction(withId: id) != nil,
-                draft: {
-                    drafts.model(for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
-                },
-                isDirty: $selection.isDirty,
-                onSaved: { await viewModel.load() },
-                onEditingEnded: {
-                    drafts.discard()
-                    if editOnOpen == id { editOnOpen = nil }
-                },
-                onSetStatus: { await viewModel.setStatus(txn, to: $0) },
-                onDelete: {
-                    await viewModel.deleteTransaction(txn)
-                    // A failed delete keeps the row (and its error); stay put.
-                    guard !viewModel.transactions.contains(where: { $0.id == id }) else { return }
-                    if drafts.transaction(withId: id) != nil { drafts.discard() }
-                    closeDetail()
-                }
-            )
-        }
-    }
-
-    private func presentation(for txn: Transaction) -> TransactionPresentation {
-        TransactionPresentation(
-            transaction: txn,
-            account: viewModel.account(for: txn),
-            category: viewModel.category(for: txn),
-            transferAccountName: viewModel.transferAccount(for: txn)?.name,
-            tags: viewModel.tags(for: txn),
-            budgetName: viewModel.budgetName(for: txn),
-            fixedExpenseName: viewModel.fixedExpenseName(for: txn),
-            isSpread: viewModel.isSpread(txn)
+        TransactionDetailScreen(
+            id: id,
+            model: viewModel,
+            drafts: drafts,
+            startsEditing: editOnOpen == id,
+            isDirty: $selection.isDirty,
+            onEditingEnded: { if editOnOpen == id { editOnOpen = nil } },
+            onClose: closeDetail
         )
     }
 

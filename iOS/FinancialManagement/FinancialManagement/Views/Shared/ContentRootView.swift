@@ -42,15 +42,31 @@ struct ContentRootView: View {
                 NavigationStack { DashboardView() }
             }
             Tab(AppSection.accounts.title, systemImage: AppSection.accounts.systemImage, value: RootTab.accounts) {
-                SplitRootContainer(storageKey: "accounts") { AccountListView() }
+                SplitRootContainer(storageKey: "accounts") { id, _ in
+                    if let accountId = UUID(uuidString: id) { AccountDetailView(accountId: accountId) }
+                } content: {
+                    AccountListView()
+                }
             }
             Tab(AppSection.transactions.title, systemImage: AppSection.transactions.systemImage, value: RootTab.transactions) {
-                SplitRootContainer(storageKey: "transactions") {
+                SplitRootContainer(storageKey: "transactions") { id, close in
+                    if let transactionId = UUID(uuidString: id) {
+                        TransactionDetailScreen(
+                            id: transactionId, model: transactionList, drafts: transactionDrafts, onClose: close
+                        )
+                    }
+                } content: {
                     TransactionListView(model: transactionList, isTabRoot: true)
                 }
             }
             Tab(AppSection.budgets.title, systemImage: AppSection.budgets.systemImage, value: RootTab.budgets) {
-                SplitRootContainer(storageKey: "budgets") { BudgetListView() }
+                SplitRootContainer(storageKey: "budgets") { id, _ in
+                    if let drilldown = BudgetDrilldown(id: id) {
+                        DrilldownTransactionList(screen: "budgets", item: drilldown.id, filters: drilldown.filters)
+                    }
+                } content: {
+                    BudgetListView()
+                }
             }
             Tab("More", systemImage: "ellipsis", value: RootTab.more) {
                 NavigationStack(path: $morePath) {

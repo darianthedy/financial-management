@@ -69,15 +69,32 @@ struct SplitRootContainer<Content: View>: View {
     /// here so a stack that pushes is created with the selected detail
     /// already on its path (`SplitPushStack`).
     @SceneStorage private var storedID: String?
-    private let restoresSelection: Bool
+    /// Builds a pushed item's detail from its stored ID (and a way back).
+    private let pushedDetail: ((String, @escaping () -> Void) -> AnyView)?
     private let content: Content
 
-    /// - Parameter storageKey: the list's `.splitDetail` storage key. Without
-    ///   one, the stack starts on the list and `.splitDetail` pushes itself.
-    init(storageKey: String? = nil, @ViewBuilder content: () -> Content) {
-        _storedID = SceneStorage("split.\(storageKey ?? "")")
+    /// A list whose `.splitDetail` pushes and tiles itself (layout tests).
+    init(@ViewBuilder content: () -> Content) {
+        _storedID = SceneStorage("split.")
+        storageKey = nil
+        pushedDetail = nil
+        self.content = content()
+    }
+
+    /// A tab's list. When it pushes, the stack opens on the stored selection,
+    /// which it builds with `detail` (an item's stored ID, and a closure that
+    /// goes back to the list): the list under a pushed detail isn't built
+    /// until it's shown, so the stack can't rely on it for the detail.
+    ///
+    /// - Parameter storageKey: the list's `.splitDetail` storage key.
+    init<Detail: View>(
+        storageKey: String,
+        @ViewBuilder detail: @escaping (_ id: String, _ close: @escaping () -> Void) -> Detail,
+        @ViewBuilder content: () -> Content
+    ) {
+        _storedID = SceneStorage("split.\(storageKey)")
         self.storageKey = storageKey
-        restoresSelection = storageKey != nil
+        pushedDetail = { id, close in AnyView(detail(id, close)) }
         self.content = content()
     }
 
@@ -85,8 +102,8 @@ struct SplitRootContainer<Content: View>: View {
         GeometryReader { geo in
             if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
                 ListDetailSplit { content }
-            } else if restoresSelection {
-                SplitPushStack(restoring: currentStoredID) { content }
+            } else if let pushedDetail {
+                SplitPushStack(restoring: currentStoredID, detail: pushedDetail) { content }
             } else {
                 NavigationStack { content }
             }
@@ -152,22 +169,35 @@ extension EnvironmentValues {
 
 /// A stack whose path starts with the stored selection, the state
 /// restoration `NavigationStack(path:)` is built for: a fold, an unfold or
-/// a rotation re-creates the stack already showing the detail, instead of
-/// pushing it once the list is on screen.
+/// a rotation re-creates the stack already showing the detail. Its
+/// destination is declared here, at the stack's root, so it exists whether
+/// or not the list under the detail has been built.
 private struct SplitPushStack<Content: View>: View {
     @State private var path: [SplitPushID]
+    let detail: (String, @escaping () -> Void) -> AnyView
     let content: Content
 
-    init(restoring storedID: String?, @ViewBuilder content: () -> Content) {
+    init(
+        restoring storedID: String?,
+        detail: @escaping (String, @escaping () -> Void) -> AnyView,
+        @ViewBuilder content: () -> Content
+    ) {
         let stored = SplitSelectionRule.Stored(rawValue: storedID)
         _path = State(initialValue: stored.map { [SplitPushID(id: $0.id)] } ?? [])
         splitTrace("push stack init stored=\(storedID ?? "nil")")
+        self.detail = detail
         self.content = content()
     }
 
     var body: some View {
+        let path = $path
         NavigationStack(path: $path) {
-            content.environment(\.splitPushPath, $path)
+            content
+                .environment(\.splitPushPath, $path)
+                .navigationDestination(for: SplitPushID.self) { pushed in
+                    detail(pushed.id) { path.wrappedValue = [] }
+                        .layoutProbe("split.detail")
+                }
         }
     }
 }
@@ -403,16 +433,17 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                 content.onChange(of: selection.map(id), initial: true) { publish() }
             } else if let pushPath {
                 // Pushed by value on the stack's path, which a re-created
-                // stack starts with (`SplitPushStack`).
+                // stack starts with and builds itself (`SplitPushStack`).
                 content
-                    .navigationDestination(for: SplitPushID.self) { pushed in
-                        pushedDetail(pushed.id)
-                    }
                     .onChange(of: pushPath.wrappedValue) { old, path in
                         splitTrace("\(storageKey) path \(old.map(\.id)) -> \(path.map(\.id)) selection=\(selection.map(id) ?? "nil")")
                         // Back: the list is on screen again with nothing
                         // pushed (it forgets the selection in `onAppear`).
                         if path.isEmpty, selection != nil { selection = nil }
+                        if let pushed = path.last?.id, selection.map(id) != pushed,
+                           let item = items.first(where: { id($0) == pushed }) {
+                            selection = item
+                        }
                     }
             } else {
                 // Inside another stack (More): pushed by the selection.
@@ -448,7 +479,10 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         }
         .onAppear {
             splitTrace("\(storageKey) appear tiled=\(canTile) selection=\(selection.map(id) ?? "nil") restored=\(hasRestored)")
-            if !canTile, selection == nil, hasRestored, pushPath?.wrappedValue.isEmpty ?? true {
+            if let pushPath {
+                // On screen with nothing pushed: Back, or nothing chosen.
+                if pushPath.wrappedValue.isEmpty { forgetSelection() }
+            } else if !canTile, selection == nil, hasRestored {
                 forgetSelection()
             }
         }
@@ -474,16 +508,6 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         store?.value(for: storageKey) ?? storedID
     }
 
-    /// The detail of the item `pushedID` names, once it's in the list.
-    @ViewBuilder
-    private func pushedDetail(_ pushedID: String) -> some View {
-        if let item = items.first(where: { id($0) == pushedID }) {
-            detail(item).layoutProbe("split.detail")
-        } else {
-            ProgressView()
-        }
-    }
-
     /// Hands the tiled split the selected item's detail, or the placeholder.
     private func publish() {
         guard let host else { return }
@@ -500,7 +524,17 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         // A push restore waits for `.task` (e.g. a fold onto the outer display
         // with the Transactions list already loaded, which reports its items
         // before its stack exists).
-        if !canTile, pushPath == nil, current == nil, !hasRestored, !hasAppeared { return }
+        if let pushPath {
+            // The stack restores (its initial path); the list follows it.
+            let pushed = pushPath.wrappedValue.last?.id
+            let wanted = pushed.flatMap { pushed in available.contains(pushed) ? pushed : nil }
+            splitTrace("\(storageKey) reconcile pushed=\(pushed ?? "nil") current=\(current ?? "nil") available=\(available.count)")
+            if !available.isEmpty { hasRestored = true }
+            guard pushed != nil, wanted != current, let wanted else { return }
+            selection = items.first { id($0) == wanted }
+            return
+        }
+        if !canTile, current == nil, !hasRestored, !hasAppeared { return }
         let resolved = SplitSelectionRule.resolve(
             selected: current, stored: SplitSelectionRule.Stored(rawValue: currentStoredID),
             available: available, restoring: !hasRestored, isTiled: canTile
