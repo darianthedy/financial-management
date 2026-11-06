@@ -46,6 +46,8 @@ final class LayoutProbeRecorder {
     /// Drop a probe's record when its view disappears, for tests that ask
     /// what is on screen now rather than what was shown.
     var dropsDisappeared = false
+    /// Steps a test asked to trace (`splitTrace`).
+    var trace: [String] = []
     private(set) var records: [String: Record] = [:]
 
     func reset() { records = [:] }

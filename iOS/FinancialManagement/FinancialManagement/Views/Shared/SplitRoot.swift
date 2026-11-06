@@ -135,7 +135,7 @@ extension EnvironmentValues {
 @MainActor
 func splitTrace(_ message: @autoclosure () -> String) {
     #if DEBUG
-    if LayoutProbeRecorder.shared.dropsDisappeared { print("SPLIT-TRACE \(message())") }
+    if LayoutProbeRecorder.shared.dropsDisappeared { LayoutProbeRecorder.shared.trace.append(message()) }
     #endif
 }
 

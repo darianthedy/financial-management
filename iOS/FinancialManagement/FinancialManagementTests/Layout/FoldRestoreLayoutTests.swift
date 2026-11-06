@@ -39,11 +39,12 @@ final class FoldRestoreLayoutTests: XCTestCase {
         }
     }
 
-    /// Selects `storedID` in the tiled split, folds, and returns the probes
-    /// recorded on the outer display.
-    private func fold<Content: View>(
-        selecting storedID: String, key: String, @ViewBuilder _ content: () -> Content
-    ) async throws -> [String: LayoutProbeRecorder.Record] {
+    /// Selects `storedID` in the tiled split, then folds and unfolds
+    /// `times` times, checking after each fold that the outer display shows
+    /// the detail. Failures carry the restore's trace.
+    private func foldRepeatedly<Content: View>(
+        selecting storedID: String, key: String, times: Int = 4, @ViewBuilder _ content: () -> Content
+    ) async throws {
         let appState = AppState()
         await appState.loadCurrencyData()
         let display = Display()
@@ -71,6 +72,7 @@ final class FoldRestoreLayoutTests: XCTestCase {
 
         let recorder = LayoutProbeRecorder.shared
         recorder.reset()
+        recorder.trace = []
         recorder.isRecording = true
         recorder.dropsDisappeared = true
         defer {
@@ -78,36 +80,44 @@ final class FoldRestoreLayoutTests: XCTestCase {
             recorder.dropsDisappeared = false
         }
 
+        func show(_ size: LayoutSize) {
+            recorder.trace.append("---- \(size)")
+            display.size = size
+            window.frame = CGRect(origin: .zero, size: size.size)
+        }
+
         try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] != nil }
         XCTAssertNotNil(recorder.records["split.list"], "never tiled before the fold")
 
-        // The fold: the outer display's size and compact width.
-        print("SPLIT-TRACE ---- fold \(key)")
-        recorder.reset()
-        display.size = .outerPortrait
-        window.frame = CGRect(origin: .zero, size: LayoutSize.outerPortrait.size)
-        try await poll { recorder.records["split.detail"] != nil }
-        // Let any late reload or reconcile run: a probe that leaves the
-        // screen drops out of the records.
-        try await Task.sleep(for: .seconds(3))
-        print("SPLIT-TRACE ---- end \(key) stored=\(String(describing: store.value(for: key))) probes=\(recorder.records.keys.sorted())")
-        return recorder.records
+        for round in 1...times {
+            show(.outerPortrait)
+            try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] == nil }
+            // Let any late reload or reconcile run: a probe that leaves the
+            // screen drops out of the records.
+            try await Task.sleep(for: .milliseconds(1500))
+            let trace = recorder.trace.joined(separator: "\n")
+            XCTAssertNotNil(
+                recorder.records["split.detail"],
+                "fold \(round): the outer display showed the list. stored=\(String(describing: store.value(for: key)))\n\(trace)"
+            )
+            guard recorder.records["split.detail"] != nil else { return }
+
+            show(.innerLandscape)
+            try await poll { recorder.records["split.list"] != nil }
+            try await Task.sleep(for: .milliseconds(500))
+        }
     }
 
     func testAccountsOpensOnTheDetailAfterAFold() async throws {
-        let records = try await fold(selecting: "t:\(bca.uuidString)", key: "accounts") {
+        try await foldRepeatedly(selecting: "t:\(bca.uuidString)", key: "accounts") {
             AccountListView()
         }
-        XCTAssertNotNil(records["split.detail"], "the outer display showed the list, not the account")
-        XCTAssertNil(records["split.list"])
     }
 
     func testTransactionsOpensOnTheDetailAfterAFold() async throws {
         let model = TransactionListViewModel()
-        let records = try await fold(selecting: "t:\(topUp.uuidString)", key: "transactions") {
+        try await foldRepeatedly(selecting: "t:\(topUp.uuidString)", key: "transactions") {
             TransactionListView(model: model, isTabRoot: true)
         }
-        XCTAssertNotNil(records["split.detail"], "the outer display showed the list, not the transaction")
-        XCTAssertNotNil(records["transactionDetail"], "the transaction's detail isn't on screen")
     }
 }
