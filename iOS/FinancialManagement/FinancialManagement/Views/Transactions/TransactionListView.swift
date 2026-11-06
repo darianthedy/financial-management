@@ -647,9 +647,9 @@ struct TransactionListView: View {
         .padding(.horizontal, Self.rowInset)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Opaque backdrop so the pinned header doesn't let the rows scrolling
-        // underneath it show through.
-        .background(Color.appBackground)
+        // No backdrop of our own: the system draws the plain list's header
+        // background, pinned and across the whole width (safe areas too), so
+        // it stays one colour beside the fold in book posture.
         // System-style hairline under the pinned header, matching the separator
         // UIKit draws beneath plain-list section headers.
         .overlay(alignment: .bottom) {
