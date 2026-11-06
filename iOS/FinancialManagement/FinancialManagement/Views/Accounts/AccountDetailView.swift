@@ -33,20 +33,27 @@ struct AccountDetailView: View {
                             .bold()
                     }
                 }
+                .listRowBackground(Color.appCard)
 
                 Section {
                     LabeledContent("Show on Dashboard", value: account.showOnDashboard ? "Yes" : "No")
                     LabeledContent("Default Account",
                                    value: appState.defaultAccountId == account.id ? "Yes" : "No")
                 }
+                .listRowBackground(Color.appCard)
 
                 Section {
                     Button("Archive Account", role: .destructive) {
                         showingArchiveConfirm = true
                     }
                 }
+                .listRowBackground(Color.appCard)
             }
         }
+        // The app's surfaces, as the Transactions detail beside it, rather
+        // than the system's grouped colours.
+        .scrollContentBackground(.hidden)
+        .background(Color.appBackground)
         .navigationTitle(viewModel.account?.name ?? "Account")
         .alert("Archive account?", isPresented: $showingArchiveConfirm) {
             Button("Cancel", role: .cancel) {}

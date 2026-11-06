@@ -514,8 +514,10 @@ struct TransactionListView: View {
         // One background behind the rows, the sticky day headers and the
         // detail: the selected row's pill is the only fill in the list.
         .scrollContentBackground(.hidden)
-        .background(Color.appBackground)
         .staysClearOfTrailingBar()
+        // Outside the clearance, so the strip it leaves clear of a trailing
+        // safe area (the bar, or the fold in book posture) is painted too.
+        .background(Color.appBackground)
         .layoutProbe("transactions.list")
         .overlay {
             if viewModel.failedToLoad {
