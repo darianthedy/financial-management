@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// Accounts (S4). Compact pushes `AccountDetailView` as before; on regular
-/// width (`SplitRootContainer`) the detail tiles beside the list, which
-/// highlights the selected row (design §S4, implementation plan D2.1).
+/// Accounts (S4). A row selects its account: tiled (`SplitRootContainer` on
+/// the inner display in landscape) the detail shows beside the list, which
+/// highlights the row; elsewhere `.splitDetail` pushes it. Selecting in both
+/// cases is what lets a rotation or a fold keep the account on screen.
 struct AccountListView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.canTileSplitRoot) private var canTile
     @State private var viewModel = AccountListViewModel()
     @State private var showingAddSheet = false
-    /// The tiled split's selection. On compact the rows push by value instead.
+    /// The open account: the detail column's, or the pushed one.
     @State private var selectedAccountId: UUID?
 
     init(selectedAccountId: UUID? = nil) {
@@ -44,7 +45,6 @@ struct AccountListView: View {
             }
         }
         .navigationTitle("Accounts")
-        .modifier(PushAccountByValue(enabled: !canTile))
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -96,34 +96,21 @@ struct AccountListView: View {
 }
 
 extension AccountListView {
-    /// Compact: a `NavigationLink(value:)` push, as before D2.1. Tiled: a
-    /// button that selects the account for the detail column.
-    @ViewBuilder
+    /// Selects the account. Pushed (not tiled) it carries a disclosure
+    /// chevron, as the `NavigationLink` it replaces did.
     fileprivate func accountRow(_ account: Account) -> some View {
-        let card = AccountCard(account: account, currentBalance: viewModel.balance(for: account.id))
-        if canTile {
-            Button { selectedAccountId = account.id } label: {
-                card.contentShape(Rectangle())
+        Button { selectedAccountId = account.id } label: {
+            HStack(spacing: 8) {
+                AccountCard(account: account, currentBalance: viewModel.balance(for: account.id))
+                if !canTile {
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
-            .buttonStyle(.plain)
-        } else {
-            NavigationLink(value: account.id) { card }
+            .contentShape(Rectangle())
         }
-    }
-}
-
-/// Compact width: rows are `NavigationLink(value:)`s that push the detail, as
-/// before D2.1. Left out when tiled, where rows select instead of push.
-private struct PushAccountByValue: ViewModifier {
-    let enabled: Bool
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content.navigationDestination(for: UUID.self) { accountId in
-                AccountDetailView(accountId: accountId)
-            }
-        } else {
-            content
-        }
+        .buttonStyle(.plain)
     }
 }
