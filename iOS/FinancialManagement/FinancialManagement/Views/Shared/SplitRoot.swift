@@ -35,11 +35,27 @@ extension EnvironmentValues {
     @Entry var splitDetailHost: SplitDetailHost? = nil
 }
 
-/// What a tiled list column tells the split around it.
+/// What a tiled list column tells the split around it: the list's
+/// `.splitDetail` hands it the detail, which the split shows in its `detail`
+/// column, as SwiftUI's split view expects (the detail driven by the
+/// selection, a placeholder while there is none).
 @MainActor
 @Observable
 final class SplitDetailHost {
     var hasSelection = false
+    /// Builds the selected item's detail. Called in the detail column's body,
+    /// so what it reads (the list's view models) keeps the detail current.
+    fileprivate(set) var detail: (() -> AnyView)?
+    /// Identifies the detail, so another selection starts a fresh one.
+    fileprivate(set) var detailID: String?
+    fileprivate(set) var placeholder: SplitPlaceholder?
+
+    fileprivate func show(id: String?, placeholder: SplitPlaceholder, detail: (() -> AnyView)?) {
+        self.placeholder = placeholder
+        detailID = id
+        self.detail = detail
+        hasSelection = id != nil
+    }
 }
 
 /// Hosts a tab's list screen: list | detail side by side when
@@ -83,12 +99,33 @@ private struct ListDetailSplit<ListColumn: View>: View {
                         min: min(width, SplitColumns.minimumListWidth), ideal: width, max: width
                     )
             } detail: {
-                // Filled by the list's `.splitDetail`.
-                Color.clear
+                // Its own stack, so a detail can push further.
+                NavigationStack { SplitDetailColumn(host: host) }
             }
             .navigationSplitViewStyle(.balanced)
         }
         .readsFoldContext()
+    }
+}
+
+/// The tiled split's detail column: the list's selected item, or its
+/// placeholder while nothing is selected.
+private struct SplitDetailColumn: View {
+    let host: SplitDetailHost
+
+    var body: some View {
+        if let detail = host.detail {
+            detail()
+                .id(host.detailID)
+                .layoutProbe("split.detail")
+        } else if let placeholder = host.placeholder {
+            ContentUnavailableView {
+                Label(placeholder.title, systemImage: placeholder.systemImage)
+            } description: {
+                if let description = placeholder.description { Text(description) }
+            }
+            .layoutProbe("split.placeholder")
+        }
     }
 }
 
@@ -276,13 +313,8 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if canTile {
-                // The detail column, always: the selection, or the placeholder.
-                content.navigationDestination(isPresented: .constant(true)) {
-                    tiledDetail
-                        .environment(\.canTileSplitRoot, false)
-                        .environment(\.isSplitListColumn, false)
-                        .environment(\.splitDetailHost, nil)
-                }
+                // The split's detail column shows it (`SplitDetailColumn`).
+                content.onChange(of: selection.map(id), initial: true) { publish() }
             } else {
                 content.navigationDestination(item: $selection) { item in
                     detail(item).layoutProbe("split.detail")
@@ -296,29 +328,21 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             hasAppeared = true
             reconcile(items.map(id))
         }
-        .onChange(of: selection != nil, initial: true) { _, selected in
-            if canTile { host?.hasSelection = selected }
-        }
         .onChange(of: selection) { _, new in
             storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
             if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
         }
     }
 
-    @ViewBuilder
-    private var tiledDetail: some View {
-        if let selection {
-            detail(selection)
-                .id(id(selection))
-                .layoutProbe("split.detail")
-        } else {
-            ContentUnavailableView {
-                Label(placeholder.title, systemImage: placeholder.systemImage)
-            } description: {
-                if let description = placeholder.description { Text(description) }
-            }
-            .layoutProbe("split.placeholder")
-        }
+    /// Hands the tiled split the selected item's detail, or the placeholder.
+    private func publish() {
+        guard let host else { return }
+        let detail = detail
+        host.show(
+            id: selection.map(id),
+            placeholder: placeholder,
+            detail: selection.map { item in { AnyView(detail(item)) } }
+        )
     }
 
     private func reconcile(_ available: [String]) {

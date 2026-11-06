@@ -44,6 +44,12 @@ struct AccountListView: View {
                 }
             }
         }
+        // Pinned: in the split's list column a List takes the sidebar style by
+        // default, which coloured Accounts unlike Transactions and Budgets.
+        .listStyle(.insetGrouped)
+        // The same background as the other lists and their details.
+        .scrollContentBackground(.hidden)
+        .background(Color.appBackground)
         .navigationTitle("Accounts")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
