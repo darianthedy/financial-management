@@ -107,14 +107,15 @@ struct TransactionListView: View {
 
     @ViewBuilder
     var body: some View {
-        if isTabRoot && horizontalSizeClass == .regular {
+        if isTabRoot {
             // Summary (F3) is a sheet everywhere: a side panel inside the
-            // system split covered the detail column's editor.
+            // system split covered the detail column's editor. The tent
+            // glance shows itself only on regular width, so it's applied on
+            // every width: branching on the size class here re-created the
+            // list on a fold and dropped its selection.
             splitScreen
                 .sheet(isPresented: showingSummaryBinding) { summaryView }
                 .tentGlance { glance }
-        } else if isTabRoot {
-            splitScreen.sheet(isPresented: showingSummaryBinding) { summaryView }
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
             screen.sheet(isPresented: showingSummaryBinding) { summaryView }
@@ -497,7 +498,9 @@ struct TransactionListView: View {
                 .onChange(of: selection.selection, initial: true) { _, selected in
                     revealRestoredSelection(selected, with: proxy)
                 }
-                .onChange(of: viewModel.transactions.count) {
+                // After a load has settled its rows (and their badges), so
+                // the rows above keep their final heights.
+                .onChange(of: viewModel.completedLoads) {
                     revealRestoredSelection(selection.selection, with: proxy)
                 }
         }
@@ -506,7 +509,7 @@ struct TransactionListView: View {
     /// Scrolls a restored selection's row into view, once per list (see
     /// `hasPickedHere`), when its row is loaded.
     private func revealRestoredSelection(_ id: UUID?, with proxy: ScrollViewProxy) {
-        guard isTabRoot, !hasPickedHere, !hasRevealedSelection, let id,
+        guard isTabRoot, !hasPickedHere, !hasRevealedSelection, let id, !viewModel.isReloading,
               viewModel.transactions.contains(where: { $0.id == id }) else { return }
         hasRevealedSelection = true
         proxy.scrollTo(id, anchor: .center)

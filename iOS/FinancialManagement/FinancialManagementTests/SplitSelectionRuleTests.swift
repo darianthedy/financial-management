@@ -46,9 +46,10 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(Rule.resolve(selected: nil, stored: .init(id: "c", wasTiled: true), available: ids, restoring: true, isTiled: false), "c")
     }
 
-    func testNeverRestoresPushIntoPush() {
-        // Relaunching on iPhone, or More popped to its root: no surprise push.
-        XCTAssertNil(Rule.resolve(selected: nil, stored: .init(id: "c", wasTiled: false), available: ids, restoring: true, isTiled: false))
+    func testRestoresPushIntoPush() {
+        // Inner portrait → outer display: both push, and the detail stays.
+        // (Going Back clears what's stored, so a popped stack never re-pushes.)
+        XCTAssertEqual(Rule.resolve(selected: nil, stored: .init(id: "c", wasTiled: false), available: ids, restoring: true, isTiled: false), "c")
     }
 
     func testRestoresOnlyOnce() {
