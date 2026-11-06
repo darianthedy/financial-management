@@ -287,8 +287,9 @@ struct TransactionListView: View {
             }
             .task {
                 // The tab's model outlives the screen, which a fold or a
-                // rotation re-creates: it loads once (pull to refresh reloads).
-                if isTabRoot, viewModel.completedLoads > 0 { return }
+                // rotation re-creates: once it has rows it isn't reloaded (pull
+                // to refresh reloads).
+                if isTabRoot, viewModel.completedLoads > 0, !viewModel.transactions.isEmpty { return }
                 await viewModel.load()
             }
             .reloadsAfterFoldedSheet { await viewModel.load() }
