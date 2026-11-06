@@ -4,10 +4,15 @@ import XCTest
 
 /// iPhone Duo layout probe (docs/ios-iphone-duo-plan.md §1.3). Not a
 /// correctness test: it records what the system actually does on the current
-/// display — point sizes, size classes, per-edge safe areas, and where system
-/// bars and toolbar items land — so the plan's estimates can be replaced with
-/// measurements. Each probe writes `<name>.json` + `<name>.png` to `DUO_OUT`
-/// and attaches both to the result bundle.
+/// display — point sizes, size classes, per-edge safe areas, the probe
+/// screens' SwiftUI frames, and the fold and camera regions — so the plan's
+/// estimates can be replaced with measurements. Each probe writes
+/// `<name>.json` + `<name>.png` to `DUO_OUT` and attaches both to the result
+/// bundle.
+///
+/// Where system bars and toolbar items land is measured from outside the app,
+/// with XCUITest queries, by `FinancialManagementUITests/DuoProbeUITests`: a
+/// unit test can only find them by walking UIKit's private view hierarchy.
 ///
 /// Skipped unless `DUO_PROBE=1` (CI passes `TEST_RUNNER_DUO_PROBE=1`), so the
 /// normal unit-test run is unaffected.
@@ -90,8 +95,6 @@ final class DuoProbeTests: XCTestCase {
             "window": describe(view: window, in: window),
             "windowSafeArea": insets(window.safeAreaInsets),
             "traits": describe(traits: window.traitCollection),
-            "systemViews": systemViews(in: window),
-            "labeledViews": labeledViews(in: window),
             "swiftUIFrames": ProbeFrames.shared.snapshot(),
             "reservedRegions": reservedRegions(window),
             "hinge": hinge.updates,
@@ -188,47 +191,6 @@ final class DuoProbeTests: XCTestCase {
         ]
     }
 
-    /// System bar-like views (navigation bars, tab bars, toolbars, sidebars,
-    /// and private platters/glass containers) with their window frames — the
-    /// evidence for which edge vertical bars occupy.
-    private func systemViews(in window: UIWindow) -> [[String: Any]] {
-        let pattern = try? NSRegularExpression(
-            pattern: "Bar|Sidebar|Toolbar|Tab|Navigation|Platter|Glass|Split|Column|Sheet|Presentation"
-        )
-        var out: [[String: Any]] = []
-        walk(window, depth: 0) { view in
-            let name = String(describing: type(of: view))
-            guard out.count < 300,
-                  view.bounds.width > 0, view.bounds.height > 0,
-                  let pattern,
-                  pattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
-            else { return }
-            out.append(describe(view: view, in: window))
-        }
-        return out
-    }
-
-    /// Views carrying the accessibility labels the probe screens use, so each
-    /// toolbar item, tab item, and sidebar row can be located on screen.
-    private func labeledViews(in window: UIWindow) -> [[String: Any]] {
-        var out: [[String: Any]] = []
-        walk(window, depth: 0) { view in
-            guard out.count < 300, let label = view.accessibilityLabel, !label.isEmpty,
-                  ProbeLabels.all.contains(label)
-            else { return }
-            var entry = describe(view: view, in: window)
-            entry["label"] = label
-            out.append(entry)
-        }
-        return out
-    }
-
-    private func walk(_ view: UIView, depth: Int, _ visit: (UIView) -> Void) {
-        guard depth < 40, !view.isHidden else { return }
-        visit(view)
-        for sub in view.subviews { walk(sub, depth: depth + 1, visit) }
-    }
-
     // MARK: - Output
 
     private func write(_ name: String, _ report: [String: Any], image: UIImage?) throws {
@@ -273,15 +235,6 @@ private final class HingeLog {
 }
 
 // MARK: - Probe screens
-
-/// Accessibility labels used by the probe screens.
-private enum ProbeLabels {
-    static let all: Set<String> = [
-        "Dashboard", "Accounts", "Transactions", "Budgets", "More", "Tags", "Settings",
-        "Add", "Filter", "Summary", "Edit", "Cancel", "Save", "Back", "Show Sidebar",
-        "Hide Sidebar", "Sidebar",
-    ]
-}
 
 /// Frames of probe SwiftUI views in global coordinates, with the safe-area
 /// insets and size classes SwiftUI reported for them.
