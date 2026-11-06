@@ -2,10 +2,11 @@ import SwiftUI
 import XCTest
 @testable import FinancialManagement
 
-/// A fold under a live tab: list | detail on the inner display in landscape,
-/// then the outer display, which must open on the selected detail (pushed),
-/// as the app's root hosts it (`SplitRootContainer(storageKey:)` with the
-/// root-owned `SplitSelectionStore`).
+/// Folds and rotations under a live tab, as the app's root hosts it
+/// (`SplitRootContainer(storageKey:detail:)` with the root-owned
+/// `SplitSelectionStore`): list | detail on the inner display in landscape;
+/// the outer display opens on the list and keeps the selection; unfolding
+/// brings it back beside the list; rotating to portrait pushes it.
 @MainActor
 final class FoldRestoreLayoutTests: XCTestCase {
     @Observable
@@ -40,10 +41,9 @@ final class FoldRestoreLayoutTests: XCTestCase {
     }
 
     /// Selects `storedID` in the tiled split, then folds and unfolds
-    /// `times` times, checking after each fold that the outer display shows
-    /// the detail.
+    /// `times` times and finally rotates to portrait.
     private func foldRepeatedly<Content: View, Detail: View>(
-        selecting storedID: String, key: String, times: Int = 4,
+        selecting storedID: String, key: String, row: String, times: Int = 3,
         @ViewBuilder detail: @escaping (String, @escaping () -> Void) -> Detail,
         @ViewBuilder _ content: () -> Content
     ) async throws {
@@ -85,40 +85,46 @@ final class FoldRestoreLayoutTests: XCTestCase {
             display.size = size
             window.frame = CGRect(origin: .zero, size: size.size)
         }
+        let selectedID = SplitSelectionRule.Stored(rawValue: storedID)?.id
 
         try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] != nil }
-        XCTAssertNotNil(recorder.records["split.list"], "never tiled before the fold")
+        XCTAssertNotNil(recorder.records["split.detail"], "never tiled the selection before the fold")
 
         for round in 1...times {
             show(.outerPortrait)
-            try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] == nil }
-            // Let any late reload or reconcile run: a probe that leaves the
-            // screen drops out of the records.
-            try await Task.sleep(for: .milliseconds(1500))
-            XCTAssertNotNil(
-                recorder.records["split.detail"],
-                "fold \(round): the outer display showed the list. stored=\(String(describing: store.value(for: key)))"
-            )
-            guard recorder.records["split.detail"] != nil else { return }
+            try await poll { recorder.records["split.list"] == nil && recorder.records[row] != nil }
+            try await Task.sleep(for: .milliseconds(1000))
+            XCTAssertNotNil(recorder.records[row], "fold \(round): the outer display didn't show the list")
+            XCTAssertNil(recorder.records["split.detail"], "fold \(round): the outer display opened a detail")
+            let kept = store.value(for: key).flatMap { SplitSelectionRule.Stored(rawValue: $0)?.id }
+            XCTAssertEqual(kept, selectedID, "fold \(round): the selection wasn't kept for the inner display")
 
             show(.innerLandscape)
-            try await poll { recorder.records["split.list"] != nil }
-            try await Task.sleep(for: .milliseconds(500))
+            try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] != nil }
+            XCTAssertNotNil(recorder.records["split.detail"], "unfold \(round): the selection didn't come back")
+            guard recorder.records["split.detail"] != nil else { return }
         }
+
+        // Rotating to portrait pushes the selection.
+        show(.innerPortrait)
+        try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] == nil }
+        XCTAssertNotNil(recorder.records["split.detail"], "rotating to portrait didn't push the selection")
     }
 
-    func testAccountsOpensOnTheDetailAfterAFold() async throws {
-        try await foldRepeatedly(selecting: "t:\(bca.uuidString)", key: "accounts") { id, _ in
+    func testAccountsKeepTheSelectionThroughFolds() async throws {
+        try await foldRepeatedly(selecting: "t:\(bca.uuidString)", key: "accounts", row: "accounts.row.BCA Tahapan") { id, _ in
             if let accountId = UUID(uuidString: id) { AccountDetailView(accountId: accountId) }
         } _: {
             AccountListView()
         }
     }
 
-    func testTransactionsOpensOnTheDetailAfterAFold() async throws {
+    func testTransactionsKeepTheSelectionThroughFolds() async throws {
         let model = TransactionListViewModel()
         let drafts = TransactionEditorDrafts()
-        try await foldRepeatedly(selecting: "t:\(topUp.uuidString)", key: "transactions") { id, close in
+        try await foldRepeatedly(
+            selecting: "t:\(topUp.uuidString)", key: "transactions", row: "transactions.row.Top up Jenius"
+        ) { id, close in
             if let transactionId = UUID(uuidString: id) {
                 TransactionDetailScreen(id: transactionId, model: model, drafts: drafts, onClose: close)
             }

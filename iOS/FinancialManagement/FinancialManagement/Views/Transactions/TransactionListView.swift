@@ -9,6 +9,7 @@ import SwiftUI
 struct TransactionListView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.canTileSplitRoot) private var canTileSplitRoot
+    @Environment(\.splitPushPath) private var splitPushPath
     @Environment(\.transactionDrafts) private var sharedDrafts
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: TransactionListViewModel
@@ -82,6 +83,11 @@ struct TransactionListView: View {
     /// `editing` opens it straight into the form (the row menu's Edit).
     private func open(_ txn: Transaction, editing: Bool = false) {
         editOnOpen = editing ? txn.id : nil
+        // Nothing open, but unsaved edits to another transaction kept through
+        // a fold (their editor isn't on screen): "Discard changes?" first.
+        if isTabRoot, selection.selection == nil {
+            selection.isDirty = drafts.unsavedTransaction.map { $0.id != txn.id } ?? false
+        }
         // The draft marks the editor open, which is how a detail the tab's
         // stack builds itself (`TransactionDetailScreen`) knows to start in it.
         if editing, isTabRoot {
@@ -191,6 +197,11 @@ struct TransactionListView: View {
     /// in the detail column when tiled, else pushed. A fold or a rotation
     /// re-creates the list, and the editor reopens with it, edits or not.
     private func reopenUnsavedDraft() {
+        // On a tab's stack the detail isn't reopened from the list: the
+        // inner display in portrait restores it (and its editor, while the
+        // draft exists) by the stack's path, and the outer display opens on
+        // the list. Tiled, the detail column reopens it here.
+        guard splitPushPath == nil else { return }
         guard selection.selection == nil, let draft = drafts.transaction else { return }
         selection.selection = draft.id
         selection.isDirty = drafts.unsavedTransaction != nil
@@ -256,10 +267,13 @@ struct TransactionListView: View {
                     }
                 }
             }
-            // Drill-downs push the detail onto their own stack.
-            .navigationDestination(item: $pushedTransactionId) { id in
+            // Drill-downs push the detail onto their own stack. The tab root
+            // never does: its rows select (`.splitDetail`), and its stack
+            // pushes by path, which this item binding (always nil there) reset
+            // to the list on the outer display (fold diagnostics).
+            .modifier(DrilldownPush(isEnabled: !isTabRoot, item: $pushedTransactionId) { id in
                 detailView(for: id)
-            }
+            })
             .foldSafeSheet(item: $installmentSource, sizing: .page) { source in
                 CreateInstallmentSheet(source: source) {
                     await viewModel.load()
@@ -271,7 +285,12 @@ struct TransactionListView: View {
                     searchText = newFilters.search ?? ""
                 }
             }
-            .task { await viewModel.load() }
+            .task {
+                // The tab's model outlives the screen, which a fold or a
+                // rotation re-creates: it loads once (pull to refresh reloads).
+                if isTabRoot, viewModel.completedLoads > 0 { return }
+                await viewModel.load()
+            }
             .reloadsAfterFoldedSheet { await viewModel.load() }
             .refreshable { await viewModel.load() }
             // Shared delete confirmation for both the row's long-press menu and the swipe
@@ -794,6 +813,21 @@ private struct RowSwipeActions: ViewModifier {
     private var deleteButton: some View {
         Button(role: .destructive, action: onDelete) {
             Label("Delete", systemImage: "trash")
+        }
+    }
+}
+
+/// A drill-down's own push of the selected transaction (not the tab root's).
+private struct DrilldownPush<Detail: View>: ViewModifier {
+    let isEnabled: Bool
+    @Binding var item: UUID?
+    @ViewBuilder let detail: (UUID) -> Detail
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.navigationDestination(item: $item) { detail($0) }
+        } else {
+            content
         }
     }
 }

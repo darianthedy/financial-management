@@ -101,13 +101,29 @@ struct SplitRootContainer<Content: View>: View {
     var body: some View {
         GeometryReader { geo in
             if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
+                // Restores the selection into its detail column.
                 ListDetailSplit { content }
+            } else if let pushedDetail, horizontalSizeClass == .regular {
+                // The inner display in portrait: a rotation opens it on the
+                // selection, which the new stack pushes on its first update.
+                SplitPushStack(restoring: currentStoredID, detail: pushedDetail, onBack: forget) { content }
             } else if let pushedDetail {
-                SplitPushStack(restoring: currentStoredID, detail: pushedDetail) { content }
+                // The outer display opens on the list. A fold moves the app to
+                // another screen while it re-creates the stack, and that move
+                // cancelled a restoring push at random (fold diagnostics). The
+                // selection is kept for the inner display.
+                SplitPushStack(restoring: nil, detail: pushedDetail, onBack: forget) { content }
             } else {
                 NavigationStack { content }
             }
         }
+    }
+
+    /// The user went back from a detail: don't restore it again.
+    private func forget() {
+        guard let storageKey else { return }
+        store?.set(nil, for: storageKey)
+        storedID = nil
     }
 
     /// This run's stored selection, else the scene's (a relaunch).
@@ -159,24 +175,31 @@ extension EnvironmentValues {
     @Entry var splitPushPath: Binding<[SplitPushID]>? = nil
 }
 
-/// A stack whose path starts with the stored selection, the state
-/// restoration `NavigationStack(path:)` is built for: a fold, an unfold or
-/// a rotation re-creates the stack already showing the detail. Its
-/// destination is declared here, at the stack's root, so it exists whether
-/// or not the list under the detail has been built.
+/// A tab's stack. Its path can start with a stored selection (the state
+/// restoration `NavigationStack(path:)` is built for), and its destination
+/// is declared here, at the stack's root, so it exists whether or not the
+/// list under the detail has been built.
 private struct SplitPushStack<Content: View>: View {
     @State private var path: [SplitPushID]
+    /// Whether a detail has been on screen in this stack. The list showing
+    /// again after that, with nothing pushed, is the user going back; a
+    /// stack that never showed one (a dropped restore) or one torn down by a
+    /// fold or a rotation isn't, and keeps the selection.
+    @State private var hasShownDetail = false
     let detail: (String, @escaping () -> Void) -> AnyView
+    let onBack: () -> Void
     let content: Content
 
     init(
         restoring storedID: String?,
         detail: @escaping (String, @escaping () -> Void) -> AnyView,
+        onBack: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         let stored = SplitSelectionRule.Stored(rawValue: storedID)
         _path = State(initialValue: stored.map { [SplitPushID(id: $0.id)] } ?? [])
         self.detail = detail
+        self.onBack = onBack
         self.content = content()
     }
 
@@ -185,9 +208,13 @@ private struct SplitPushStack<Content: View>: View {
         NavigationStack(path: $path) {
             content
                 .environment(\.splitPushPath, $path)
+                .onAppear {
+                    if self.path.isEmpty, hasShownDetail { onBack() }
+                }
                 .navigationDestination(for: SplitPushID.self) { pushed in
                     detail(pushed.id) { path.wrappedValue = [] }
                         .layoutProbe("split.detail")
+                        .onAppear { hasShownDetail = true }
                 }
         }
     }
@@ -427,13 +454,9 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                 // stack starts with and builds itself (`SplitPushStack`).
                 content
                     .onChange(of: pushPath.wrappedValue) { _, path in
-                        // Back: the list is on screen again with nothing
-                        // pushed (it forgets the selection in `onAppear`).
+                        // Back: the row is no longer open. (The stack forgets
+                        // the stored selection once the list is shown again.)
                         if path.isEmpty, selection != nil { selection = nil }
-                        if let pushed = path.last?.id, selection.map(id) != pushed,
-                           let item = items.first(where: { id($0) == pushed }) {
-                            selection = item
-                        }
                     }
             } else {
                 // Inside another stack (More): pushed by the selection.
@@ -467,12 +490,9 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             // nothing pushed: the user went Back (`onAppear` below).
         }
         .onAppear {
-            if let pushPath {
-                // On screen with nothing pushed: Back, or nothing chosen.
-                if pushPath.wrappedValue.isEmpty { forgetSelection() }
-            } else if !canTile, selection == nil, hasRestored {
-                forgetSelection()
-            }
+            // Pushed by its own selection (More), back on screen with nothing
+            // pushed: the user went back.
+            if pushPath == nil, !canTile, selection == nil, hasRestored { forgetSelection() }
         }
     }
 
@@ -511,13 +531,12 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         // A push restore waits for `.task` (e.g. a fold onto the outer display
         // with the Transactions list already loaded, which reports its items
         // before its stack exists).
-        if let pushPath {
-            // The stack restores (its initial path); the list follows it.
-            let pushed = pushPath.wrappedValue.last?.id
-            let wanted = pushed.flatMap { pushed in available.contains(pushed) ? pushed : nil }
+        if pushPath != nil {
+            // A tab's stack restores by its initial path and builds the detail
+            // itself. The list under it doesn't follow: changing the list
+            // while the stack still pushed its restored path made it drop it
+            // (fold diagnostics), and on the outer display nothing restores.
             if !available.isEmpty { hasRestored = true }
-            guard pushed != nil, wanted != current, let wanted else { return }
-            selection = items.first { id($0) == wanted }
             return
         }
         if !canTile, current == nil, !hasRestored, !hasAppeared { return }
