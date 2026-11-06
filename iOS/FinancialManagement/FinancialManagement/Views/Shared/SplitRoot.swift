@@ -63,15 +63,62 @@ final class SplitDetailHost {
 /// The app's tabs and the layout tests both use it.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @ViewBuilder var content: Content
+    /// The list's selection, as `.splitDetail(storageKey:)` keeps it. Read
+    /// here so a stack that pushes is created with the selected detail
+    /// already on its path (`SplitPushStack`).
+    @SceneStorage private var storedID: String?
+    private let restoresSelection: Bool
+    private let content: Content
+
+    /// - Parameter storageKey: the list's `.splitDetail` storage key. Without
+    ///   one, the stack starts on the list and `.splitDetail` pushes itself.
+    init(storageKey: String? = nil, @ViewBuilder content: () -> Content) {
+        _storedID = SceneStorage("split.\(storageKey ?? "")")
+        restoresSelection = storageKey != nil
+        self.content = content()
+    }
 
     var body: some View {
         GeometryReader { geo in
             if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
                 ListDetailSplit { content }
+            } else if restoresSelection {
+                SplitPushStack(restoring: storedID) { content }
             } else {
                 NavigationStack { content }
             }
+        }
+    }
+}
+
+/// A `.splitDetail` item pushed on a `SplitPushStack`, by its stored ID.
+struct SplitPushID: Hashable {
+    let id: String
+}
+
+extension EnvironmentValues {
+    /// The path of the `SplitPushStack` around a list, which its
+    /// `.splitDetail` pushes onto.
+    @Entry var splitPushPath: Binding<[SplitPushID]>? = nil
+}
+
+/// A stack whose path starts with the stored selection, the state
+/// restoration `NavigationStack(path:)` is built for: a fold, an unfold or
+/// a rotation re-creates the stack already showing the detail, instead of
+/// pushing it once the list is on screen.
+private struct SplitPushStack<Content: View>: View {
+    @State private var path: [SplitPushID]
+    let content: Content
+
+    init(restoring storedID: String?, @ViewBuilder content: () -> Content) {
+        let stored = SplitSelectionRule.Stored(rawValue: storedID)
+        _path = State(initialValue: stored.map { [SplitPushID(id: $0.id)] } ?? [])
+        self.content = content()
+    }
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            content.environment(\.splitPushPath, $path)
         }
     }
 }
@@ -270,6 +317,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @Environment(\.canTileSplitRoot) private var canTile
     @Environment(\.foldKeptModels) private var keptModels
     @Environment(\.splitDetailHost) private var host
+    @Environment(\.splitPushPath) private var pushPath
     @Binding var selection: Item?
     let storageKey: String
     let items: [Item]
@@ -303,7 +351,20 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             if canTile {
                 // The split's detail column shows it (`SplitDetailColumn`).
                 content.onChange(of: selection.map(id), initial: true) { publish() }
+            } else if let pushPath {
+                // Pushed by value on the stack's path, which a re-created
+                // stack starts with (`SplitPushStack`).
+                content
+                    .navigationDestination(for: SplitPushID.self) { pushed in
+                        pushedDetail(pushed.id)
+                    }
+                    .onChange(of: pushPath.wrappedValue) { _, path in
+                        // Back: the list is on screen again with nothing
+                        // pushed (it forgets the selection in `onAppear`).
+                        if path.isEmpty, selection != nil { selection = nil }
+                    }
             } else {
+                // Inside another stack (More): pushed by the selection.
                 content.navigationDestination(item: $selection) { item in
                     detail(item).layoutProbe("split.detail")
                 }
@@ -319,8 +380,14 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         .onChange(of: selection) { _, new in
             if let new {
                 storedID = SplitSelectionRule.Stored(id: id(new), wasTiled: canTile).rawValue
+                if !canTile, let pushPath, pushPath.wrappedValue.last?.id != id(new) {
+                    pushPath.wrappedValue = [SplitPushID(id: id(new))]
+                }
             } else if canTile {
                 forgetSelection()
+            } else if let pushPath, !pushPath.wrappedValue.isEmpty {
+                // Closed from the detail (saved, deleted): back to the list.
+                pushPath.wrappedValue = []
             }
             // Pushed, nil is also what a fold or a rotation writes as it tears
             // the stack down, which must not forget what the next layout
@@ -328,7 +395,9 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             // nothing pushed: the user went Back (`onAppear` below).
         }
         .onAppear {
-            if !canTile, selection == nil, hasRestored { forgetSelection() }
+            if !canTile, selection == nil, hasRestored, pushPath?.wrappedValue.isEmpty ?? true {
+                forgetSelection()
+            }
         }
     }
 
@@ -337,6 +406,16 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     private func forgetSelection() {
         storedID = nil
         keptModels?.discardDrilldown(screen: storageKey)
+    }
+
+    /// The detail of the item `pushedID` names, once it's in the list.
+    @ViewBuilder
+    private func pushedDetail(_ pushedID: String) -> some View {
+        if let item = items.first(where: { id($0) == pushedID }) {
+            detail(item).layoutProbe("split.detail")
+        } else {
+            ProgressView()
+        }
     }
 
     /// Hands the tiled split the selected item's detail, or the placeholder.
@@ -355,7 +434,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         // A push restore waits for `.task` (e.g. a fold onto the outer display
         // with the Transactions list already loaded, which reports its items
         // before its stack exists).
-        if !canTile, current == nil, !hasRestored, !hasAppeared { return }
+        if !canTile, pushPath == nil, current == nil, !hasRestored, !hasAppeared { return }
         let resolved = SplitSelectionRule.resolve(
             selected: current, stored: SplitSelectionRule.Stored(rawValue: storedID),
             available: available, restoring: !hasRestored, isTiled: canTile
