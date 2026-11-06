@@ -59,21 +59,13 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertNil(Rule.resolve(selected: nil, stored: .init(id: "z", wasTiled: true), available: ids, restoring: true, isTiled: true))
     }
 
+    /// Every tab's list takes half, as Contacts does, while the detail keeps 360.
     func testListColumnWidth() {
-        XCTAssertEqual(SplitColumns.listWidth(for: 669), 300)   // inner portrait
-        XCTAssertEqual(SplitColumns.listWidth(for: 951), 380)   // inner landscape
-        XCTAssertEqual(SplitColumns.listWidth(for: 1366), 420)
+        XCTAssertEqual(SplitColumns.listWidth(for: 951), 476)   // inner landscape
+        XCTAssertEqual(SplitColumns.listWidth(for: 867), 434)
+        XCTAssertEqual(SplitColumns.listWidth(for: 1366), 683)
+        XCTAssertEqual(SplitColumns.listWidth(for: 669), 309)   // detail keeps 360
         XCTAssertEqual(SplitColumns.listWidth(for: 500), 300)
-    }
-
-    /// Transactions takes half, as Contacts does, while the detail keeps 360.
-    func testHalvedListColumnWidth() {
-        XCTAssertEqual(SplitColumns.listWidth(for: 951, halves: true), 476)   // inner landscape
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, halves: true), 434)
-        XCTAssertEqual(SplitColumns.listWidth(for: 669, halves: true), 309)   // detail keeps 360
-        XCTAssertEqual(SplitColumns.listWidth(for: 500, halves: true), 300)
-        // The fold still wins in book posture.
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 475.5), halves: true), 476)
     }
 
     /// Device test (build 143): in book posture the sidebar fills the leading
@@ -93,9 +85,9 @@ final class SplitSelectionRuleTests: XCTestCase {
 
     func testListColumnIgnoresAFoldThatStarvesAColumn() {
         // The fold at the container's edge (the sidebar fills the leading region).
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 0)), 347)
-        XCTAssertEqual(SplitColumns.listWidth(for: 700, fold: .book(divisionX: 500)), 300)
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 347)
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 0)), 434)
+        XCTAssertEqual(SplitColumns.listWidth(for: 700, fold: .book(divisionX: 500)), 340)
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 434)
     }
 
     /// As in Music: list | detail only on regular width in landscape, with

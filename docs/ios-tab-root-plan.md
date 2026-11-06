@@ -18,7 +18,7 @@ The Notes-style root, a sidebar with sections | list | detail on one `Navigation
 |---|---|
 | Dashboard | `NavigationStack { DashboardView() }` |
 | Accounts | `SplitRootContainer { AccountListView() }` |
-| Transactions | `SplitRootContainer(halves: true) { TransactionListView(…) }` |
+| Transactions | `SplitRootContainer { TransactionListView(…) }` |
 | Budgets | `SplitRootContainer { BudgetListView() }` |
 | More | `NavigationStack(path:)`. A list of Tags, Categories, Fixed Expenses, Scheduled, Settings and Sign Out. Each pushes its screen, and that screen pushes its detail. |
 

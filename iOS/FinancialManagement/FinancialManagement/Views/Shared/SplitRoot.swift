@@ -63,14 +63,12 @@ final class SplitDetailHost {
 /// The app's tabs and the layout tests both use it.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    /// The list takes half the width (`SplitColumns.listWidth(halves:)`).
-    var halves = false
     @ViewBuilder var content: Content
 
     var body: some View {
         GeometryReader { geo in
             if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
-                ListDetailSplit(halves: halves) { content }
+                ListDetailSplit { content }
             } else {
                 NavigationStack { content }
             }
@@ -85,12 +83,11 @@ private struct ListDetailSplit<ListColumn: View>: View {
     @State private var host = SplitDetailHost()
     /// Both columns, always: the system toggle that hides the list is removed.
     @State private var visibility: NavigationSplitViewVisibility = .doubleColumn
-    let halves: Bool
     @ViewBuilder var list: ListColumn
 
     var body: some View {
         GeometryReader { geo in
-            let width = SplitColumns.listWidth(for: geo.size.width, fold: fold, halves: halves)
+            let width = SplitColumns.listWidth(for: geo.size.width, fold: fold)
             NavigationSplitView(columnVisibility: $visibility) {
                 list
                     .splitListColumn(host)
@@ -216,21 +213,14 @@ enum SplitColumns {
         regular && size.width > size.height && tiles(width: size.width)
     }
 
-    /// The list column's width: on the fold in book posture, when both regions
-    /// fit a column, so neither column straddles it; else 40% of the space,
-    /// kept between 300 and 420 pt, so the detail column gets the larger share.
-    ///
-    /// `halves`: half the space, as Contacts splits it, for a list whose rows
-    /// need the room (Transactions' title beside an aligned amount), as long
-    /// as the detail keeps its minimum.
-    static func listWidth(for width: CGFloat, fold: FoldContext = .none, halves: Bool = false) -> CGFloat {
+    /// The list column's width, the same on every tab: on the fold in book
+    /// posture, when both regions fit a column, so neither column straddles
+    /// it; else half the space, as long as the detail keeps its minimum.
+    static func listWidth(for width: CGFloat, fold: FoldContext = .none) -> CGFloat {
         if case .book(let x) = fold, x >= minimumListWidth, width - x >= minimumDetailWidth {
             return x.rounded()
         }
-        if halves {
-            return max(minimumListWidth, min((width / 2).rounded(), width - minimumDetailWidth))
-        }
-        return min(420, max(minimumListWidth, (width * 0.4).rounded()))
+        return max(minimumListWidth, min((width / 2).rounded(), width - minimumDetailWidth))
     }
 }
 
