@@ -1,26 +1,29 @@
 import SwiftUI
 import UIKit
 
-// List → detail scaffold (iPhone Duo design §3.2, implementation plan D2.0).
+// List → detail scaffold (iPhone Duo design §3.2, implementation plan D2.0,
+// docs/ios-tab-root-plan.md).
 //
-// The app's root (`ContentRootView`) is one Notes-style `NavigationSplitView`:
-// sections | list | detail. A list screen sits in its list column and applies
-// `.splitDetail(selection:…)` where it used `.navigationDestination(item:)`,
-// after its title, toolbar and overlay.
+// Accounts, Transactions and Budgets each sit in a `SplitRootContainer` at the
+// root of their tab. A list screen applies `.splitDetail(selection:…)` where
+// it used `.navigationDestination(item:)`, after its title, toolbar and
+// overlay.
 //
-// On regular width (`canTileSplitRoot`) the modifier fills the split's detail
-// column: the selected item, or a placeholder while nothing is selected. On
-// compact width the split collapses into one stack, and the modifier is the
-// same `navigationDestination(item:)` push as before. A screen pushed further
-// (e.g. inside a detail) always pushes.
+// As in Music, list | detail tiles only on the inner display in landscape:
+// regular width, wider than tall, and room for both columns. There the
+// modifier fills the split's detail column with the selected item, or a
+// placeholder while nothing is selected. Everywhere else (portrait, the outer
+// display, a narrow Split View, and screens pushed from More) the container
+// is a plain stack and the modifier is the same `navigationDestination(item:)`
+// push as before. A screen pushed further (e.g. inside a detail) always pushes.
 //
 // The modifier sits *inside* the screen, so the screen's own state (its view
-// model, the selection) lives above the modifier's switch. A fold flips the
-// switch, which re-creates the screen's content, which is why the selection is
-// restored from `@SceneStorage` and sheets use `.foldSafeSheet`.
+// model, the selection) lives above the modifier's switch. A fold or a rotation
+// flips the container, which re-creates the screen, which is why the selection
+// is restored from `@SceneStorage` and sheets use `.foldSafeSheet`.
 
 extension EnvironmentValues {
-    /// Set in the root split's list column on regular width: the next
+    /// Set in a tiled split's list column: the next
     /// `.splitDetail` below it fills the detail column. Reset in the detail, so
     /// nested screens push.
     @Entry var canTileSplitRoot = false
@@ -28,80 +31,242 @@ extension EnvironmentValues {
     /// highlighted (`.splitRowSelected(_:)`).
     @Entry var isSplitListColumn = false
     /// The split around a tiled list column, told whether something is
-    /// selected (portrait hides the list then).
+    /// selected.
     @Entry var splitDetailHost: SplitDetailHost? = nil
 }
 
-/// What a tiled list column tells the split around it.
+/// What a tiled list column tells the split around it: the list's
+/// `.splitDetail` hands it the detail, which the split shows in its `detail`
+/// column, as SwiftUI's split view expects (the detail driven by the
+/// selection, a placeholder while there is none).
 @MainActor
 @Observable
 final class SplitDetailHost {
     var hasSelection = false
+    /// Builds the selected item's detail. Called in the detail column's body,
+    /// so what it reads (the list's view models) keeps the detail current.
+    fileprivate(set) var detail: (() -> AnyView)?
+    /// Identifies the detail, so another selection starts a fresh one.
+    fileprivate(set) var detailID: String?
+    fileprivate(set) var placeholder: SplitPlaceholder?
+
+    fileprivate func show(id: String?, placeholder: SplitPlaceholder, detail: (() -> AnyView)?) {
+        self.placeholder = placeholder
+        detailID = id
+        self.detail = detail
+        hasSelection = id != nil
+    }
 }
 
-/// Hosts one list screen the way the root's list and detail columns do: a
-/// two-column split on regular width, a stack on compact. Layout tests render
-/// screens in it; the app's root is `ContentRootView`.
-///
-/// Regular width that is still too narrow for two columns gets the compact
-/// stack too, rather than a crushed detail column.
+/// Hosts a tab's list screen: list | detail side by side when
+/// `SplitColumns.tiles(_:regular:)`, else a stack where the detail pushes.
+/// The app's tabs and the layout tests both use it.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @ViewBuilder var content: Content
+    @Environment(\.splitSelectionStore) private var store
+    private let storageKey: String?
+    /// The list's selection, as `.splitDetail(storageKey:)` keeps it. Read
+    /// here so a stack that pushes is created with the selected detail
+    /// already on its path (`SplitPushStack`).
+    @SceneStorage private var storedID: String?
+    /// Builds a pushed item's detail from its stored ID (and a way back).
+    private let pushedDetail: ((String, @escaping () -> Void) -> AnyView)?
+    private let content: Content
+
+    /// A list whose `.splitDetail` pushes and tiles itself (layout tests).
+    init(@ViewBuilder content: () -> Content) {
+        _storedID = SceneStorage("split.")
+        storageKey = nil
+        pushedDetail = nil
+        self.content = content()
+    }
+
+    /// A tab's list. When it pushes, the stack opens on the stored selection,
+    /// which it builds with `detail` (an item's stored ID, and a closure that
+    /// goes back to the list): the list under a pushed detail isn't built
+    /// until it's shown, so the stack can't rely on it for the detail.
+    ///
+    /// - Parameter storageKey: the list's `.splitDetail` storage key.
+    init<Detail: View>(
+        storageKey: String,
+        @ViewBuilder detail: @escaping (_ id: String, _ close: @escaping () -> Void) -> Detail,
+        @ViewBuilder content: () -> Content
+    ) {
+        _storedID = SceneStorage("split.\(storageKey)")
+        self.storageKey = storageKey
+        pushedDetail = { id, close in AnyView(detail(id, close)) }
+        self.content = content()
+    }
 
     var body: some View {
-        if horizontalSizeClass == .regular {
-            GeometryReader { geo in
-                if SplitColumns.tiles(width: geo.size.width) {
-                    ListDetailSplit { content }
-                } else {
-                    NavigationStack { content }
-                }
+        GeometryReader { geo in
+            if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
+                // Restores the selection into its detail column.
+                ListDetailSplit { content }
+            } else if let pushedDetail, horizontalSizeClass == .regular {
+                // The inner display in portrait: a rotation opens it on the
+                // selection, which the new stack pushes on its first update.
+                SplitPushStack(restoring: currentStoredID, detail: pushedDetail, onBack: forget) { content }
+            } else if let pushedDetail {
+                // The outer display opens on the list. A fold moves the app to
+                // another screen while it re-creates the stack, and that move
+                // cancelled a restoring push at random (fold diagnostics). The
+                // selection is kept for the inner display.
+                SplitPushStack(restoring: nil, detail: pushedDetail, onBack: forget) { content }
+            } else {
+                NavigationStack { content }
             }
-        } else {
-            NavigationStack { content }
+        }
+    }
+
+    /// The user went back from a detail: don't restore it again.
+    private func forget() {
+        guard let storageKey else { return }
+        store?.set(nil, for: storageKey)
+        storedID = nil
+    }
+
+    /// This run's stored selection, else the scene's (a relaunch).
+    private var currentStoredID: String? {
+        guard let storageKey, let kept = store?.value(for: storageKey) else { return storedID }
+        return kept
+    }
+}
+
+/// Each list's stored selection (`SplitSelectionRule.Stored`), by its
+/// `.splitDetail` storage key, owned by `ContentRootView` above every tab.
+///
+/// `@SceneStorage` is for restoring a scene on relaunch: each view reading a
+/// key keeps its own copy, which needn't see another view's writes while the
+/// app runs. A fold or a rotation re-creates the list and its container in
+/// the same run, so they read the selection from here, and fall back to
+/// their `@SceneStorage` only when this has nothing (a relaunch).
+///
+/// A cache, not view state: nothing here is observed.
+@MainActor
+final class SplitSelectionStore {
+    private var values: [String: String?] = [:]
+
+    /// The stored selection for `key`: `.some(nil)` once it was cleared,
+    /// nil while this run hasn't stored anything for it.
+    func value(for key: String) -> String?? {
+        values[key]
+    }
+
+    func set(_ value: String?, for key: String) {
+        values[key] = .some(value)
+    }
+}
+
+extension EnvironmentValues {
+    /// Set by `ContentRootView`. Absent (e.g. in a hosted test), lists use
+    /// their `@SceneStorage` alone.
+    @Entry var splitSelectionStore: SplitSelectionStore? = nil
+}
+
+/// A `.splitDetail` item pushed on a `SplitPushStack`, by its stored ID.
+struct SplitPushID: Hashable {
+    let id: String
+}
+
+extension EnvironmentValues {
+    /// The path of the `SplitPushStack` around a list, which its
+    /// `.splitDetail` pushes onto.
+    @Entry var splitPushPath: Binding<[SplitPushID]>? = nil
+}
+
+/// A tab's stack. Its path can start with a stored selection (the state
+/// restoration `NavigationStack(path:)` is built for), and its destination
+/// is declared here, at the stack's root, so it exists whether or not the
+/// list under the detail has been built.
+private struct SplitPushStack<Content: View>: View {
+    @State private var path: [SplitPushID]
+    /// Whether a detail has been on screen in this stack. The list showing
+    /// again after that, with nothing pushed, is the user going back; a
+    /// stack that never showed one (a dropped restore) or one torn down by a
+    /// fold or a rotation isn't, and keeps the selection.
+    @State private var hasShownDetail = false
+    let detail: (String, @escaping () -> Void) -> AnyView
+    let onBack: () -> Void
+    let content: Content
+
+    init(
+        restoring storedID: String?,
+        detail: @escaping (String, @escaping () -> Void) -> AnyView,
+        onBack: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        let stored = SplitSelectionRule.Stored(rawValue: storedID)
+        _path = State(initialValue: stored.map { [SplitPushID(id: $0.id)] } ?? [])
+        self.detail = detail
+        self.onBack = onBack
+        self.content = content()
+    }
+
+    var body: some View {
+        let path = $path
+        NavigationStack(path: $path) {
+            content
+                .environment(\.splitPushPath, $path)
+                .onAppear {
+                    if self.path.isEmpty, hasShownDetail { onBack() }
+                }
+                .navigationDestination(for: SplitPushID.self) { pushed in
+                    detail(pushed.id) { path.wrappedValue = [] }
+                        .layoutProbe("split.detail")
+                        .onAppear { hasShownDetail = true }
+                }
         }
     }
 }
 
-/// A list column beside a detail column, as in the root split without its
-/// sections: side by side in landscape; in portrait the detail fills the
-/// screen and the list slides over it until something is picked.
+/// A list column beside a detail column, both always on screen, as Music's
+/// Artists | artist on the inner display in landscape.
 private struct ListDetailSplit<ListColumn: View>: View {
     @Environment(\.foldContext) private var fold
     @State private var host = SplitDetailHost()
+    /// Both columns, always: the system toggle that hides the list is removed.
     @State private var visibility: NavigationSplitViewVisibility = .doubleColumn
     @ViewBuilder var list: ListColumn
 
     var body: some View {
         GeometryReader { geo in
             let width = SplitColumns.listWidth(for: geo.size.width, fold: fold)
-            let sideBySide = SplitColumns.sideBySide(geo.size)
-            let split = NavigationSplitView(columnVisibility: $visibility) {
+            NavigationSplitView(columnVisibility: $visibility) {
                 list
                     .splitListColumn(host)
+                    .toolbar(removing: .sidebarToggle)
                     .navigationSplitViewColumnWidth(
                         min: min(width, SplitColumns.minimumListWidth), ideal: width, max: width
                     )
             } detail: {
-                // Filled by the list's `.splitDetail`.
-                Color.clear
+                // Its own stack, so a detail can push further.
+                NavigationStack { SplitDetailColumn(host: host) }
             }
-            Group {
-                if sideBySide {
-                    split.navigationSplitViewStyle(.balanced)
-                } else {
-                    split.navigationSplitViewStyle(.prominentDetail)
-                }
-            }
-            .onChange(of: sideBySide, initial: true) { _, sideBySide in
-                visibility = SplitColumns.visibility(selected: host.hasSelection, sideBySide: sideBySide)
-            }
-            .onChange(of: host.hasSelection) { _, selected in
-                visibility = SplitColumns.visibility(selected: selected, sideBySide: sideBySide)
-            }
+            .navigationSplitViewStyle(.balanced)
         }
         .readsFoldContext()
+    }
+}
+
+/// The tiled split's detail column: the list's selected item, or its
+/// placeholder while nothing is selected.
+private struct SplitDetailColumn: View {
+    let host: SplitDetailHost
+
+    var body: some View {
+        if let detail = host.detail {
+            detail()
+                .id(host.detailID)
+                .layoutProbe("split.detail")
+        } else if let placeholder = host.placeholder {
+            ContentUnavailableView {
+                Label(placeholder.title, systemImage: placeholder.systemImage)
+            } description: {
+                if let description = placeholder.description { Text(description) }
+            }
+            .layoutProbe("split.placeholder")
+        }
     }
 }
 
@@ -125,8 +290,8 @@ struct SplitPlaceholder: Equatable {
 }
 
 extension View {
-    /// Shows `detail(item)` for the selected item: in a tiled detail column on
-    /// regular width (see `SplitRootContainer`), else pushed, like
+    /// Shows `detail(item)` for the selected item: in a tiled detail column
+    /// (see `SplitRootContainer`), else pushed, like
     /// `navigationDestination(item:)`.
     ///
     /// - Parameters:
@@ -180,42 +345,26 @@ enum SplitColumns {
     static let minimumDetailWidth: CGFloat = 360
 
     /// Whether `width` fits a list and a detail column at their minimums
-    /// (660 pt): the inner display in landscape or portrait, but not a narrow
-    /// Split View.
+    /// (660 pt).
     static func tiles(width: CGFloat) -> Bool {
         width >= minimumListWidth + minimumDetailWidth
     }
 
-    /// Landscape: list | detail side by side. Portrait: the detail fills the
-    /// screen and the list slides over it, as in Notes.
-    static func sideBySide(_ size: CGSize) -> Bool {
-        size.width > size.height
+    /// Whether list | detail tiles at `size`, as in Music: regular width, in
+    /// landscape, with room for both columns. Portrait, the outer display and
+    /// a narrow Split View push instead.
+    static func tiles(_ size: CGSize, regular: Bool) -> Bool {
+        regular && size.width > size.height && tiles(width: size.width)
     }
 
-    /// The list's visibility beside the detail. Side by side, always both:
-    /// handing it to the system (`.automatic`) hid the list on every tap
-    /// (build 150). Portrait: the list over the detail until something is
-    /// picked. `.doubleColumn` is the list and the detail in both the root's
-    /// three columns (its sections hidden) and a two-column split.
-    static func visibility(selected: Bool, sideBySide: Bool) -> NavigationSplitViewVisibility {
-        sideBySide || !selected ? .doubleColumn : .detailOnly
-    }
-
-    /// The list column's width: on the fold in book posture, when both regions
-    /// fit a column, so neither column straddles it; else 40% of the space,
-    /// kept between 300 and 420 pt, so the detail column gets the larger share.
-    ///
-    /// `halves`: half the space, as Contacts splits it, for a list whose rows
-    /// need the room (Transactions' title beside an aligned amount), as long
-    /// as the detail keeps its minimum.
-    static func listWidth(for width: CGFloat, fold: FoldContext = .none, halves: Bool = false) -> CGFloat {
+    /// The list column's width, the same on every tab: on the fold in book
+    /// posture, when both regions fit a column, so neither column straddles
+    /// it; else half the space, as long as the detail keeps its minimum.
+    static func listWidth(for width: CGFloat, fold: FoldContext = .none) -> CGFloat {
         if case .book(let x) = fold, x >= minimumListWidth, width - x >= minimumDetailWidth {
             return x.rounded()
         }
-        if halves {
-            return max(minimumListWidth, min((width / 2).rounded(), width - minimumDetailWidth))
-        }
-        return min(420, max(minimumListWidth, (width * 0.4).rounded()))
+        return max(minimumListWidth, min((width / 2).rounded(), width - minimumDetailWidth))
     }
 }
 
@@ -248,17 +397,15 @@ enum SplitSelectionRule {
     /// - An empty list is treated as "still loading": nothing changes.
     /// - A selection that is no longer listed is cleared.
     /// - With nothing selected, the stored selection is restored once
-    ///   (`restoring`) if that can't surprise anyone: into a tiled split
-    ///   (it only fills the detail column), or from a tiled split into a push
-    ///   (fold continuity). A push → push restore is skipped, so relaunching
-    ///   the iPhone layout, or popping a stack to its root, never re-pushes.
+    ///   (`restoring`), tiled or pushed, so a fold, an unfold or a rotation
+    ///   keeps it. Going Back forgets it (`.splitDetail`), so a stack popped
+    ///   to its root never re-pushes.
     static func resolve(
         selected: String?, stored: Stored?, available: [String], restoring: Bool, isTiled: Bool
     ) -> String? {
         guard !available.isEmpty else { return selected }
         if let selected { return available.contains(selected) ? selected : nil }
-        guard restoring, let stored, isTiled || stored.wasTiled,
-              available.contains(stored.id) else { return nil }
+        guard restoring, let stored, available.contains(stored.id) else { return nil }
         return stored.id
     }
 }
@@ -267,6 +414,8 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @Environment(\.canTileSplitRoot) private var canTile
     @Environment(\.foldKeptModels) private var keptModels
     @Environment(\.splitDetailHost) private var host
+    @Environment(\.splitPushPath) private var pushPath
+    @Environment(\.splitSelectionStore) private var store
     @Binding var selection: Item?
     let storageKey: String
     let items: [Item]
@@ -298,14 +447,19 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             if canTile {
-                // The detail column, always: the selection, or the placeholder.
-                content.navigationDestination(isPresented: .constant(true)) {
-                    tiledDetail
-                        .environment(\.canTileSplitRoot, false)
-                        .environment(\.isSplitListColumn, false)
-                        .environment(\.splitDetailHost, nil)
-                }
+                // The split's detail column shows it (`SplitDetailColumn`).
+                content.onChange(of: selection.map(id), initial: true) { publish() }
+            } else if let pushPath {
+                // Pushed by value on the stack's path, which a re-created
+                // stack starts with and builds itself (`SplitPushStack`).
+                content
+                    .onChange(of: pushPath.wrappedValue) { _, path in
+                        // Back: the row is no longer open. (The stack forgets
+                        // the stored selection once the list is shown again.)
+                        if path.isEmpty, selection != nil { selection = nil }
+                    }
             } else {
+                // Inside another stack (More): pushed by the selection.
                 content.navigationDestination(item: $selection) { item in
                     detail(item).layoutProbe("split.detail")
                 }
@@ -318,29 +472,58 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             hasAppeared = true
             reconcile(items.map(id))
         }
-        .onChange(of: selection != nil, initial: true) { _, selected in
-            if canTile { host?.hasSelection = selected }
-        }
         .onChange(of: selection) { _, new in
-            storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
-            if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
+            if let new {
+                remember(SplitSelectionRule.Stored(id: id(new), wasTiled: canTile).rawValue)
+                if !canTile, let pushPath, pushPath.wrappedValue.last?.id != id(new) {
+                    pushPath.wrappedValue = [SplitPushID(id: id(new))]
+                }
+            } else if canTile {
+                forgetSelection()
+            } else if let pushPath, !pushPath.wrappedValue.isEmpty {
+                // Closed from the detail (saved, deleted): back to the list.
+                pushPath.wrappedValue = []
+            }
+            // Pushed, nil is also what a fold or a rotation writes as it tears
+            // the stack down, which must not forget what the next layout
+            // restores. The list forgets only once it is back on screen with
+            // nothing pushed: the user went Back (`onAppear` below).
+        }
+        .onAppear {
+            // Pushed by its own selection (More), back on screen with nothing
+            // pushed: the user went back.
+            if pushPath == nil, !canTile, selection == nil, hasRestored { forgetSelection() }
         }
     }
 
-    @ViewBuilder
-    private var tiledDetail: some View {
-        if let selection {
-            detail(selection)
-                .id(id(selection))
-                .layoutProbe("split.detail")
-        } else {
-            ContentUnavailableView {
-                Label(placeholder.title, systemImage: placeholder.systemImage)
-            } description: {
-                if let description = placeholder.description { Text(description) }
-            }
-            .layoutProbe("split.placeholder")
-        }
+    /// The user left the selection: don't restore it, and start its
+    /// drill-down afresh next time.
+    private func forgetSelection() {
+        remember(nil)
+        keptModels?.discardDrilldown(screen: storageKey)
+    }
+
+    /// Stores the selection for this run (`SplitSelectionStore`) and for a
+    /// relaunch (`@SceneStorage`).
+    private func remember(_ value: String?) {
+        store?.set(value, for: storageKey)
+        storedID = value
+    }
+
+    /// This run's stored selection, else the scene's (a relaunch).
+    private var currentStoredID: String? {
+        store?.value(for: storageKey) ?? storedID
+    }
+
+    /// Hands the tiled split the selected item's detail, or the placeholder.
+    private func publish() {
+        guard let host else { return }
+        let detail = detail
+        host.show(
+            id: selection.map(id),
+            placeholder: placeholder,
+            detail: selection.map { item in { AnyView(detail(item)) } }
+        )
     }
 
     private func reconcile(_ available: [String]) {
@@ -348,9 +531,17 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         // A push restore waits for `.task` (e.g. a fold onto the outer display
         // with the Transactions list already loaded, which reports its items
         // before its stack exists).
+        if pushPath != nil {
+            // A tab's stack restores by its initial path and builds the detail
+            // itself. The list under it doesn't follow: changing the list
+            // while the stack still pushed its restored path made it drop it
+            // (fold diagnostics), and on the outer display nothing restores.
+            if !available.isEmpty { hasRestored = true }
+            return
+        }
         if !canTile, current == nil, !hasRestored, !hasAppeared { return }
         let resolved = SplitSelectionRule.resolve(
-            selected: current, stored: SplitSelectionRule.Stored(rawValue: storedID),
+            selected: current, stored: SplitSelectionRule.Stored(rawValue: currentStoredID),
             available: available, restoring: !hasRestored, isTiled: canTile
         )
         if !available.isEmpty { hasRestored = true }

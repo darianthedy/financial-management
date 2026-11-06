@@ -9,6 +9,7 @@ import SwiftUI
 struct TransactionListView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.canTileSplitRoot) private var canTileSplitRoot
+    @Environment(\.splitPushPath) private var splitPushPath
     @Environment(\.transactionDrafts) private var sharedDrafts
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: TransactionListViewModel
@@ -26,10 +27,20 @@ struct TransactionListView: View {
     /// The tiled split's selection (transaction ID), guarded against dropping
     /// edits. Tab root only.
     @State private var selection: GuardedSelection<UUID>
+    /// Whether the selection came from a tap here. Until then a selection was
+    /// restored (a fold, a rotation, a reopened draft), and the list scrolls
+    /// to it once, so the selected row is on screen in the new layout.
+    @State private var hasPickedHere = false
+    @State private var hasRevealedSelection = false
     /// Used when no `ContentRootView` provides shared drafts (hosted tests).
     @State private var localDrafts = TransactionEditorDrafts()
     /// The Transactions tab root, the only embedding that adopts the split.
     private let isTabRoot: Bool
+    /// A drill-down's own filters (its budget, tag, month, …): what the screen
+    /// is, not a search the user made, so they aren't removable search tokens.
+    /// The search field's clear button would otherwise drop them with the
+    /// text and turn the drill-down into every transaction.
+    private let scopeFacets: Set<FilterFacetKey>
 
     init(
         scopedAccountId: UUID? = nil,
@@ -48,6 +59,7 @@ struct TransactionListView: View {
         _searchText = State(initialValue: model.filters.search ?? "")
         _selection = State(initialValue: GuardedSelection(selection: isTabRoot ? selectedTransactionId : nil))
         self.isTabRoot = isTabRoot
+        scopeFacets = isTabRoot ? [] : (initialFilters?.activeFacets ?? [])
         if showsSummary { model.isShowingSummary = true }
     }
 
@@ -71,6 +83,17 @@ struct TransactionListView: View {
     /// `editing` opens it straight into the form (the row menu's Edit).
     private func open(_ txn: Transaction, editing: Bool = false) {
         editOnOpen = editing ? txn.id : nil
+        // Nothing open, but unsaved edits to another transaction kept through
+        // a fold (their editor isn't on screen): "Discard changes?" first.
+        if isTabRoot, selection.selection == nil {
+            selection.isDirty = drafts.unsavedTransaction.map { $0.id != txn.id } ?? false
+        }
+        // The draft marks the editor open, which is how a detail the tab's
+        // stack builds itself (`TransactionDetailScreen`) knows to start in it.
+        if editing, isTabRoot {
+            _ = drafts.model(for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
+        }
+        hasPickedHere = true
         if isTabRoot {
             selection.request(txn.id)
         } else {
@@ -95,14 +118,15 @@ struct TransactionListView: View {
 
     @ViewBuilder
     var body: some View {
-        if isTabRoot && horizontalSizeClass == .regular {
+        if isTabRoot {
             // Summary (F3) is a sheet everywhere: a side panel inside the
-            // system split covered the detail column's editor.
+            // system split covered the detail column's editor. The tent
+            // glance shows itself only on regular width, so it's applied on
+            // every width: branching on the size class here re-created the
+            // list on a fold and dropped its selection.
             splitScreen
                 .sheet(isPresented: showingSummaryBinding) { summaryView }
                 .tentGlance { glance }
-        } else if isTabRoot {
-            splitScreen.sheet(isPresented: showingSummaryBinding) { summaryView }
         } else {
             // Drill-downs (Budgets, Categories, Tags, …): the sheet, as before.
             screen.sheet(isPresented: showingSummaryBinding) { summaryView }
@@ -159,18 +183,28 @@ struct TransactionListView: View {
                 .onChange(of: selection.selection) { _, selected in
                     if selected == nil { selection.isDirty = false }
                     if selected != editOnOpen { editOnOpen = nil }
+                    // Another row: the previous row's editor is closed.
+                    if let selected, drafts.transaction != nil, drafts.transaction(withId: selected) == nil {
+                        drafts.discard()
+                    }
                 }
                 // After a fold re-creates the list, reopen an unsaved draft.
                 .task { reopenUnsavedDraft() }
         }
     }
 
-    /// Selects a draft that still has unsaved edits, if nothing is selected:
-    /// in the detail column when tiled, else pushed.
+    /// Selects the transaction whose editor was open, if nothing is selected:
+    /// in the detail column when tiled, else pushed. A fold or a rotation
+    /// re-creates the list, and the editor reopens with it, edits or not.
     private func reopenUnsavedDraft() {
-        guard selection.selection == nil, let draft = drafts.unsavedTransaction else { return }
+        // On a tab's stack the detail isn't reopened from the list: the
+        // inner display in portrait restores it (and its editor, while the
+        // draft exists) by the stack's path, and the outer display opens on
+        // the list. Tiled, the detail column reopens it here.
+        guard splitPushPath == nil else { return }
+        guard selection.selection == nil, let draft = drafts.transaction else { return }
         selection.selection = draft.id
-        selection.isDirty = true
+        selection.isDirty = drafts.unsavedTransaction != nil
     }
 
     /// The loaded rows, plus a kept draft whose row isn't loaded (yet), so the
@@ -181,46 +215,16 @@ struct TransactionListView: View {
         return ids + [draft.id]
     }
 
-    /// The selected transaction's detail. Its editor works on the shared
-    /// draft, so a fold / unfold keeps the edits (and reopens it editing).
-    @ViewBuilder
+    /// The selected transaction's detail (`TransactionDetailScreen`).
     private func detailView(for id: UUID) -> some View {
-        if let txn = viewModel.transactions.first(where: { $0.id == id }) ?? drafts.transaction(withId: id) {
-            let shown = presentation(for: txn)
-            TransactionDetailView(
-                presentation: shown,
-                startsEditing: editOnOpen == id || drafts.unsavedTransaction?.id == id,
-                draft: {
-                    drafts.model(for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
-                },
-                isDirty: $selection.isDirty,
-                onSaved: { await viewModel.load() },
-                onEditingEnded: {
-                    drafts.discard()
-                    if editOnOpen == id { editOnOpen = nil }
-                },
-                onSetStatus: { await viewModel.setStatus(txn, to: $0) },
-                onDelete: {
-                    await viewModel.deleteTransaction(txn)
-                    // A failed delete keeps the row (and its error); stay put.
-                    guard !viewModel.transactions.contains(where: { $0.id == id }) else { return }
-                    if drafts.transaction(withId: id) != nil { drafts.discard() }
-                    closeDetail()
-                }
-            )
-        }
-    }
-
-    private func presentation(for txn: Transaction) -> TransactionPresentation {
-        TransactionPresentation(
-            transaction: txn,
-            account: viewModel.account(for: txn),
-            category: viewModel.category(for: txn),
-            transferAccountName: viewModel.transferAccount(for: txn)?.name,
-            tags: viewModel.tags(for: txn),
-            budgetName: viewModel.budgetName(for: txn),
-            fixedExpenseName: viewModel.fixedExpenseName(for: txn),
-            isSpread: viewModel.isSpread(txn)
+        TransactionDetailScreen(
+            id: id,
+            model: viewModel,
+            drafts: drafts,
+            startsEditing: editOnOpen == id,
+            isDirty: $selection.isDirty,
+            onEditingEnded: { if editOnOpen == id { editOnOpen = nil } },
+            onClose: closeDetail
         )
     }
 
@@ -263,10 +267,13 @@ struct TransactionListView: View {
                     }
                 }
             }
-            // Drill-downs push the detail onto their own stack.
-            .navigationDestination(item: $pushedTransactionId) { id in
+            // Drill-downs push the detail onto their own stack. The tab root
+            // never does: its rows select (`.splitDetail`), and its stack
+            // pushes by path, which this item binding (always nil there) reset
+            // to the list on the outer display (fold diagnostics).
+            .modifier(DrilldownPush(isEnabled: !isTabRoot, item: $pushedTransactionId) { id in
                 detailView(for: id)
-            }
+            })
             .foldSafeSheet(item: $installmentSource, sizing: .page) { source in
                 CreateInstallmentSheet(source: source) {
                     await viewModel.load()
@@ -278,7 +285,13 @@ struct TransactionListView: View {
                     searchText = newFilters.search ?? ""
                 }
             }
-            .task { await viewModel.load() }
+            .task {
+                // The tab's model outlives the screen, which a fold or a
+                // rotation re-creates: once it has rows it isn't reloaded (pull
+                // to refresh reloads).
+                if isTabRoot, viewModel.completedLoads > 0, !viewModel.transactions.isEmpty { return }
+                await viewModel.load()
+            }
             .reloadsAfterFoldedSheet { await viewModel.load() }
             .refreshable { await viewModel.load() }
             // Shared delete confirmation for both the row's long-press menu and the swipe
@@ -441,7 +454,7 @@ struct TransactionListView: View {
     /// active-filter chips (web/src/components/transactions/transaction-filters.tsx).
     private var filterTokens: [FilterToken] {
         FilterFacetKey.allCases
-            .filter { $0 != .search }
+            .filter { $0 != .search && !scopeFacets.contains($0) }
             .compactMap { key in chipLabel(for: key).map { FilterToken(key: key, label: $0) } }
     }
 
@@ -473,6 +486,29 @@ struct TransactionListView: View {
     }
 
     private var transactionList: some View {
+        ScrollViewReader { proxy in
+            rows
+                .onChange(of: selection.selection, initial: true) { _, selected in
+                    revealRestoredSelection(selected, with: proxy)
+                }
+                // After a load has settled its rows (and their badges), so
+                // the rows above keep their final heights.
+                .onChange(of: viewModel.completedLoads) {
+                    revealRestoredSelection(selection.selection, with: proxy)
+                }
+        }
+    }
+
+    /// Scrolls a restored selection's row into view, once per list (see
+    /// `hasPickedHere`), when its row is loaded.
+    private func revealRestoredSelection(_ id: UUID?, with proxy: ScrollViewProxy) {
+        guard isTabRoot, !hasPickedHere, !hasRevealedSelection, let id, !viewModel.isReloading,
+              viewModel.transactions.contains(where: { $0.id == id }) else { return }
+        hasRevealedSelection = true
+        proxy.scrollTo(id, anchor: .center)
+    }
+
+    private var rows: some View {
         List {
             ForEach(viewModel.dateGroups) { group in
                 Section {
@@ -502,7 +538,6 @@ struct TransactionListView: View {
         // detail: the selected row's pill is the only fill in the list.
         .scrollContentBackground(.hidden)
         .background(Color.appBackground)
-        .staysClearOfTrailingBar()
         .layoutProbe("transactions.list")
         .overlay {
             if viewModel.failedToLoad {
@@ -605,9 +640,9 @@ struct TransactionListView: View {
         .padding(.horizontal, Self.rowInset)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Opaque backdrop so the pinned header doesn't let the rows scrolling
-        // underneath it show through.
-        .background(Color.appBackground)
+        // No backdrop of our own: the system draws the plain list's header
+        // background, pinned and across the whole width (safe areas too), so
+        // it stays one colour beside the fold in book posture.
         // System-style hairline under the pinned header, matching the separator
         // UIKit draws beneath plain-list section headers.
         .overlay(alignment: .bottom) {
@@ -779,6 +814,21 @@ private struct RowSwipeActions: ViewModifier {
     private var deleteButton: some View {
         Button(role: .destructive, action: onDelete) {
             Label("Delete", systemImage: "trash")
+        }
+    }
+}
+
+/// A drill-down's own push of the selected transaction (not the tab root's).
+private struct DrilldownPush<Detail: View>: ViewModifier {
+    let isEnabled: Bool
+    @Binding var item: UUID?
+    @ViewBuilder let detail: (UUID) -> Detail
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.navigationDestination(item: $item) { detail($0) }
+        } else {
+            content
         }
     }
 }

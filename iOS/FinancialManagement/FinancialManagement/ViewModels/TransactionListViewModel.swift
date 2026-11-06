@@ -141,9 +141,16 @@ final class TransactionListViewModel {
 
     // MARK: - Loading
 
+    /// Counts loads that finished (rows and badges in place), for views that
+    /// act once the list has settled.
+    private(set) var completedLoads = 0
+    /// A load is under way, whether or not rows are already on screen.
+    private(set) var isReloading = false
+
     func load() async {
         loadGeneration += 1
         let gen = loadGeneration
+        isReloading = true
         if transactions.isEmpty { isLoading = true }
         // Unstructured, so cancelling the caller can't abort the load. On the
         // outer display the collapsed split can start the list's `.task` and
@@ -153,7 +160,13 @@ final class TransactionListViewModel {
     }
 
     private func performLoad(generation gen: Int) async {
-        defer { if gen == loadGeneration { isLoading = false } }
+        defer {
+            if gen == loadGeneration {
+                isLoading = false
+                isReloading = false
+                completedLoads += 1
+            }
+        }
 
         do {
             async let lookups: Void = loadLookups()

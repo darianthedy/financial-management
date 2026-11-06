@@ -60,6 +60,21 @@ struct TransactionFilters: Equatable, Codable {
     }
 
     var isEmpty: Bool { activeCount == 0 }
+
+    /// The facets constraining the query, search aside.
+    var activeFacets: Set<FilterFacetKey> {
+        var keys: Set<FilterFacetKey> = []
+        if types != nil { keys.insert(.types) }
+        if accounts != nil { keys.insert(.accounts) }
+        if statuses != nil { keys.insert(.statuses) }
+        if dateFrom != nil || dateTo != nil { keys.insert(.date) }
+        if categories != nil { keys.insert(.categories) }
+        if tags != nil { keys.insert(.tags) }
+        if amountMin != nil || amountMax != nil { keys.insert(.amount) }
+        if budgets != nil { keys.insert(.budgets) }
+        if fixedExpenses != nil { keys.insert(.fixedExpenses) }
+        return keys
+    }
 }
 
 /// Builds the **shared** predicate set used by both the paginated list query and

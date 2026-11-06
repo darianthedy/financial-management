@@ -46,9 +46,10 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertEqual(Rule.resolve(selected: nil, stored: .init(id: "c", wasTiled: true), available: ids, restoring: true, isTiled: false), "c")
     }
 
-    func testNeverRestoresPushIntoPush() {
-        // Relaunching on iPhone, or More popped to its root: no surprise push.
-        XCTAssertNil(Rule.resolve(selected: nil, stored: .init(id: "c", wasTiled: false), available: ids, restoring: true, isTiled: false))
+    func testRestoresPushIntoPush() {
+        // Inner portrait → outer display: both push, and the detail stays.
+        // (Going Back clears what's stored, so a popped stack never re-pushes.)
+        XCTAssertEqual(Rule.resolve(selected: nil, stored: .init(id: "c", wasTiled: false), available: ids, restoring: true, isTiled: false), "c")
     }
 
     func testRestoresOnlyOnce() {
@@ -59,21 +60,13 @@ final class SplitSelectionRuleTests: XCTestCase {
         XCTAssertNil(Rule.resolve(selected: nil, stored: .init(id: "z", wasTiled: true), available: ids, restoring: true, isTiled: true))
     }
 
+    /// Every tab's list takes half, as Contacts does, while the detail keeps 360.
     func testListColumnWidth() {
-        XCTAssertEqual(SplitColumns.listWidth(for: 669), 300)   // inner portrait
-        XCTAssertEqual(SplitColumns.listWidth(for: 951), 380)   // inner landscape
-        XCTAssertEqual(SplitColumns.listWidth(for: 1366), 420)
+        XCTAssertEqual(SplitColumns.listWidth(for: 951), 476)   // inner landscape
+        XCTAssertEqual(SplitColumns.listWidth(for: 867), 434)
+        XCTAssertEqual(SplitColumns.listWidth(for: 1366), 683)
+        XCTAssertEqual(SplitColumns.listWidth(for: 669), 309)   // detail keeps 360
         XCTAssertEqual(SplitColumns.listWidth(for: 500), 300)
-    }
-
-    /// Transactions takes half, as Contacts does, while the detail keeps 360.
-    func testHalvedListColumnWidth() {
-        XCTAssertEqual(SplitColumns.listWidth(for: 951, halves: true), 476)   // inner landscape
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, halves: true), 434)
-        XCTAssertEqual(SplitColumns.listWidth(for: 669, halves: true), 309)   // detail keeps 360
-        XCTAssertEqual(SplitColumns.listWidth(for: 500, halves: true), 300)
-        // The fold still wins in book posture.
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 475.5), halves: true), 476)
     }
 
     /// Device test (build 143): in book posture the sidebar fills the leading
@@ -93,22 +86,18 @@ final class SplitSelectionRuleTests: XCTestCase {
 
     func testListColumnIgnoresAFoldThatStarvesAColumn() {
         // The fold at the container's edge (the sidebar fills the leading region).
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 0)), 347)
-        XCTAssertEqual(SplitColumns.listWidth(for: 700, fold: .book(divisionX: 500)), 300)
-        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 347)
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .book(divisionX: 0)), 434)
+        XCTAssertEqual(SplitColumns.listWidth(for: 700, fold: .book(divisionX: 500)), 340)
+        XCTAssertEqual(SplitColumns.listWidth(for: 867, fold: .tent(divisionY: 475)), 434)
     }
 
-    func testColumnVisibilityFollowsTheSelection() {
-        // Landscape: the list never goes away (build 150 hid it on each tap).
-        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: true), .doubleColumn)
-        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: true), .doubleColumn)
-        // Portrait: the list until something is picked, then the detail.
-        XCTAssertEqual(SplitColumns.visibility(selected: false, sideBySide: false), .doubleColumn)
-        XCTAssertEqual(SplitColumns.visibility(selected: true, sideBySide: false), .detailOnly)
-    }
-
-    func testSideBySideOnlyInLandscape() {
-        XCTAssertTrue(SplitColumns.sideBySide(CGSize(width: 951, height: 669)))
-        XCTAssertFalse(SplitColumns.sideBySide(CGSize(width: 669, height: 951)))
+    /// As in Music: list | detail only on regular width in landscape, with
+    /// room for both columns; portrait and compact push.
+    func testTilesOnlyInRegularLandscape() {
+        XCTAssertTrue(SplitColumns.tiles(CGSize(width: 951, height: 669), regular: true))
+        XCTAssertTrue(SplitColumns.tiles(CGSize(width: 867, height: 669), regular: true))
+        XCTAssertFalse(SplitColumns.tiles(CGSize(width: 669, height: 951), regular: true))
+        XCTAssertFalse(SplitColumns.tiles(CGSize(width: 951, height: 669), regular: false))
+        XCTAssertFalse(SplitColumns.tiles(CGSize(width: 640, height: 400), regular: true))
     }
 }

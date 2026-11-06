@@ -2,8 +2,9 @@ import SwiftUI
 import XCTest
 @testable import FinancialManagement
 
-/// The Notes-style root (design §3.1): one split on every display, opening on
-/// the Dashboard with the sections out of the way. Screenshots feed gate G1.
+/// The tab root (docs/ios-tab-root-plan.md): opens on the Dashboard tab on
+/// every display. Screenshots feed gate G1. The tab bar itself is checked by
+/// the XCUITests, which query it through the accessibility API.
 @MainActor
 final class RootLayoutTests: XCTestCase {
     override func setUp() async throws {
@@ -27,9 +28,6 @@ final class RootLayoutTests: XCTestCase {
             let snapshot = try await renderRoot(at: size)
             attach(snapshot, name: "root")
             XCTAssertNotNil(snapshot.frames["dashboard.verdict"], "the Dashboard never showed at \(size)")
-            // No tab bar any more: the sections are the split's sidebar.
-            XCTAssertTrue(snapshot.tabTitles.isEmpty, "\(size): \(snapshot.tabTitles)")
-            XCTAssertFalse(snapshot.labels.contains("More"), "More shown at \(size)")
             assertNoInteractiveOverlap(snapshot)
         }
     }
