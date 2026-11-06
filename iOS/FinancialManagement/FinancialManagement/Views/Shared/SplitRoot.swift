@@ -319,9 +319,26 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             reconcile(items.map(id))
         }
         .onChange(of: selection) { _, new in
-            storedID = new.map { SplitSelectionRule.Stored(id: id($0), wasTiled: canTile).rawValue }
-            if new == nil { keptModels?.discardDrilldown(screen: storageKey) }
+            if let new {
+                storedID = SplitSelectionRule.Stored(id: id(new), wasTiled: canTile).rawValue
+            } else if canTile {
+                forgetSelection()
+            }
+            // Pushed, nil is also what a fold or a rotation writes as it tears
+            // the stack down, which must not forget what the next layout
+            // restores. The list forgets only once it is back on screen with
+            // nothing pushed: the user went Back (`onAppear` below).
         }
+        .onAppear {
+            if !canTile, selection == nil, hasRestored { forgetSelection() }
+        }
+    }
+
+    /// The user left the selection: don't restore it, and start its
+    /// drill-down afresh next time.
+    private func forgetSelection() {
+        storedID = nil
+        keptModels?.discardDrilldown(screen: storageKey)
     }
 
     /// Hands the tiled split the selected item's detail, or the placeholder.

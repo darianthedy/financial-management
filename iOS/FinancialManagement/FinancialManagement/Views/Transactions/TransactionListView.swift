@@ -26,6 +26,11 @@ struct TransactionListView: View {
     /// The tiled split's selection (transaction ID), guarded against dropping
     /// edits. Tab root only.
     @State private var selection: GuardedSelection<UUID>
+    /// Whether the selection came from a tap here. Until then a selection was
+    /// restored (a fold, a rotation, a reopened draft), and the list scrolls
+    /// to it once, so the selected row is on screen in the new layout.
+    @State private var hasPickedHere = false
+    @State private var hasRevealedSelection = false
     /// Used when no `ContentRootView` provides shared drafts (hosted tests).
     @State private var localDrafts = TransactionEditorDrafts()
     /// The Transactions tab root, the only embedding that adopts the split.
@@ -77,6 +82,7 @@ struct TransactionListView: View {
     /// `editing` opens it straight into the form (the row menu's Edit).
     private func open(_ txn: Transaction, editing: Bool = false) {
         editOnOpen = editing ? txn.id : nil
+        hasPickedHere = true
         if isTabRoot {
             selection.request(txn.id)
         } else {
@@ -486,6 +492,27 @@ struct TransactionListView: View {
     }
 
     private var transactionList: some View {
+        ScrollViewReader { proxy in
+            rows
+                .onChange(of: selection.selection, initial: true) { _, selected in
+                    revealRestoredSelection(selected, with: proxy)
+                }
+                .onChange(of: viewModel.transactions.count) {
+                    revealRestoredSelection(selection.selection, with: proxy)
+                }
+        }
+    }
+
+    /// Scrolls a restored selection's row into view, once per list (see
+    /// `hasPickedHere`), when its row is loaded.
+    private func revealRestoredSelection(_ id: UUID?, with proxy: ScrollViewProxy) {
+        guard isTabRoot, !hasPickedHere, !hasRevealedSelection, let id,
+              viewModel.transactions.contains(where: { $0.id == id }) else { return }
+        hasRevealedSelection = true
+        proxy.scrollTo(id, anchor: .center)
+    }
+
+    private var rows: some View {
         List {
             ForEach(viewModel.dateGroups) { group in
                 Section {
