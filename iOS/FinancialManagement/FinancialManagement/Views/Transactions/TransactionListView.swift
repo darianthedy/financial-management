@@ -30,6 +30,11 @@ struct TransactionListView: View {
     @State private var localDrafts = TransactionEditorDrafts()
     /// The Transactions tab root, the only embedding that adopts the split.
     private let isTabRoot: Bool
+    /// A drill-down's own filters (its budget, tag, month, …): what the screen
+    /// is, not a search the user made, so they aren't removable search tokens.
+    /// The search field's clear button would otherwise drop them with the
+    /// text and turn the drill-down into every transaction.
+    private let scopeFacets: Set<FilterFacetKey>
 
     init(
         scopedAccountId: UUID? = nil,
@@ -48,6 +53,7 @@ struct TransactionListView: View {
         _searchText = State(initialValue: model.filters.search ?? "")
         _selection = State(initialValue: GuardedSelection(selection: isTabRoot ? selectedTransactionId : nil))
         self.isTabRoot = isTabRoot
+        scopeFacets = isTabRoot ? [] : (initialFilters?.activeFacets ?? [])
         if showsSummary { model.isShowingSummary = true }
     }
 
@@ -159,18 +165,23 @@ struct TransactionListView: View {
                 .onChange(of: selection.selection) { _, selected in
                     if selected == nil { selection.isDirty = false }
                     if selected != editOnOpen { editOnOpen = nil }
+                    // Another row: the previous row's editor is closed.
+                    if let selected, drafts.transaction != nil, drafts.transaction(withId: selected) == nil {
+                        drafts.discard()
+                    }
                 }
                 // After a fold re-creates the list, reopen an unsaved draft.
                 .task { reopenUnsavedDraft() }
         }
     }
 
-    /// Selects a draft that still has unsaved edits, if nothing is selected:
-    /// in the detail column when tiled, else pushed.
+    /// Selects the transaction whose editor was open, if nothing is selected:
+    /// in the detail column when tiled, else pushed. A fold or a rotation
+    /// re-creates the list, and the editor reopens with it, edits or not.
     private func reopenUnsavedDraft() {
-        guard selection.selection == nil, let draft = drafts.unsavedTransaction else { return }
+        guard selection.selection == nil, let draft = drafts.transaction else { return }
         selection.selection = draft.id
-        selection.isDirty = true
+        selection.isDirty = drafts.unsavedTransaction != nil
     }
 
     /// The loaded rows, plus a kept draft whose row isn't loaded (yet), so the
@@ -189,7 +200,9 @@ struct TransactionListView: View {
             let shown = presentation(for: txn)
             TransactionDetailView(
                 presentation: shown,
-                startsEditing: editOnOpen == id || drafts.unsavedTransaction?.id == id,
+                // The editor was open (a draft exists until it closes), so a
+                // fold or a rotation reopens it, with or without edits.
+                startsEditing: editOnOpen == id || drafts.transaction(withId: id) != nil,
                 draft: {
                     drafts.model(for: txn, currency: appState.defaultCurrency, decimalPlaces: appState.decimalPlaces)
                 },
@@ -441,7 +454,7 @@ struct TransactionListView: View {
     /// active-filter chips (web/src/components/transactions/transaction-filters.tsx).
     private var filterTokens: [FilterToken] {
         FilterFacetKey.allCases
-            .filter { $0 != .search }
+            .filter { $0 != .search && !scopeFacets.contains($0) }
             .compactMap { key in chipLabel(for: key).map { FilterToken(key: key, label: $0) } }
     }
 

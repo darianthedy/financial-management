@@ -96,4 +96,14 @@ final class TransactionFiltersTests: XCTestCase {
         let result = try await applyFilters(f, to: baseQuery(client), client: client)
         XCTAssertNotNil(result)
     }
+
+    /// A drill-down's own filters, which its search field leaves alone.
+    func testActiveFacetsLeaveOutSearch() {
+        var f = TransactionFilters()
+        XCTAssertEqual(f.activeFacets, [])
+        f.search = "coffee"
+        f.budgets = Facet(values: ["Food"])
+        f.dateFrom = Date()
+        XCTAssertEqual(f.activeFacets, [.budgets, .date])
+    }
 }
