@@ -253,17 +253,15 @@ enum SplitSelectionRule {
     /// - An empty list is treated as "still loading": nothing changes.
     /// - A selection that is no longer listed is cleared.
     /// - With nothing selected, the stored selection is restored once
-    ///   (`restoring`) if that can't surprise anyone: into a tiled split
-    ///   (it only fills the detail column), or from a tiled split into a push
-    ///   (fold continuity). A push → push restore is skipped, so relaunching
-    ///   the iPhone layout, or popping a stack to its root, never re-pushes.
+    ///   (`restoring`), tiled or pushed, so a fold, an unfold or a rotation
+    ///   keeps it. Going Back forgets it (`.splitDetail`), so a stack popped
+    ///   to its root never re-pushes.
     static func resolve(
         selected: String?, stored: Stored?, available: [String], restoring: Bool, isTiled: Bool
     ) -> String? {
         guard !available.isEmpty else { return selected }
         if let selected { return available.contains(selected) ? selected : nil }
-        guard restoring, let stored, isTiled || stored.wasTiled,
-              available.contains(stored.id) else { return nil }
+        guard restoring, let stored, available.contains(stored.id) else { return nil }
         return stored.id
     }
 }
