@@ -1,6 +1,6 @@
 # iOS root: back to tabs, Music-style list | detail
 
-Status: **agreed** (Discord review, 2026-11-06). Integration branch `ios/tab-root`. Phase branches `ios/tab-root-pN`. `main` is untouched until the owner says otherwise.
+Status: **done**, device-tested and merged to `main` (2026-11-06). Built on the integration branch `ios/tab-root` (phase PRs #303 and #305–#317).
 
 ## Why
 
@@ -34,10 +34,16 @@ Otherwise it's a plain `NavigationStack` and `.splitDetail` pushes.
 
 - Tiled, it's a two-column `NavigationSplitView` with both columns always visible: the `.balanced` style, `.toolbar(removing: .sidebarToggle)`, and `.doubleColumn` visibility.
 - Everything it uses is public, documented SwiftUI.
-- Rotation and fold swap the container. The existing continuity rebuilds the screen:
-  - `@SceneStorage` selection restore (`SplitSelectionRule`)
-  - `foldSafeSheet` / `hostsFoldSafeSheets` above the `TabView`
-  - `TransactionEditorDrafts`, `FoldKeptModels` and the root-owned `TransactionListViewModel`
+- The width class and orientation pick the container, so a fold or a rotation swaps it and re-creates the list. The selection lives in a root-owned `SplitSelectionStore` for the run, with `@SceneStorage` used only for relaunch.
+
+**Fold and rotation behaviour** (final, after on-device fold diagnostics):
+- **Outer display:** every tab opens on its list. The selection is kept. It's forgotten only when the user goes back from a detail they opened there. An unsaved Transactions draft is kept too: tapping that transaction reopens it in the editor, and tapping another asks "Discard changes?".
+- **Inner display, landscape:** the selection comes back in the detail column (`SplitDetailHost`, the split's `detail` driven by the selection).
+- **Inner display, portrait (rotation):** the tab's stack (`SplitPushStack`) starts with the selection on its `NavigationStack(path:)` and builds the detail at its root from the stored ID.
+- **Why the outer display doesn't restore a push:** a fold moves the app to the other screen while it re-creates the stack. When that move landed before the new stack's first push, the push was cancelled, at random, and no documented API orders the two. Rotation stays on one screen and has no such race. If it ever shows one, portrait opens on the list too.
+- **Sheets and drafts:** `foldSafeSheet` / `hostsFoldSafeSheets` above the `TabView`; `TransactionEditorDrafts`, `FoldKeptModels` and the root-owned `TransactionListViewModel`, which loads once and refreshes on pull.
+- **Lists:** every tab's list | detail split is 50/50, with the fold setting the edge in book posture.
+- **Not done:** `TrailingBarClearance` was removed. The swipe-action gap on the outer display is back, pending a documented fix. Transactions' date headers use the system background, which removes the book-posture strip.
 
 **Tags, Categories, Fixed Expenses and Scheduled** sit inside More, so they push their detail (the filtered transaction list or the editor) on every display. A "Show in Transactions" action that switches tabs with a filter is deferred as a possible later feature.
 
