@@ -82,6 +82,7 @@ final class FoldRestoreLayoutTests: XCTestCase {
         XCTAssertNotNil(recorder.records["split.list"], "never tiled before the fold")
 
         // The fold: the outer display's size and compact width.
+        print("SPLIT-TRACE ---- fold \(key)")
         recorder.reset()
         display.size = .outerPortrait
         window.frame = CGRect(origin: .zero, size: LayoutSize.outerPortrait.size)
@@ -89,6 +90,7 @@ final class FoldRestoreLayoutTests: XCTestCase {
         // Let any late reload or reconcile run: a probe that leaves the
         // screen drops out of the records.
         try await Task.sleep(for: .seconds(3))
+        print("SPLIT-TRACE ---- end \(key) stored=\(String(describing: store.value(for: key))) probes=\(recorder.records.keys.sorted())")
         return recorder.records
     }
 

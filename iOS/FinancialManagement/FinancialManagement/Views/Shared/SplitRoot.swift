@@ -131,6 +131,14 @@ extension EnvironmentValues {
     @Entry var splitSelectionStore: SplitSelectionStore? = nil
 }
 
+/// Traces `.splitDetail`'s restore while a fold test asks for it.
+@MainActor
+func splitTrace(_ message: @autoclosure () -> String) {
+    #if DEBUG
+    if LayoutProbeRecorder.shared.dropsDisappeared { print("SPLIT-TRACE \(message())") }
+    #endif
+}
+
 /// A `.splitDetail` item pushed on a `SplitPushStack`, by its stored ID.
 struct SplitPushID: Hashable {
     let id: String
@@ -153,6 +161,7 @@ private struct SplitPushStack<Content: View>: View {
     init(restoring storedID: String?, @ViewBuilder content: () -> Content) {
         let stored = SplitSelectionRule.Stored(rawValue: storedID)
         _path = State(initialValue: stored.map { [SplitPushID(id: $0.id)] } ?? [])
+        splitTrace("push stack init stored=\(storedID ?? "nil")")
         self.content = content()
     }
 
@@ -399,7 +408,8 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
                     .navigationDestination(for: SplitPushID.self) { pushed in
                         pushedDetail(pushed.id)
                     }
-                    .onChange(of: pushPath.wrappedValue) { _, path in
+                    .onChange(of: pushPath.wrappedValue) { old, path in
+                        splitTrace("\(storageKey) path \(old.map(\.id)) -> \(path.map(\.id)) selection=\(selection.map(id) ?? "nil")")
                         // Back: the list is on screen again with nothing
                         // pushed (it forgets the selection in `onAppear`).
                         if path.isEmpty, selection != nil { selection = nil }
@@ -419,6 +429,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             reconcile(items.map(id))
         }
         .onChange(of: selection) { _, new in
+            splitTrace("\(storageKey) selection -> \(new.map(id) ?? "nil") tiled=\(canTile) path=\(pushPath?.wrappedValue.map(\.id) ?? [])")
             if let new {
                 remember(SplitSelectionRule.Stored(id: id(new), wasTiled: canTile).rawValue)
                 if !canTile, let pushPath, pushPath.wrappedValue.last?.id != id(new) {
@@ -436,6 +447,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             // nothing pushed: the user went Back (`onAppear` below).
         }
         .onAppear {
+            splitTrace("\(storageKey) appear tiled=\(canTile) selection=\(selection.map(id) ?? "nil") restored=\(hasRestored)")
             if !canTile, selection == nil, hasRestored, pushPath?.wrappedValue.isEmpty ?? true {
                 forgetSelection()
             }
@@ -445,6 +457,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     /// The user left the selection: don't restore it, and start its
     /// drill-down afresh next time.
     private func forgetSelection() {
+        splitTrace("\(storageKey) forget")
         remember(nil)
         keptModels?.discardDrilldown(screen: storageKey)
     }
@@ -492,6 +505,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
             selected: current, stored: SplitSelectionRule.Stored(rawValue: currentStoredID),
             available: available, restoring: !hasRestored, isTiled: canTile
         )
+        splitTrace("\(storageKey) reconcile tiled=\(canTile) current=\(current ?? "nil") stored=\(currentStoredID ?? "nil") available=\(available.count) -> \(resolved ?? "nil")")
         if !available.isEmpty { hasRestored = true }
         guard resolved != current else { return }
         selection = resolved.flatMap { wanted in items.first { id($0) == wanted } }
