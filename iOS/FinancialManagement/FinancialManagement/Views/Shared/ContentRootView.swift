@@ -40,15 +40,15 @@ struct ContentRootView: View {
                 NavigationStack { DashboardView() }
             }
             Tab(AppSection.accounts.title, systemImage: AppSection.accounts.systemImage, value: RootTab.accounts) {
-                SplitRootContainer { AccountListView() }
+                SplitRootContainer(storageKey: "accounts") { AccountListView() }
             }
             Tab(AppSection.transactions.title, systemImage: AppSection.transactions.systemImage, value: RootTab.transactions) {
-                SplitRootContainer {
+                SplitRootContainer(storageKey: "transactions") {
                     TransactionListView(model: transactionList, isTabRoot: true)
                 }
             }
             Tab(AppSection.budgets.title, systemImage: AppSection.budgets.systemImage, value: RootTab.budgets) {
-                SplitRootContainer { BudgetListView() }
+                SplitRootContainer(storageKey: "budgets") { BudgetListView() }
             }
             Tab("More", systemImage: "ellipsis", value: RootTab.more) {
                 NavigationStack(path: $morePath) {
