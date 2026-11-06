@@ -33,6 +33,8 @@ struct ContentRootView: View {
     @State private var transactionList = TransactionListViewModel()
     /// Keeps the Budgets and Fixed Expenses month across a fold.
     @State private var keptModels = FoldKeptModels()
+    /// Each list's selection, so a fold or a rotation restores it.
+    @State private var selections = SplitSelectionStore()
 
     var body: some View {
         TabView(selection: $tab) {
@@ -72,6 +74,7 @@ struct ContentRootView: View {
         // Outside the sheet host too, so the sheets inherit it.
         .environment(\.transactionDrafts, transactionDrafts)
         .environment(\.foldKeptModels, keptModels)
+        .environment(\.splitSelectionStore, selections)
     }
 
     private func restore() {

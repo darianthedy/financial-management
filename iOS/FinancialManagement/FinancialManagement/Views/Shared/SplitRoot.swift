@@ -63,6 +63,8 @@ final class SplitDetailHost {
 /// The app's tabs and the layout tests both use it.
 struct SplitRootContainer<Content: View>: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.splitSelectionStore) private var store
+    private let storageKey: String?
     /// The list's selection, as `.splitDetail(storageKey:)` keeps it. Read
     /// here so a stack that pushes is created with the selected detail
     /// already on its path (`SplitPushStack`).
@@ -74,6 +76,7 @@ struct SplitRootContainer<Content: View>: View {
     ///   one, the stack starts on the list and `.splitDetail` pushes itself.
     init(storageKey: String? = nil, @ViewBuilder content: () -> Content) {
         _storedID = SceneStorage("split.\(storageKey ?? "")")
+        self.storageKey = storageKey
         restoresSelection = storageKey != nil
         self.content = content()
     }
@@ -83,12 +86,49 @@ struct SplitRootContainer<Content: View>: View {
             if SplitColumns.tiles(geo.size, regular: horizontalSizeClass == .regular) {
                 ListDetailSplit { content }
             } else if restoresSelection {
-                SplitPushStack(restoring: storedID) { content }
+                SplitPushStack(restoring: currentStoredID) { content }
             } else {
                 NavigationStack { content }
             }
         }
     }
+
+    /// This run's stored selection, else the scene's (a relaunch).
+    private var currentStoredID: String? {
+        guard let storageKey, let kept = store?.value(for: storageKey) else { return storedID }
+        return kept
+    }
+}
+
+/// Each list's stored selection (`SplitSelectionRule.Stored`), by its
+/// `.splitDetail` storage key, owned by `ContentRootView` above every tab.
+///
+/// `@SceneStorage` is for restoring a scene on relaunch: each view reading a
+/// key keeps its own copy, which needn't see another view's writes while the
+/// app runs. A fold or a rotation re-creates the list and its container in
+/// the same run, so they read the selection from here, and fall back to
+/// their `@SceneStorage` only when this has nothing (a relaunch).
+///
+/// A cache, not view state: nothing here is observed.
+@MainActor
+final class SplitSelectionStore {
+    private var values: [String: String?] = [:]
+
+    /// The stored selection for `key`: `.some(nil)` once it was cleared,
+    /// nil while this run hasn't stored anything for it.
+    func value(for key: String) -> String?? {
+        values[key]
+    }
+
+    func set(_ value: String?, for key: String) {
+        values[key] = .some(value)
+    }
+}
+
+extension EnvironmentValues {
+    /// Set by `ContentRootView`. Absent (e.g. in a hosted test), lists use
+    /// their `@SceneStorage` alone.
+    @Entry var splitSelectionStore: SplitSelectionStore? = nil
 }
 
 /// A `.splitDetail` item pushed on a `SplitPushStack`, by its stored ID.
@@ -318,6 +358,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     @Environment(\.foldKeptModels) private var keptModels
     @Environment(\.splitDetailHost) private var host
     @Environment(\.splitPushPath) private var pushPath
+    @Environment(\.splitSelectionStore) private var store
     @Binding var selection: Item?
     let storageKey: String
     let items: [Item]
@@ -379,7 +420,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         }
         .onChange(of: selection) { _, new in
             if let new {
-                storedID = SplitSelectionRule.Stored(id: id(new), wasTiled: canTile).rawValue
+                remember(SplitSelectionRule.Stored(id: id(new), wasTiled: canTile).rawValue)
                 if !canTile, let pushPath, pushPath.wrappedValue.last?.id != id(new) {
                     pushPath.wrappedValue = [SplitPushID(id: id(new))]
                 }
@@ -404,8 +445,20 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
     /// The user left the selection: don't restore it, and start its
     /// drill-down afresh next time.
     private func forgetSelection() {
-        storedID = nil
+        remember(nil)
         keptModels?.discardDrilldown(screen: storageKey)
+    }
+
+    /// Stores the selection for this run (`SplitSelectionStore`) and for a
+    /// relaunch (`@SceneStorage`).
+    private func remember(_ value: String?) {
+        store?.set(value, for: storageKey)
+        storedID = value
+    }
+
+    /// This run's stored selection, else the scene's (a relaunch).
+    private var currentStoredID: String? {
+        store?.value(for: storageKey) ?? storedID
     }
 
     /// The detail of the item `pushedID` names, once it's in the list.
@@ -436,7 +489,7 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
         // before its stack exists).
         if !canTile, pushPath == nil, current == nil, !hasRestored, !hasAppeared { return }
         let resolved = SplitSelectionRule.resolve(
-            selected: current, stored: SplitSelectionRule.Stored(rawValue: storedID),
+            selected: current, stored: SplitSelectionRule.Stored(rawValue: currentStoredID),
             available: available, restoring: !hasRestored, isTiled: canTile
         )
         if !available.isEmpty { hasRestored = true }
