@@ -43,7 +43,7 @@ struct ContentRootView: View {
                 SplitRootContainer { AccountListView() }
             }
             Tab(AppSection.transactions.title, systemImage: AppSection.transactions.systemImage, value: RootTab.transactions) {
-                SplitRootContainer(halves: AppSection.transactions.halvesSplit) {
+                SplitRootContainer {
                     TransactionListView(model: transactionList, isTabRoot: true)
                 }
             }

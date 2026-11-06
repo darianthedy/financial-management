@@ -119,7 +119,6 @@ struct BudgetListView: View {
                     )
                 }
                 .listStyle(.plain)
-                .staysClearOfTrailingBar()
                 .scrollContentBackground(.hidden)
                 .background(Color.appBackground)
                 .monthPageTransition(
