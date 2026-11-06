@@ -72,7 +72,11 @@ final class FoldRestoreLayoutTests: XCTestCase {
         let recorder = LayoutProbeRecorder.shared
         recorder.reset()
         recorder.isRecording = true
-        defer { recorder.isRecording = false }
+        recorder.dropsDisappeared = true
+        defer {
+            recorder.isRecording = false
+            recorder.dropsDisappeared = false
+        }
 
         try await poll { recorder.records["split.detail"] != nil && recorder.records["split.list"] != nil }
         XCTAssertNotNil(recorder.records["split.list"], "never tiled before the fold")

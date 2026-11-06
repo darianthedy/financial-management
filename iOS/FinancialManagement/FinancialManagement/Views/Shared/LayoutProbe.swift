@@ -43,6 +43,9 @@ final class LayoutProbeRecorder {
     static let shared = LayoutProbeRecorder()
 
     var isRecording = false
+    /// Drop a probe's record when its view disappears, for tests that ask
+    /// what is on screen now rather than what was shown.
+    var dropsDisappeared = false
     private(set) var records: [String: Record] = [:]
 
     func reset() { records = [:] }
@@ -50,7 +53,7 @@ final class LayoutProbeRecorder {
     /// A probe left the screen. Only its own record goes: another view may
     /// have recorded the same ID since (a re-created screen).
     func remove(_ id: String, _ frame: CGRect) {
-        guard isRecording, records[id]?.frame == frame else { return }
+        guard isRecording, dropsDisappeared, records[id]?.frame == frame else { return }
         records[id] = nil
     }
 
