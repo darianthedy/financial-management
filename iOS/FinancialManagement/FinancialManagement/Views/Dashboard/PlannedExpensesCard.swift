@@ -57,6 +57,15 @@ struct PlannedExpensesCard: View {
         paidFixedExpenseTotals[expense.id] ?? expense.amount
     }
 
+    /// Widest spent / limit bodies among the budgets, sizing the two columns
+    /// of the budget rows' "spent / limit" fraction.
+    private var widestBudgetSpent: String {
+        CurrencyUtils.numberBody(budgets.map { abs($0.spent) }.max() ?? 0, currency: currencyCode)
+    }
+    private var widestBudgetLimit: String {
+        CurrencyUtils.numberBody(budgets.map { abs(effective($0)) }.max() ?? 0, currency: currencyCode)
+    }
+
     private var isEmpty: Bool { budgets.isEmpty && fixedExpenses.isEmpty }
 
     /// Fraction of the selected month already elapsed: 0 for a future month,
@@ -160,17 +169,29 @@ struct PlannedExpensesCard: View {
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1)
                 Spacer()
-                // A spent-of-budget fraction, not a column: the two amounts sit
-                // snugly around the slash rather than in padded column slots
-                // (which left a wide gap before a small spend like "0").
-                Text("\(budget.spent.asCurrency(code: currencyCode)) / \(eff.asCurrency(code: currencyCode))")
-                    .font(.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(overspent ? Color.appDanger : Color.appMutedForeground)
-                    .lineLimit(1)
-                    .minimumScaleFactor(horizontalSizeClass == .regular ? 1 : 0.7)
-                    // The budget name truncates before the money does.
-                    .layoutPriority(1)
+                // Spent and limit are each a column sized to the widest
+                // budget (not the whole dashboard), so the slashes and symbols
+                // line up down the list without a wide gap before small spends.
+                HStack(spacing: 4) {
+                    AmountColumnView(
+                        minorUnits: budget.spent,
+                        currencyCode: currencyCode,
+                        widestNumber: widestBudgetSpent
+                    )
+                    Text("/")
+                        .fixedSize()
+                    AmountColumnView(
+                        minorUnits: eff,
+                        currencyCode: currencyCode,
+                        widestNumber: widestBudgetLimit
+                    )
+                }
+                .font(.caption)
+                .foregroundStyle(overspent ? Color.appDanger : Color.appMutedForeground)
+                .lineLimit(1)
+                .minimumScaleFactor(horizontalSizeClass == .regular ? 1 : 0.7)
+                // The budget name truncates before the money does.
+                .layoutPriority(1)
             }
 
             paceBar(
