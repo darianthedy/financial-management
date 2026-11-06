@@ -148,10 +148,6 @@ extension EnvironmentValues {
 /// pushing it once the list is on screen.
 private struct SplitPushStack<Content: View>: View {
     @State private var path: [SplitPushID]
-    /// Until the stack is on screen, it shows what it was created with
-    /// without animating: a fold or a rotation re-creates it already on the
-    /// detail, which slid in as if just opened.
-    @State private var isOnScreen = false
     let content: Content
 
     init(restoring storedID: String?, @ViewBuilder content: () -> Content) {
@@ -164,10 +160,6 @@ private struct SplitPushStack<Content: View>: View {
         NavigationStack(path: $path) {
             content.environment(\.splitPushPath, $path)
         }
-        .transaction { transaction in
-            if !isOnScreen { transaction.disablesAnimations = true }
-        }
-        .onAppear { isOnScreen = true }
     }
 }
 
