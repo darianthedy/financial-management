@@ -41,7 +41,7 @@ final class FoldRestoreLayoutTests: XCTestCase {
 
     /// Selects `storedID` in the tiled split, then folds and unfolds
     /// `times` times, checking after each fold that the outer display shows
-    /// the detail. Failures carry the restore's trace.
+    /// the detail.
     private func foldRepeatedly<Content: View, Detail: View>(
         selecting storedID: String, key: String, times: Int = 4,
         @ViewBuilder detail: @escaping (String, @escaping () -> Void) -> Detail,
@@ -74,7 +74,6 @@ final class FoldRestoreLayoutTests: XCTestCase {
 
         let recorder = LayoutProbeRecorder.shared
         recorder.reset()
-        recorder.trace = []
         recorder.isRecording = true
         recorder.dropsDisappeared = true
         defer {
@@ -83,7 +82,6 @@ final class FoldRestoreLayoutTests: XCTestCase {
         }
 
         func show(_ size: LayoutSize) {
-            recorder.trace.append("---- \(size)")
             display.size = size
             window.frame = CGRect(origin: .zero, size: size.size)
         }
@@ -97,10 +95,9 @@ final class FoldRestoreLayoutTests: XCTestCase {
             // Let any late reload or reconcile run: a probe that leaves the
             // screen drops out of the records.
             try await Task.sleep(for: .milliseconds(1500))
-            let trace = recorder.trace.joined(separator: "\n")
             XCTAssertNotNil(
                 recorder.records["split.detail"],
-                "fold \(round): the outer display showed the list. stored=\(String(describing: store.value(for: key)))\n\(trace)"
+                "fold \(round): the outer display showed the list. stored=\(String(describing: store.value(for: key)))"
             )
             guard recorder.records["split.detail"] != nil else { return }
 
