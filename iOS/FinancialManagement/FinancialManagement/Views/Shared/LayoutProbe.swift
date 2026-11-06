@@ -21,6 +21,7 @@ private struct LayoutProbeModifier: ViewModifier {
                 Color.clear
                     .onAppear { LayoutProbeRecorder.shared.record(id, frame, interactive: interactive) }
                     .onChange(of: frame) { LayoutProbeRecorder.shared.record(id, frame, interactive: interactive) }
+                    .onDisappear { LayoutProbeRecorder.shared.remove(id, frame) }
             }
         }
         #else
@@ -42,9 +43,19 @@ final class LayoutProbeRecorder {
     static let shared = LayoutProbeRecorder()
 
     var isRecording = false
+    /// Drop a probe's record when its view disappears, for tests that ask
+    /// what is on screen now rather than what was shown.
+    var dropsDisappeared = false
     private(set) var records: [String: Record] = [:]
 
     func reset() { records = [:] }
+
+    /// A probe left the screen. Only its own record goes: another view may
+    /// have recorded the same ID since (a re-created screen).
+    func remove(_ id: String, _ frame: CGRect) {
+        guard isRecording, dropsDisappeared, records[id]?.frame == frame else { return }
+        records[id] = nil
+    }
 
     func record(_ id: String, _ frame: CGRect, interactive: Bool) {
         guard isRecording else { return }

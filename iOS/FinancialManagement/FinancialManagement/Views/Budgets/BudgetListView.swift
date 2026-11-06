@@ -241,6 +241,12 @@ struct BudgetDrilldown: Identifiable, Hashable {
 
     var id: String { "\(name)|\(yearMonth)" }
 
+    /// Reads back `id` (the month follows the last "|").
+    init?(id: String) {
+        guard let bar = id.lastIndex(of: "|") else { return nil }
+        self.init(name: String(id[..<bar]), yearMonth: String(id[id.index(after: bar)...]))
+    }
+
     init(name: String, yearMonth: String) {
         self.name = name
         self.yearMonth = yearMonth
