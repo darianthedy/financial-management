@@ -89,7 +89,20 @@ common=(
 )
 
 # --- Build once ------------------------------------------------------------
-if ! xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; then
+build() { xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; }
+# A DerivedData restored from the workflow's cache (DD_RESTORED=true) is only
+# trusted while it builds: on any failure, retry once from a clean one.
+built=1
+if ! build; then
+  built=0
+  if [ "${DD_RESTORED:-}" = "true" ]; then
+    echo "warning: build on the cached DerivedData failed after $((SECONDS - start))s; retrying clean" | tee -a "$out/summary.txt"
+    mv "$out/build.log" "$out/build-cached.log"
+    rm -rf "$dd"
+    build && built=1
+  fi
+fi
+if [ "$built" = 0 ]; then
   grep -E "error:" "$out/build.log" | sort -u | head -50
   echo "build-for-testing FAILED after $((SECONDS - start))s" | tee -a "$out/summary.txt"
   exit 1
