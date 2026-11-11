@@ -84,7 +84,10 @@ common=(
 )
 
 # --- Build once ------------------------------------------------------------
-if ! xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; then
+# CI never debugs or indexes: build only the simulator's arch, skip the index
+# store, and leave debug info in the object files instead of a dSYM.
+fast=(ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf)
+if ! xcodebuild build-for-testing "${common[@]}" "${fast[@]}" >"$out/build.log" 2>&1; then
   grep -E "error:" "$out/build.log" | sort -u | head -50
   echo "build-for-testing FAILED after $((SECONDS - start))s" | tee -a "$out/summary.txt"
   exit 1
