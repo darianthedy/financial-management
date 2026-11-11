@@ -54,8 +54,6 @@ if [ -z "$devtype" ]; then
   echo "warning: no iPhone Duo device type; using $devtype" | tee -a "$out/summary.txt"
 fi
 udid="$(xcrun simctl create PRCheck "$devtype" "$runtime")"
-# Boot in the background while the build runs.
-xcrun simctl boot "$udid" &
 echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
 
 # Config/*.xcconfig is git-ignored, so supply placeholder Supabase settings;
@@ -89,7 +87,7 @@ common=(
 )
 
 # --- Build once ------------------------------------------------------------
-build() { xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; }
+build() { xcodebuild build-for-testing "${common[@]}" -showBuildTimingSummary >"$out/build.log" 2>&1; }
 # A DerivedData restored from the workflow's cache (DD_RESTORED=true) is only
 # trusted while it builds: on any failure, retry once from a clean one.
 built=1
@@ -111,8 +109,13 @@ build_s=$((SECONDS - start))
 echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
 
 # --- Test twice (unit + layout; XCUITests wait for gate G4 / T3) -----------
-wait # simulator boot
+# EXP: timing of the build's phases, and boot only after the build.
+echo "EXP first xcodebuild output: $(grep -m1 -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+' "$out/build.log" || echo none)"
+sed -n '/Build Timing Summary/,$p' "$out/build.log" | head -40 || true
+boot_start=$SECONDS
+xcrun simctl boot "$udid" || true
 xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
+echo "EXP simulator boot: $((SECONDS - boot_start))s"
 
 gate_env=()
 if [ "${GATE:-0}" = "1" ]; then
