@@ -164,6 +164,7 @@ extension XCTestCase {
                 RunLoop.current.run(until: Date().addingTimeInterval(0.25))
             } while Date() < deadline
         }
+        dumpScreen(XCUIApplication())
         XCTFail("\(field) never took keyboard focus", file: file, line: line)
     }
 
