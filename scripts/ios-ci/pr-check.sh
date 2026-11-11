@@ -84,7 +84,9 @@ common=(
 )
 
 # --- Build once ------------------------------------------------------------
-if ! xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; then
+only=(-only-testing:FinancialManagementTests)
+[ "${UITESTS:-0}" = "1" ] && only=()
+if ! xcodebuild build-for-testing "${common[@]}" ${only[@]+"${only[@]}"} >"$out/build.log" 2>&1; then
   grep -E "error:" "$out/build.log" | sort -u | head -50
   echo "build-for-testing FAILED after $((SECONDS - start))s" | tee -a "$out/summary.txt"
   exit 1
