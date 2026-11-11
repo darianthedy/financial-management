@@ -108,6 +108,12 @@ if [ "$built" = 0 ]; then
   exit 1
 fi
 build_s=$((SECONDS - start))
+# DIAG (temporary): what did the build recompile?
+echo "DIAG SwiftCompile total: $(grep -c '^SwiftCompile ' "$out/build.log" || true)"
+echo "DIAG SwiftCompile packages: $(grep '^SwiftCompile ' "$out/build.log" | grep -c SourcePackages || true)"
+echo "DIAG SwiftDriver tasks: $(grep -c '^SwiftDriver ' "$out/build.log" || true)"
+grep -E '^(SwiftCompile|SwiftDriver|CompileC|Ld|ProcessInfoPlistFile|CompileAssetCatalog)' "$out/build.log" | awk '{print $1}' | sort | uniq -c
+grep -E '^SwiftCompile ' "$out/build.log" | head -5 | cut -c1-250
 echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
 
 # --- Test twice (unit + layout; XCUITests wait for gate G4 / T3) -----------
