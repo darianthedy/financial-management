@@ -89,11 +89,7 @@ common=(
 )
 
 # --- Build once ------------------------------------------------------------
-# Without the XCUITests, build only the unit test bundle (and the app it hosts
-# in), so FinancialManagementUITests isn't compiled for nothing.
-only=(-only-testing:FinancialManagementTests)
-[ "${UITESTS:-0}" = "1" ] && only=()
-if ! xcodebuild build-for-testing "${common[@]}" ${only[@]+"${only[@]}"} >"$out/build.log" 2>&1; then
+if ! xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; then
   grep -E "error:" "$out/build.log" | sort -u | head -50
   echo "build-for-testing FAILED after $((SECONDS - start))s" | tee -a "$out/summary.txt"
   exit 1
