@@ -51,8 +51,7 @@ final class HappyPathUITests: XCTestCase {
         let accountName = "UITest Account \(Int(Date().timeIntervalSince1970))"
         let nameField = app.textFields.firstMatch
         waitFor(nameField, 5, in: app)
-        nameField.tap()
-        nameField.typeText(accountName)
+        focusAndType(nameField, accountName)
         app.buttons["Save"].firstMatch.tap()
         // The sheet closes only on success; a save error keeps it up, with
         // the new row possibly visible behind it.
@@ -77,8 +76,7 @@ final class HappyPathUITests: XCTestCase {
         accountOption.tap()
         let amountField = app.textFields["0"].firstMatch
         waitFor(amountField, 5, in: app)
-        amountField.tap()
-        amountField.typeText("42")
+        focusAndType(amountField, "42")
         let save = app.buttons["Save"].firstMatch
         XCTAssertTrue(save.isEnabled)
         save.tap()

@@ -110,12 +110,63 @@ extension XCTestCase {
 
     /// A pushed screen's back button: labelled "Back" or with the previous
     /// screen's title, the leading button of its navigation bar.
+    /// On the outer display's rail the back button leaves the navigation bar
+    /// (an unlabelled "BackButton" on the rail), so it is looked up on screen.
     func backButton(of bar: XCUIElement, previous: String) -> XCUIElement {
-        let labelled = bar.buttons.matching(
-            NSPredicate(format: "label == %@ OR label == %@ OR identifier == %@", "Back", previous, "BackButton")
-        ).firstMatch
-        return labelled.exists ? labelled : bar.buttons.element(boundBy: 0)
+        let predicate = NSPredicate(
+            format: "label == %@ OR label == %@ OR identifier == %@", "Back", previous, "BackButton"
+        )
+        let labelled = bar.buttons.matching(predicate).firstMatch
+        if labelled.exists { return labelled }
+        // XCUIApplication() is a proxy for the app under test, the one already launched.
+        if let onRail = XCUIApplication().buttons.matching(predicate).allElementsBoundByIndex
+            .first(where: { $0.exists && $0.isHittable }) {
+            return onRail
+        }
+        return bar.buttons.element(boundBy: 0)
     }
+
+    /// The button labelled `label` among `bar`'s items: in the navigation
+    /// bar, or on the outer display's rail, where the system moves them.
+    /// Waits up to `timeout` for one that can be tapped.
+    func barButton(
+        _ label: String, of bar: XCUIElement, in app: XCUIApplication, timeout: TimeInterval = 10,
+        file: StaticString = #filePath, line: UInt = #line
+    ) -> XCUIElement {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let inBar = bar.buttons[label]
+            if inBar.exists { return inBar }
+            if let onRail = app.buttons.matching(NSPredicate(format: "label == %@", label))
+                .allElementsBoundByIndex.first(where: { $0.exists && $0.isHittable }) {
+                return onRail
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        } while Date() < deadline
+        dumpScreen(app)
+        XCTFail("No \"\(label)\" button in or beside \(bar) after \(Int(timeout))s", file: file, line: line)
+        return bar.buttons[label]
+    }
+
+    /// Taps `field` until it has keyboard focus, then types `text`. A tap
+    /// that lands while a sheet is still presenting doesn't focus it.
+    func focusAndType(
+        _ field: XCUIElement, _ text: String, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        for _ in 0..<3 {
+            field.tap()
+            let deadline = Date().addingTimeInterval(2)
+            repeat {
+                if (field.value(forKey: "hasKeyboardFocus") as? Bool) == true {
+                    field.typeText(text)
+                    return
+                }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+            } while Date() < deadline
+        }
+        XCTFail("\(field) never took keyboard focus", file: file, line: line)
+    }
+
 
     /// Rotates the device and lets the layout settle.
     func rotate(_ orientation: UIDeviceOrientation, in app: XCUIApplication) {
