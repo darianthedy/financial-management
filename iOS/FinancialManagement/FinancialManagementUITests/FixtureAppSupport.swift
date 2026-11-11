@@ -16,13 +16,57 @@ extension XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["DUO_FIXTURES"] = "1"
         app.launch()
-        waitUntilExists(app.tabBars.firstMatch, 15, in: app, file: file, line: line)
+        waitForTabs(15, in: app, file: file, line: line)
         return app
     }
 
-    /// The root's tab bar button for `name` (Dashboard, Accounts, …).
+    /// The SF Symbol of each tab (AppSection.systemImage, ContentRootView),
+    /// including the sidebar-only sections that must not show up as tabs.
+    /// A rail button's accessibility identifier is its symbol's name.
+    private static let tabSymbols: [String: String] = [
+        "Dashboard": "square.grid.2x2",
+        "Accounts": "wallet.bifold",
+        "Transactions": "arrow.left.arrow.right",
+        "Budgets": "target",
+        "More": "ellipsis",
+        "Tags": "tag",
+        "Settings": "gear",
+    ]
+
+    /// The root's tab buttons. On the iPhone Duo's outer display the system
+    /// draws the tab bar as a vertical rail, which the accessibility tree
+    /// exposes as plain buttons (in a Toolbar) with no TabBar element; there
+    /// they are matched by their symbol, so a pushed screen's "Accounts" back
+    /// button never stands in for the Accounts tab.
+    func tabButtons(in app: XCUIApplication) -> XCUIElementQuery {
+        if app.tabBars.firstMatch.exists { return app.tabBars.buttons }
+        return app.buttons.matching(
+            NSPredicate(format: "identifier IN %@", Array(Self.tabSymbols.values))
+        )
+    }
+
+    /// The root's tab button for `name` (Dashboard, Accounts, …), in a tab
+    /// bar or on the outer display's rail.
     func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
-        app.tabBars.buttons[name]
+        tabButtons(in: app).matching(NSPredicate(format: "label == %@", name)).firstMatch
+    }
+
+    /// Waits for the root's tabs, in a tab bar or on the rail. Polls both, as
+    /// which one shows is only known once the root is up.
+    func waitForTabs(
+        _ timeout: TimeInterval, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let rail = app.buttons.matching(
+            NSPredicate(format: "label == %@ AND identifier == %@", "Dashboard", Self.tabSymbols["Dashboard"]!)
+        ).firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if app.tabBars.firstMatch.exists || rail.exists { return }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        } while Date() < deadline
+        dumpScreen(app)
+        XCTFail("Timed out after \(Int(timeout))s waiting for the tab bar or rail", file: file, line: line)
     }
 
     /// Selects the tab `name`, and pops its stack to its root screen (titled

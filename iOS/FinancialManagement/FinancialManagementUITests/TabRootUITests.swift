@@ -32,7 +32,7 @@ final class TabRootUITests: XCTestCase {
             for name in Self.tabs {
                 XCTAssertTrue(tab(name, in: app).waitForExistence(timeout: 5), "\(name) tab, \(orientation.rawValue)")
             }
-            XCTAssertEqual(app.tabBars.buttons.count, Self.tabs.count, "tab bar buttons, \(orientation.rawValue)")
+            XCTAssertEqual(tabButtons(in: app).count, Self.tabs.count, "tab bar buttons, \(orientation.rawValue)")
             for toggle in ["Show Sidebar", "Hide Sidebar", "Sidebar"] {
                 XCTAssertFalse(app.buttons[toggle].exists, "\(toggle) button, \(orientation.rawValue)")
             }

@@ -43,9 +43,8 @@ final class HappyPathUITests: XCTestCase {
         app.buttons["Sign in"].tap()
 
         // 2. Land on the Dashboard and open the Accounts tab.
-        let accountsTab = section("Accounts", in: app)
-        waitFor(accountsTab, 15, in: app)
-        accountsTab.tap()
+        waitForTabs(15, in: app)
+        section("Accounts", in: app).tap()
 
         // 3. Add an account via the "+" toolbar button.
         app.buttons["Add"].firstMatch.tap()
@@ -90,10 +89,10 @@ final class HappyPathUITests: XCTestCase {
         waitFor(app.staticTexts["Planned Expenses"], 10, in: app)
     }
 
-    /// A section's button in the root's tab bar, the same five tabs on every
-    /// display (docs/ios-tab-root-plan.md).
+    /// A section's button in the root's tab bar (or the outer display's
+    /// rail), the same five tabs on every display (docs/ios-tab-root-plan.md).
     private func section(_ name: String, in app: XCUIApplication) -> XCUIElement {
-        app.tabBars.buttons[name]
+        tab(name, in: app)
     }
 
     /// Waits for `element`; on a miss, logs what was on screen (the CI log is
