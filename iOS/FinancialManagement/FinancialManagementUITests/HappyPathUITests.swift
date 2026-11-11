@@ -44,6 +44,13 @@ final class HappyPathUITests: XCTestCase {
 
         // 2. Land on the Dashboard and open the Accounts tab.
         waitForTabs(15, in: app)
+        // iOS offers to save the signed-in password in a sheet over the app,
+        // which takes every tap until it is answered.
+        let notNow = app.buttons["Not Now"]
+        if notNow.waitForExistence(timeout: 5) {
+            notNow.tap()
+            XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "Save Password? sheet")
+        }
         section("Accounts", in: app).tap()
 
         // 3. Add an account via the "+" toolbar button.
