@@ -54,6 +54,8 @@ if [ -z "$devtype" ]; then
   echo "warning: no iPhone Duo device type; using $devtype" | tee -a "$out/summary.txt"
 fi
 udid="$(xcrun simctl create PRCheck "$devtype" "$runtime")"
+# Boot in the background while the build runs.
+xcrun simctl boot "$udid" &
 echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
 
 # Config/*.xcconfig is git-ignored, so supply placeholder Supabase settings;
@@ -87,20 +89,7 @@ common=(
 )
 
 # --- Build once ------------------------------------------------------------
-build() { xcodebuild build-for-testing "${common[@]}" -showBuildTimingSummary >"$out/build.log" 2>&1; }
-# A DerivedData restored from the workflow's cache (DD_RESTORED=true) is only
-# trusted while it builds: on any failure, retry once from a clean one.
-built=1
-if ! build; then
-  built=0
-  if [ "${DD_RESTORED:-}" = "true" ]; then
-    echo "warning: build on the cached DerivedData failed after $((SECONDS - start))s; retrying clean" | tee -a "$out/summary.txt"
-    mv "$out/build.log" "$out/build-cached.log"
-    rm -rf "$dd"
-    build && built=1
-  fi
-fi
-if [ "$built" = 0 ]; then
+if ! xcodebuild build-for-testing "${common[@]}" >"$out/build.log" 2>&1; then
   grep -E "error:" "$out/build.log" | sort -u | head -50
   echo "build-for-testing FAILED after $((SECONDS - start))s" | tee -a "$out/summary.txt"
   exit 1
@@ -109,10 +98,8 @@ build_s=$((SECONDS - start))
 echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
 
 # --- Test twice (unit + layout; XCUITests wait for gate G4 / T3) -----------
-# EXP: timing of the build's phases, and boot only after the build.
-echo "EXP first xcodebuild output: $(grep -m1 -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+' "$out/build.log" || echo none)"
-sed -n '/Build Timing Summary/,$p' "$out/build.log" | head -40 || true
-# EXP: no explicit boot; test-without-building boots the simulator itself.
+wait # simulator boot
+xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
 
 gate_env=()
 if [ "${GATE:-0}" = "1" ]; then
@@ -134,8 +121,7 @@ env ${gate_env[@]+"${gate_env[@]}"} perl -e 'alarm shift; exec @ARGV' 900 \
   -default-test-execution-time-allowance 180 \
   -maximum-test-execution-time-allowance 300 \
   -resultBundlePath "$out/tests.xcresult" 2>&1 \
-  | perl -MPOSIX -MTime::HiRes=time -ne '$|=1; my $t=time; printf "[%s.%03d] %s", strftime("%H:%M:%S", gmtime $t), ($t-int $t)*1000, $_' \
-  | tee "$out/test.log" | grep --line-buffered -E "Test Case .*(started|passed|failed)"
+  | tee "$out/test.log" | grep --line-buffered -E "^Test Case .*(started|passed|failed)"
 status=${PIPESTATUS[0]}
 set -e
 

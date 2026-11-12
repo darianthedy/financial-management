@@ -33,28 +33,6 @@ jobs:
         working-directory: iOS/FinancialManagement
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Full history, to date each file by its last commit (below).
-          fetch-depth: 0
-
-      # A fresh checkout stamps every file "now", which makes a cached
-      # DerivedData recompile everything. Give each file under iOS/ its last
-      # commit's time instead, so only files changed since the cache rebuild.
-      - name: Restore file times
-        working-directory: ${{ github.workspace }}
-        run: |
-          git log --format='T %ct' --name-only -- iOS | python3 -c '
-          import os, sys
-          seen, t = set(), 0
-          for line in sys.stdin:
-              line = line.rstrip("\n")
-              if line.startswith("T "):
-                  t = int(line[2:])
-              elif line and line not in seen:
-                  seen.add(line)
-                  if os.path.isfile(line):
-                      os.utime(line, (t, t))
-          print(f"dated {len(seen)} paths")'
 
       - name: Select Xcode 27.1
         run: |
@@ -64,7 +42,8 @@ jobs:
           xcodebuild -version
 
       # Cache the Swift package checkouts (Supabase and friends), keyed on the
-      # lockfile.
+      # lockfile. DerivedData is deliberately not cached: it is fragile across
+      # Xcode builds.
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:
@@ -72,35 +51,8 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('iOS/FinancialManagement/FinancialManagement.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
 
-      # DerivedData is fragile across Xcode builds, so its key is the exact
-      # `xcodebuild -version` plus the lockfile, with no fallback keys; one
-      # that fails to build is discarded for a clean build (pr-check.sh).
-      - name: Key DerivedData
-        id: dd-key
-        run: echo "key=dd-${{ runner.os }}-$(xcodebuild -version | shasum -a 256 | cut -c1-16)-${{ hashFiles('iOS/FinancialManagement/FinancialManagement.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}" >> "$GITHUB_OUTPUT"
-
-      - name: Restore DerivedData
-        id: dd
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ runner.temp }}/pr-dd
-          key: ${{ steps.dd-key.outputs.key }}
-
       - name: Build and test
-        env:
-          DD_RESTORED: ${{ steps.dd.outputs.cache-hit }}
         run: bash ../../scripts/ios-ci/pr-check.sh "$RUNNER_TEMP/pr-check"
-
-      - name: Trim DerivedData
-        if: success() && steps.dd.outputs.cache-hit != 'true'
-        run: rm -rf "$RUNNER_TEMP/pr-dd/Logs" "$RUNNER_TEMP/pr-dd/Index.noindex" && du -sh "$RUNNER_TEMP/pr-dd"
-
-      - name: Save DerivedData
-        if: success() && steps.dd.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ runner.temp }}/pr-dd
-          key: ${{ steps.dd-key.outputs.key }}
 
       - name: Summarize
         if: always()
@@ -113,7 +65,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload results
-        if: always()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: ios-pr-check
