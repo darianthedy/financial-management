@@ -146,7 +146,8 @@ env ${gate_env[@]+"${gate_env[@]}"} perl -e 'alarm shift; exec @ARGV' 900 \
   -default-test-execution-time-allowance 180 \
   -maximum-test-execution-time-allowance 300 \
   -resultBundlePath "$out/tests.xcresult" 2>&1 \
-  | tee "$out/test.log" | grep --line-buffered -E "^Test Case .*(started|passed|failed)"
+  | perl -MPOSIX -MTime::HiRes=time -ne '$|=1; my $t=time; printf "[%s.%03d] %s", strftime("%H:%M:%S", gmtime $t), ($t-int $t)*1000, $_' \
+  | tee "$out/test.log" | grep --line-buffered -E "Test Case .*(started|passed|failed)"
 status=${PIPESTATUS[0]}
 set -e
 
