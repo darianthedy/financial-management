@@ -81,6 +81,11 @@ common=(
   "${signing[@]}"
   "SUPABASE_URL=$supabase_url"
   "SUPABASE_ANON_KEY=$supabase_key"
+  # CI never indexes, debugs or ships this build: skip the index store and
+  # dSYMs, and build only the simulator's arch.
+  ONLY_ACTIVE_ARCH=YES
+  COMPILER_INDEX_STORE_ENABLE=NO
+  DEBUG_INFORMATION_FORMAT=dwarf
 )
 
 # --- Build once ------------------------------------------------------------
