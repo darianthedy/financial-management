@@ -112,10 +112,7 @@ echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
 # EXP: timing of the build's phases, and boot only after the build.
 echo "EXP first xcodebuild output: $(grep -m1 -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:.]+' "$out/build.log" || echo none)"
 sed -n '/Build Timing Summary/,$p' "$out/build.log" | head -40 || true
-boot_start=$SECONDS
-xcrun simctl boot "$udid" || true
-xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
-echo "EXP simulator boot: $((SECONDS - boot_start))s"
+# EXP: no explicit boot; test-without-building boots the simulator itself.
 
 gate_env=()
 if [ "${GATE:-0}" = "1" ]; then
