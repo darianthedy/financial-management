@@ -53,6 +53,15 @@ if [ -z "$devtype" ]; then
     jq -r '[.devicetypes[] | select(.productFamily == "iPhone")] | last | .identifier')"
   echo "warning: no iPhone Duo device type; using $devtype" | tee -a "$out/summary.txt"
 fi
+# EXP: is the first-boot stall the runtime's dyld shared cache?
+xcrun simctl runtime dyld_shared_cache --help 2>&1 | head -5 || true
+ls -la /Library/Developer/CoreSimulator/Caches/dyld 2>&1 | head; du -sh /Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
+du -sh ~/Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
+dsc_start=$SECONDS
+xcrun simctl runtime dyld_shared_cache update "$runtime" 2>&1 | tail -5 || true
+echo "EXP dyld_shared_cache update: $((SECONDS - dsc_start))s"
+du -sh /Library/Developer/CoreSimulator/Caches/dyld/* ~/Library/Developer/CoreSimulator/Caches/dyld/* 2>/dev/null || true
+start=$SECONDS
 udid="$(xcrun simctl create PRCheck "$devtype" "$runtime")"
 echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
 
