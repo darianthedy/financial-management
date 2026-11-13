@@ -43,17 +43,17 @@ final class HappyPathUITests: XCTestCase {
         app.buttons["Sign in"].tap()
 
         // 2. Land on the Dashboard and open the Accounts tab.
-        let accountsTab = section("Accounts", in: app)
-        waitFor(accountsTab, 15, in: app)
-        accountsTab.tap()
+        waitForTabs(15, in: app)
+        // It comes up a while after sign-in, at no fixed time.
+        declineSavePassword(in: app, timeout: 20)
+        section("Accounts", in: app).tap()
 
         // 3. Add an account via the "+" toolbar button.
         app.buttons["Add"].firstMatch.tap()
         let accountName = "UITest Account \(Int(Date().timeIntervalSince1970))"
         let nameField = app.textFields.firstMatch
         waitFor(nameField, 5, in: app)
-        nameField.tap()
-        nameField.typeText(accountName)
+        focusAndType(nameField, accountName)
         app.buttons["Save"].firstMatch.tap()
         // The sheet closes only on success; a save error keeps it up, with
         // the new row possibly visible behind it.
@@ -78,8 +78,7 @@ final class HappyPathUITests: XCTestCase {
         accountOption.tap()
         let amountField = app.textFields["0"].firstMatch
         waitFor(amountField, 5, in: app)
-        amountField.tap()
-        amountField.typeText("42")
+        focusAndType(amountField, "42")
         let save = app.buttons["Save"].firstMatch
         XCTAssertTrue(save.isEnabled)
         save.tap()
@@ -90,10 +89,22 @@ final class HappyPathUITests: XCTestCase {
         waitFor(app.staticTexts["Planned Expenses"], 10, in: app)
     }
 
-    /// A section's button in the root's tab bar, the same five tabs on every
-    /// display (docs/ios-tab-root-plan.md).
+    /// A section's button in the root's tab bar (or the outer display's
+    /// rail), the same five tabs on every display (docs/ios-tab-root-plan.md).
+    /// Answers a "Save Password?" sheet still up, so the tap reaches the tab.
     private func section(_ name: String, in app: XCUIApplication) -> XCUIElement {
-        app.tabBars.buttons[name]
+        declineSavePassword(in: app, timeout: 0)
+        return tab(name, in: app)
+    }
+
+    /// After Sign in, iOS offers to save the password in a sheet over the
+    /// app, which takes every tap until it is answered. Taps Not Now if it
+    /// shows within `timeout`.
+    private func declineSavePassword(in app: XCUIApplication, timeout: TimeInterval) {
+        let notNow = app.buttons["Not Now"]
+        guard timeout > 0 ? notNow.waitForExistence(timeout: timeout) : notNow.exists else { return }
+        notNow.tap()
+        XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "Save Password? sheet")
     }
 
     /// Waits for `element`; on a miss, logs what was on screen (the CI log is

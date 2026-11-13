@@ -32,7 +32,7 @@ final class TabRootUITests: XCTestCase {
             for name in Self.tabs {
                 XCTAssertTrue(tab(name, in: app).waitForExistence(timeout: 5), "\(name) tab, \(orientation.rawValue)")
             }
-            XCTAssertEqual(app.tabBars.buttons.count, Self.tabs.count, "tab bar buttons, \(orientation.rawValue)")
+            XCTAssertEqual(tabButtons(in: app).count, Self.tabs.count, "tab bar buttons, \(orientation.rawValue)")
             for toggle in ["Show Sidebar", "Hide Sidebar", "Sidebar"] {
                 XCTAssertFalse(app.buttons[toggle].exists, "\(toggle) button, \(orientation.rawValue)")
             }
@@ -53,11 +53,12 @@ final class TabRootUITests: XCTestCase {
         let tags = app.navigationBars["Tags"]
         waitUntilExists(tags, 10, in: app)
 
-        // FixtureStore's "Gifts" tag is on "Dinner with friends".
         hittableButton(containing: "Gifts", in: app).tap()
         let transactions = app.navigationBars["Transactions"]
         waitUntilExists(transactions, 10, in: app)
-        waitUntilExists(app.staticTexts["Dinner with friends"], 10, in: app)
+        // The list is scoped to the tag. FixtureStore answers every query
+        // unfiltered, so the scope shows as the active filter, not as rows.
+        XCTAssertTrue(barButton("Filters (1 active)", of: transactions, in: app).exists, "tag filter")
         XCTAssertFalse(tags.exists, "Tags is under the pushed list")
 
         let back = backButton(of: transactions, previous: "Tags")
@@ -171,9 +172,7 @@ final class TabRootUITests: XCTestCase {
         let app = launchFixtureApp()
         openTab("Transactions", in: app)
 
-        let add = app.navigationBars["Transactions"].buttons["Add"]
-        waitUntilExists(add, 10, in: app)
-        add.tap()
+        barButton("Add", of: app.navigationBars["Transactions"], in: app).tap()
         let sheet = app.navigationBars["New Transaction"]
         waitUntilExists(sheet, 10, in: app)
 
