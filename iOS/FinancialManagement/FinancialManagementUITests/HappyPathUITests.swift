@@ -44,13 +44,8 @@ final class HappyPathUITests: XCTestCase {
 
         // 2. Land on the Dashboard and open the Accounts tab.
         waitForTabs(15, in: app)
-        // iOS offers to save the signed-in password in a sheet over the app,
-        // which takes every tap until it is answered.
-        let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: 5) {
-            notNow.tap()
-            XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "Save Password? sheet")
-        }
+        // It comes up a while after sign-in, at no fixed time.
+        declineSavePassword(in: app, timeout: 20)
         section("Accounts", in: app).tap()
 
         // 3. Add an account via the "+" toolbar button.
@@ -96,8 +91,20 @@ final class HappyPathUITests: XCTestCase {
 
     /// A section's button in the root's tab bar (or the outer display's
     /// rail), the same five tabs on every display (docs/ios-tab-root-plan.md).
+    /// Answers a "Save Password?" sheet still up, so the tap reaches the tab.
     private func section(_ name: String, in app: XCUIApplication) -> XCUIElement {
-        tab(name, in: app)
+        declineSavePassword(in: app, timeout: 0)
+        return tab(name, in: app)
+    }
+
+    /// After Sign in, iOS offers to save the password in a sheet over the
+    /// app, which takes every tap until it is answered. Taps Not Now if it
+    /// shows within `timeout`.
+    private func declineSavePassword(in app: XCUIApplication, timeout: TimeInterval) {
+        let notNow = app.buttons["Not Now"]
+        guard timeout > 0 ? notNow.waitForExistence(timeout: timeout) : notNow.exists else { return }
+        notNow.tap()
+        XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "Save Password? sheet")
     }
 
     /// Waits for `element`; on a miss, logs what was on screen (the CI log is
