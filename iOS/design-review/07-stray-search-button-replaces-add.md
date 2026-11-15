@@ -33,10 +33,12 @@ Screenshots: `screenshots/D-closed-dash-outer.png`,
 
 ## Fix
 
-1. Remove the hierarchy swap that re-creates the Transactions screen on every
-   rotation (finding 01). That is the most likely cause: a search toolbar item
-   from a torn-down `.searchable` host stays in the shared tab bar.
-2. Until then, attach `.searchable` where its host survives rotation, so the
+1. The most likely cause is the hierarchy swap that re-creates the
+   Transactions screen on every rotation: a search toolbar item from a
+   torn-down `.searchable` host stays in the shared tab bar. The swap itself
+   stays (the Music pattern, `docs/ios-tab-root-plan.md`), so fix it at the
+   search host.
+2. Attach `.searchable` where its host survives rotation, so the
    search item is never re-registered. For example, apply it on the
    Transactions `SplitRootContainer` in `ContentRootView`, bound to
    `transactionList` (already owned above the tabs), instead of inside
