@@ -1,5 +1,7 @@
 # iOS TestFlight setup — progress & handoff
 
+> **2026-11-14: iOS builds are now local on the Mac Mini** — see [`README-Local.md`](README-Local.md). This page is history.
+
 > Notes from the Claude session that set up the no-Mac iOS build pipeline.
 
 ## ✅ STATUS: WORKING (2026-06-20)

@@ -18,3 +18,4 @@ iOS/**/Config/*.xcconfig
 
 # clasp project binding (contains the personal Apps Script project id)
 integrations/gmail-apps-script/.clasp.json
+.DS_Store

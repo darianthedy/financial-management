@@ -3,6 +3,8 @@
 Status: Proposal · Date: 2026-10-29
 Design: [`ios-iphone-duo-plan.md`](ios-iphone-duo-plan.md) · Mockups: [iPhone Duo Mockups canvas](https://claude.ai/artifact/Ptpqw6RjFrLEXJvSPMf2oS)
 
+> **2026-11-14: iOS builds are now local on the Mac Mini** — see [`../iOS/README-Local.md`](../iOS/README-Local.md). The T1/T2/T3 tiers below still apply, but run on this Mac (`scripts/ios-ci/pr-check.sh`, `GATE=1`, `UITESTS=1`) instead of the `xcode-27` runner — the "wait on macOS CI" constraint is gone.
+
 This plan breaks the Duo work into **22 small PRs** in 7 phases, with **4 checkpoints** ("gates") between them. It is shaped around one constraint: every PR waits on GitHub Actions macOS CI. So the expensive checks run at the gates, not on every PR. A runtime switch called the **adaptive kill switch** lets each PR merge straight to `main` without changing what users see.
 
 ---
