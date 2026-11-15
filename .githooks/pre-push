@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Runs the iOS unit + layout tests (scripts/ios-ci/pr-check.sh) before a push
+# whose commits touch the iOS app. Replaces the old ios-pr-check.yml workflow:
+# iOS builds run locally on the Mac Mini now, not on GitHub's macOS runners.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Skip one push:           git push --no-verify   (or SKIP_IOS_CHECK=1 git push)
+#
+# Note: the tests run against the working tree, so commit or stash unrelated
+# edits first if you want the result to reflect exactly what is being pushed.
+set -euo pipefail
+
+[ "${SKIP_IOS_CHECK:-0}" = "1" ] && exit 0
+
+zero=0000000000000000000000000000000000000000
+remote="$1"
+changed=""
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # branch deletion
+  if [ "$remote_sha" = "$zero" ]; then
+    # New branch on the remote: compare with the remote's default branch.
+    base="$(git merge-base "$local_sha" "refs/remotes/$remote/main" 2>/dev/null || true)"
+    range="${base:+$base..}$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  changed+="$(git diff --name-only "$range" 2>/dev/null || git ls-tree -r --name-only "$local_sha")"$'\n'
+done
+
+# Same filter the old workflow used: iOS/** (minus docs) and the CI script.
+if ! grep -E '^(iOS/|scripts/ios-ci/)' <<<"$changed" | grep -vqE '\.md$'; then
+  exit 0
+fi
+
+root="$(git rev-parse --show-toplevel)"
+out="${TMPDIR:-/tmp}/fm-ios-pr-check"
+rm -rf "$out"
+echo "pre-push: iOS changes detected — running unit + layout tests (skip with --no-verify)"
+if (cd "$root/iOS/FinancialManagement" && bash "$root/scripts/ios-ci/pr-check.sh" "$out"); then
+  echo "pre-push: iOS check passed"
+else
+  echo "pre-push: iOS check FAILED — push aborted. Logs: $out" >&2
+  exit 1
+fi
