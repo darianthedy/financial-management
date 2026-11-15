@@ -1,13 +1,15 @@
 # Building the iOS app on the Mac Mini (local, default since 2026-11-14)
 
 We now have a **Mac Mini** (Apple Silicon, macOS 27, **Xcode 27.2**, iOS 27.2 simulators
-including **iPhone Duo**). Everything that used to run on GitHub Actions macOS runners —
-PR checks, Duo gate/probe runs, TestFlight builds — runs **here** instead.
+including **iPhone Duo**). PR checks and TestFlight builds run **here**; their
+`ios-pr-check`, `ios-duo-probe` and `ios-testflight` workflows have been deleted.
+Don't add Codemagic or other cloud builders.
 
-**Don't** use `gh workflow run ios-*`, don't wait on the `ios-pr-check` / `ios-duo-*` /
-`ios-testflight` workflows, and don't add Codemagic or other cloud builders.
-`README-TestFlight.md` and `TestFlight-Setup-Progress.md` describe the retired CI
-pipeline; they remain the reference for the App Store Connect key and the match repo.
+The one iOS workflow left on GitHub is **`ios-duo-gate.yml`**: the nightly T3 run
+(full suite + HappyPathUITests against the live backend), also runnable from the
+Actions tab or with the `duo-gate` PR label.
+
+`TestFlight-Setup-Progress.md` describes the retired CI pipeline (history only).
 
 ## One-time setup
 
@@ -28,6 +30,11 @@ bundle install            # fastlane, pinned by the Gemfile
 
 ## Everyday loop (replaces the T1 PR check)
 
+The **pre-push hook** (`.githooks/pre-push`) runs this automatically when a push
+touches `iOS/` or `scripts/ios-ci/` (not `.md`) and aborts the push on failure.
+Enable it once per clone with `git config core.hooksPath .githooks`; skip a push with
+`git push --no-verify`. Tests run pinned to en/US, so the Mac's region doesn't matter.
+
 ```bash
 cd iOS/FinancialManagement
 ../../scripts/ios-ci/pr-check.sh /tmp/fm-check   # build + unit/layout tests on the iPhone Duo simulator
@@ -41,9 +48,9 @@ simulator interactively now, which CI could not.
 ## TestFlight
 
 ```bash
-cd iOS/FinancialManagement
-bundle exec fastlane beta      # match (read-only) → archive → upload
+scripts/ios-release/testflight.sh   # fastlane beta: match (read-only) → archive → upload
 ```
 
 Run it from whatever branch you're testing — this replaces
-`gh workflow run ios-testflight.yml --ref <branch>`.
+`gh workflow run ios-testflight.yml --ref <branch>`. The script also restores the
+`project.pbxproj` signing edit afterwards. Details: `README-TestFlight.md`.

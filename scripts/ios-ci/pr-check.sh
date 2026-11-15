@@ -54,6 +54,9 @@ if [ -z "$devtype" ]; then
   echo "warning: no iPhone Duo device type; using $devtype" | tee -a "$out/summary.txt"
 fi
 udid="$(xcrun simctl create PRCheck "$devtype" "$runtime")"
+# Delete the simulator however the script exits, so a failed local run (the
+# pre-push hook) doesn't leave one behind.
+trap 'xcrun simctl delete "$udid" >/dev/null 2>&1 || true' EXIT
 # Boot in the background while the build runs.
 xcrun simctl boot "$udid" &
 echo "simulator: $devtype on $runtime ($udid)" | tee -a "$out/summary.txt"
@@ -101,6 +104,10 @@ echo "build-for-testing: ${build_s}s" | tee -a "$out/summary.txt"
 wait # simulator boot
 xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
 
+# A new simulator inherits the host's region. Pin the tests to en/US so a Mac
+# set to e.g. en_ID (comma decimals) gets the same results as GitHub's runners.
+locale=(-testLanguage en -testRegion US)
+
 gate_env=()
 if [ "${GATE:-0}" = "1" ]; then
   # TEST_RUNNER_-prefixed variables reach the test process without the prefix.
@@ -115,7 +122,7 @@ status=0
 # at 15 min (perl's alarm: macOS has no `timeout`); the suite takes ~2.
 set +e
 env ${gate_env[@]+"${gate_env[@]}"} perl -e 'alarm shift; exec @ARGV' 900 \
-  xcodebuild test-without-building "${common[@]}" \
+  xcodebuild test-without-building "${common[@]}" "${locale[@]}" \
   -only-testing:FinancialManagementTests \
   -test-timeouts-enabled YES \
   -default-test-execution-time-allowance 180 \
@@ -158,7 +165,7 @@ if [ "${UITESTS:-0}" = "1" ]; then
   set +e
   TEST_RUNNER_UITEST_EMAIL="$UITEST_EMAIL" TEST_RUNNER_UITEST_PASSWORD="$UITEST_PASSWORD" \
     perl -e 'alarm shift; exec @ARGV' 900 \
-    xcodebuild test-without-building "${common[@]}" \
+    xcodebuild test-without-building "${common[@]}" "${locale[@]}" \
     -only-testing:FinancialManagementUITests \
     -resultBundlePath "$out/uitests.xcresult" >"$out/uitests.log" 2>&1
   ui_status=$?
@@ -173,5 +180,4 @@ if [ "${UITESTS:-0}" = "1" ]; then
   [ "$ui_status" -eq 0 ] || status=$ui_status
 fi
 
-xcrun simctl delete "$udid" >/dev/null 2>&1 || true
 exit "$status"
