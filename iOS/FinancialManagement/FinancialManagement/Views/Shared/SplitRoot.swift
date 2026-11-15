@@ -353,6 +353,15 @@ enum SplitColumns {
     /// Whether list | detail tiles at `size`, as in Music: regular width, in
     /// landscape, with room for both columns. Portrait, the outer display and
     /// a narrow Split View push instead.
+    ///
+    /// The orientation check is deliberate (docs/ios-tab-root-plan.md), not a
+    /// size-class shortcut. The inner display in portrait (669 pt) passes
+    /// `tiles(width:)`, but only just: with the list at `listWidth`, the detail
+    /// gets exactly its 360 pt minimum and no room for the column divider, so
+    /// `NavigationSplitView` shows the list as an overlay on a dimmed detail
+    /// (Accounts, rechecked 2026-11-15; first seen in a9c6a09). The overlay has
+    /// no way back to the list with the sidebar toggle removed, and the width
+    /// at which the split stops tiling isn't documented, so portrait pushes.
     static func tiles(_ size: CGSize, regular: Bool) -> Bool {
         regular && size.width > size.height && tiles(width: size.width)
     }
