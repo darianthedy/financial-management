@@ -39,8 +39,8 @@ struct BudgetCard: View {
     private var barColor: Color { isOverspent ? .appDanger : .appPrimary }
 
     private var cardAccessibilityLabel: String {
-        let spentStr = progress.spent.asCurrency(code: currencyCode)
-        let budgetStr = effectiveBudget.asCurrency(code: currencyCode)
+        let spentStr = spentText
+        let budgetStr = budgetText
         if isOverspent {
             let overStr = (-progress.remaining).asCurrency(code: currencyCode)
             return "\(progress.budgetName), \(spentStr) of \(budgetStr), \(overStr) over budget"
@@ -56,23 +56,7 @@ struct BudgetCard: View {
 
             progressBar
 
-            HStack {
-                Text("\(progress.spent.asCurrency(code: currencyCode)) of \(effectiveBudget.asCurrency(code: currencyCode))")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.appMutedForeground)
-
-                Spacer()
-
-                if isOverspent {
-                    Text("\((-progress.remaining).asCurrency(code: currencyCode)) over")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.appDanger)
-                } else {
-                    Text("\(progress.remaining.asCurrency(code: currencyCode)) left")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.appForeground)
-                }
-            }
+            amountsRow
 
             // Virtual-installment reservations (P1): a distinct, muted line
             // separate from the carry-over label (which lives in the info
@@ -111,6 +95,69 @@ struct BudgetCard: View {
         .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(cardAccessibilityLabel)
+    }
+
+    // MARK: - Amounts row
+
+    private var spentText: String { progress.spent.asCurrency(code: currencyCode) }
+    private var budgetText: String { effectiveBudget.asCurrency(code: currencyCode) }
+    private var spentProbe: String { "budgets.amounts.spent.\(progress.budgetName)" }
+    private var remainingProbe: String { "budgets.amounts.remaining.\(progress.budgetName)" }
+
+    /// "spent of budget" + "remaining left/over". Uses whichever layout fits the
+    /// width, so the phrase never wraps mid-way (design review 02):
+    /// 1. one row: spent of budget ··· remaining
+    /// 2. two lines: spent of budget / remaining (narrow widths, e.g. Duo outer)
+    /// 3. three lines: spent / of budget / remaining (large Dynamic Type)
+    /// Every line is `lineLimit(1)`, so a currency amount is never split.
+    private var amountsRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                spentOfBudgetLabel(Text("\(spentText) of \(budgetText)"))
+                    .layoutProbe(spentProbe)
+                Spacer(minLength: 0)
+                remainingLabel
+                    .layoutProbe(remainingProbe)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                spentOfBudgetLabel(Text("\(spentText) of \(budgetText)"))
+                    .layoutProbe(spentProbe)
+                remainingLabel
+                    .layoutProbe(remainingProbe)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                spentOfBudgetLabel(Text(spentText))
+                    .layoutProbe(spentProbe)
+                spentOfBudgetLabel(Text("of \(budgetText)"))
+                remainingLabel
+                    .layoutProbe(remainingProbe)
+            }
+            // Last resort: scale slightly rather than truncate a figure.
+            .minimumScaleFactor(0.8)
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func spentOfBudgetLabel(_ text: Text) -> some View {
+        text
+            .font(.subheadline)
+            .foregroundStyle(Color.appMutedForeground)
+    }
+
+    @ViewBuilder
+    private var remainingLabel: some View {
+        if isOverspent {
+            Text("\((-progress.remaining).asCurrency(code: currencyCode)) over")
+                .font(.subheadline)
+                .foregroundStyle(Color.appDanger)
+        } else {
+            Text("\(progress.remaining.asCurrency(code: currencyCode)) left")
+                .font(.subheadline)
+                .foregroundStyle(Color.appForeground)
+        }
     }
 
     // MARK: - Actions menu (web: the card's trailing MoreVertical dropdown —
