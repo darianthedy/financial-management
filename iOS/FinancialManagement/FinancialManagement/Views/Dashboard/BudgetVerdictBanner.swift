@@ -124,8 +124,10 @@ struct BudgetVerdictBanner: View {
                                  .font(.subheadline)
                                  .foregroundColor(Color.appMutedForeground)
                          } ?? Text("")))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            // The Dashboard's most important status: wrap to a
+                            // second line rather than shrink below its text style.
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         Spacer(minLength: 0)
                     }

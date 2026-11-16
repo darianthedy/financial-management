@@ -45,8 +45,7 @@ struct UnplannedExpensesCard: View {
                         )
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.appCardForeground)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .readableShrink(.subheadline)
                     }
 
                     VStack(spacing: 8) {
@@ -81,8 +80,7 @@ struct UnplannedExpensesCard: View {
             )
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.appCardForeground)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .readableShrink(.subheadline)
         }
     }
 }

@@ -105,8 +105,7 @@ struct PlannedExpensesCard: View {
                         )
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.appCardForeground)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .readableShrink(.subheadline)
                     }
 
                     if !budgets.isEmpty {
@@ -188,8 +187,7 @@ struct PlannedExpensesCard: View {
                 }
                 .font(.caption)
                 .foregroundStyle(overspent ? Color.appDanger : Color.appMutedForeground)
-                .lineLimit(1)
-                .minimumScaleFactor(horizontalSizeClass == .regular ? 1 : 0.7)
+                .readableShrink(.caption1, isEnabled: horizontalSizeClass != .regular)
                 // The budget name truncates before the money does.
                 .layoutPriority(1)
             }
@@ -279,8 +277,7 @@ struct PlannedExpensesCard: View {
                             widestNumber: widestAmountBody
                         )
                             .font(.subheadline)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .readableShrink(.subheadline)
                     }
                     .foregroundStyle(Color.appMutedForeground)
                     .padding(.leading, 20)
@@ -338,8 +335,7 @@ private struct PaidFixedExpenseRow: View {
                 widestNumber: widestAmountBody
             )
                 .font(.subheadline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .readableShrink(.subheadline)
         }
         .foregroundStyle(Color.appCardForeground)
     }

@@ -71,13 +71,4 @@ struct AccountsCard: View {
             }
         }
     }
-
-    private func amount(_ value: Int64, semibold: Bool) -> some View {
-        Text(value.asCurrency(code: currencyCode))
-            .font(.subheadline.weight(semibold ? .semibold : .regular))
-            .monospacedDigit()
-            .foregroundStyle(value < 0 ? Color.appDanger : Color.appCardForeground)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-    }
 }
