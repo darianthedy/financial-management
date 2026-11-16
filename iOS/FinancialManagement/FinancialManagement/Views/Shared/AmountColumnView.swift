@@ -87,3 +87,34 @@ private struct WholeAmount: ViewModifier {
         }
     }
 }
+
+/// Shrink-to-fit for a single amount that must stay on one line, floored so the
+/// rendered text never drops below 11 pt (HIG: iOS minimum text size). The floor
+/// is computed from the current Dynamic Type size, so at default sizes a
+/// `.subheadline` amount shrinks at most to ~11 pt, and at larger sizes it may
+/// give back some of the growth but never becomes smaller than that minimum.
+/// Sentences should wrap instead (`lineLimit(2)` + vertical `fixedSize`).
+private struct ReadableShrink: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let textStyle: UIFont.TextStyle
+    var isEnabled = true
+
+    static let minimumPointSize: CGFloat = 11
+
+    func body(content: Content) -> some View {
+        let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
+        let pointSize = UIFont.preferredFont(forTextStyle: textStyle, compatibleWith: traits).pointSize
+        content
+            .lineLimit(1)
+            .minimumScaleFactor(isEnabled ? min(1, Self.minimumPointSize / pointSize) : 1)
+    }
+}
+
+extension View {
+    /// One-line amount that may shrink to fit, but never below 11 pt.
+    /// Pass the text style the amount is set in (e.g. `.subheadline`).
+    /// `isEnabled: false` keeps the amount at full size (no shrinking).
+    func readableShrink(_ textStyle: UIFont.TextStyle, isEnabled: Bool = true) -> some View {
+        modifier(ReadableShrink(textStyle: textStyle, isEnabled: isEnabled))
+    }
+}
