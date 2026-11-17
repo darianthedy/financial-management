@@ -68,7 +68,7 @@ struct ContentRootView: View {
                     BudgetListView()
                 }
             }
-            Tab("More", systemImage: "ellipsis", value: RootTab.more) {
+            Tab("More", systemImage: "list.bullet", value: RootTab.more) {
                 NavigationStack(path: $morePath) {
                     MoreView()
                         .navigationDestination(for: AppSection.self) { section in

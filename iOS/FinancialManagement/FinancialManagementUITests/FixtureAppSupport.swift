@@ -28,7 +28,7 @@ extension XCTestCase {
         "Accounts": "wallet.bifold",
         "Transactions": "arrow.left.arrow.right",
         "Budgets": "target",
-        "More": "ellipsis",
+        "More": "list.bullet",
         "Tags": "tag",
         "Settings": "gear",
     ]
