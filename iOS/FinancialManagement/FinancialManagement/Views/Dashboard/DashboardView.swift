@@ -27,7 +27,9 @@ struct DashboardView: View {
         // Tent posture (D6.2): the verdict and cashflow above the fold.
         .tentGlance {
             if let data = viewModel.data {
-                DashboardColumns(spacing: 16) {
+                // The glance has no list cards, so it keeps 300 pt columns
+                // and stays side by side above the fold in portrait.
+                DashboardColumns(spacing: 16, minimumColumnWidth: 300) {
                     verdict(data)
                     cashflow(data).dashboardColumn(1)
                 }
@@ -60,8 +62,9 @@ struct DashboardView: View {
                     ProgressView()
                         .frame(maxWidth: .infinity, minHeight: 200)
                 } else if let data = viewModel.data {
-                    // Regular width (D4.1): two balanced columns; compact
-                    // keeps the single stack below, exactly as before.
+                    // Regular width (D4.1): two balanced columns when each
+                    // is wide enough (landscape, book posture), else one
+                    // stack, as on compact (inner portrait, DR 04).
                     if horizontalSizeClass == .regular {
                         DashboardColumns(spacing: 16, foldX: layout.foldX) {
                             cards(data, showsGlance: !layout.isBelowGlance)
