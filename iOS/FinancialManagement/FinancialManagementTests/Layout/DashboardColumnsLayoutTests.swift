@@ -37,10 +37,11 @@ final class DashboardColumnsLayoutTests: XCTestCase {
 
             // The Month Navigator spans the content width. Hosted renders can
             // inherit the simulator's own side inset (inner portrait gets
-            // ~553 pt, not the device's 637), so the expected column count
+            // ~553 pt, not the device's 637; both stack), so the expected column count
             // follows the width actually rendered; landscape must tile.
             let expected = DashboardColumns.columnCount(
-                width: navigator.width, spacing: 16, minimumColumnWidth: 300
+                width: navigator.width, spacing: 16,
+                minimumColumnWidth: DashboardColumns.defaultMinimumColumnWidth
             )
             if size.name == LayoutSize.innerLandscape.name {
                 XCTAssertEqual(expected, 2, "inner landscape must fit two columns (\(navigator.width) pt)")

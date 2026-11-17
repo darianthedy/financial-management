@@ -14,8 +14,16 @@ import SwiftUI
 /// `minimumColumnWidth`, the even columns stay: the grid scrolls, and the HIG
 /// doesn't displace scrolling content.
 struct DashboardColumns: Layout {
+    /// The narrowest a column may be. The list cards (Accounts, Planned,
+    /// Unplanned) put a name beside a right-aligned amount column sized to the
+    /// widest dashboard amount; under ~330 pt the names truncate ("BCA Tahap…",
+    /// design review 04). So the inner display in portrait (637 pt of content,
+    /// two 310 pt columns) stacks, while landscape and book posture (~443 pt
+    /// columns) still tile.
+    static let defaultMinimumColumnWidth: CGFloat = 330
+
     var spacing: CGFloat = 16
-    var minimumColumnWidth: CGFloat = 300
+    var minimumColumnWidth: CGFloat = Self.defaultMinimumColumnWidth
     /// The fold's x position in this layout's coordinates, if it has one.
     var foldX: CGFloat?
     var foldGutter: CGFloat = 32
