@@ -323,7 +323,7 @@ private struct ProbeTabs<Screen: View>: View {
             Tab("Accounts", systemImage: "wallet.bifold") { screen("Accounts") }
             Tab("Transactions", systemImage: "arrow.left.arrow.right") { screen("Transactions") }
             Tab("Budgets", systemImage: "target") { screen("Budgets") }
-            Tab("More", systemImage: "ellipsis") { screen("More") }
+            Tab("More", systemImage: "list.bullet") { screen("More") }
                 .defaultVisibility(.hidden, for: .sidebar)
             TabSection("Management") {
                 Tab("Tags", systemImage: "tag") { screen("Tags") }
@@ -353,7 +353,7 @@ private struct ProbeTabsConditional: View {
             Tab("Transactions", systemImage: "arrow.left.arrow.right") { ProbeScreen(title: "Transactions") }
             Tab("Budgets", systemImage: "target") { ProbeScreen(title: "Budgets") }
             if sizeClass == .compact {
-                Tab("More", systemImage: "ellipsis") { ProbeScreen(title: "More") }
+                Tab("More", systemImage: "list.bullet") { ProbeScreen(title: "More") }
             } else {
                 TabSection("Management") {
                     Tab("Tags", systemImage: "tag") { ProbeScreen(title: "Tags") }
