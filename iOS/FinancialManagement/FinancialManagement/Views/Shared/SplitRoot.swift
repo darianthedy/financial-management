@@ -317,8 +317,8 @@ extension View {
 
     /// Highlights a list row while it is the selection of a tiled split. No-op
     /// on compact width, where selecting pushes.
-    func splitRowSelected(_ isSelected: Bool) -> some View {
-        modifier(SplitRowSelectedModifier(isSelected: isSelected))
+    func splitRowSelected(_ isSelected: Bool, background: Color? = nil) -> some View {
+        modifier(SplitRowSelectedModifier(isSelected: isSelected, background: background))
     }
 
     /// Makes a row that has no tap action on compact width select itself in a
@@ -562,10 +562,11 @@ private struct SplitDetailModifier<Item: Hashable, Detail: View>: ViewModifier {
 private struct SplitRowSelectedModifier: ViewModifier {
     @Environment(\.isSplitListColumn) private var isSplitListColumn
     let isSelected: Bool
+    let background: Color?
 
     func body(content: Content) -> some View {
         content.listRowBackground(
-            isSplitListColumn && isSelected ? Color.appPrimary.opacity(0.15) : nil
+            isSplitListColumn && isSelected ? Color.appPrimary.opacity(0.15) : background
         )
     }
 }
