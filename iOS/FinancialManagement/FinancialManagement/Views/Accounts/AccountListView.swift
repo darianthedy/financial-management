@@ -31,6 +31,7 @@ struct AccountListView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Color.appForeground)
                     }
+                    .listRowBackground(Color.appCard)
                 }
             }
 
@@ -39,7 +40,7 @@ struct AccountListView: View {
             Section {
                 ForEach(viewModel.accounts) { account in
                     accountRow(account)
-                        .splitRowSelected(selectedAccountId == account.id)
+                        .splitRowSelected(selectedAccountId == account.id, background: Color.appCard)
                         .layoutProbe("accounts.row.\(account.name)", interactive: true)
                 }
             }
