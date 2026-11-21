@@ -185,7 +185,61 @@ final class TabRootUITests: XCTestCase {
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
     }
 
+    // MARK: - Search stays in Transactions
+
+    /// Design review 07: after visiting every tab in portrait, then in
+    /// landscape, then in portrait again, a search button was left in the bar
+    /// on Dashboard and replaced Add on Budgets. A rotation re-creates the
+    /// Transactions screen (list | detail on one side, a stack on the other),
+    /// so only Transactions may offer search, and Budgets keeps Add, in every
+    /// pass.
+    func testSearchStaysInTransactionsAcrossRotations() {
+        let app = launchFixtureApp()
+        for (pass, orientation) in [UIDeviceOrientation.portrait, .landscapeLeft, .portrait].enumerated() {
+            rotate(orientation, in: app)
+            for name in Self.tabs {
+                // An iPad's top tab bar can scroll More out of reach; the Duo
+                // shows every tab (`testFiveTabsAndNoSidebar`).
+                guard tab(name, in: app).waitForExistence(timeout: 3) else { continue }
+                openTab(name, in: app)
+                let context = "\(name), pass \(pass + 1) (\(orientation.isLandscape ? "landscape" : "portrait"))"
+                if name == "Transactions" {
+                    // The field may be scrolled under the bar; it's still there.
+                    XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "search field, \(context)")
+                } else {
+                    // Give a stale item time to show before checking it's gone.
+                    RunLoop.current.run(until: Date().addingTimeInterval(1))
+                    if showsSearch(in: app, timeout: 0) { dumpScreen(app) }
+                    XCTAssertFalse(showsSearch(in: app, timeout: 0), "search, \(context)")
+                }
+                if name == "Budgets" {
+                    XCTAssertTrue(
+                        barButton("Add Budget", of: app.navigationBars["Budgets"], in: app).exists,
+                        "Add, \(context)"
+                    )
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
+
+    /// Whether Transactions' search (its field, or the button the bar shows
+    /// in its place) is on screen within `timeout`.
+    private func showsSearch(in app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(
+            format: "label == 'Search' OR identifier == 'magnifyingglass' OR placeholderValue == 'Search description'"
+        )
+        let candidates = [app.searchFields.matching(predicate), app.buttons.matching(predicate)]
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            for query in candidates where query.allElementsBoundByIndex.contains(where: { $0.exists && $0.isHittable }) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
+    }
 
     /// Accounts at its list in landscape, nothing selected; skips unless the
     /// split tiles here (its "Select an Account" placeholder shows).

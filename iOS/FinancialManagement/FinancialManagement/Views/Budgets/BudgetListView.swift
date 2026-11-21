@@ -143,6 +143,7 @@ struct BudgetListView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
+                        .accessibilityLabel("Add Budget")
                 }
             }
         }

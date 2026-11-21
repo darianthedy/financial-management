@@ -325,9 +325,17 @@ struct TransactionListView: View {
             listStack
         } else {
             listStack
+                // Always the field under the title, never the toolbar button
+                // the automatic placement collapses it into on regular width
+                // (the inner display, iPad). On the Duo that button joins the
+                // tab bar's rail, which every tab shares, and a rotation that
+                // re-created this screen left it there: on Dashboard, and in
+                // place of Budgets' Add (design review 07). The field also
+                // keeps the filter tokens in view on every display.
                 .searchable(
                     text: $searchText,
                     tokens: filterTokensBinding,
+                    placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search description"
                 ) { token in
                     Text(token.label)
