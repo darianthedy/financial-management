@@ -46,6 +46,23 @@ Screenshots: `screenshots/D-closed-dash-outer.png`,
 3. Add a UI test for the sequence above that asserts the Budgets Add button
    exists and no search button exists outside Transactions.
 
+## Resolution
+
+Fixed differently from step 2 above. Moving `.searchable` up would still let
+the system collapse search into a toolbar button on regular width (the inner
+display, iPad), and that button is the only kind of item that can end up on
+the rail every tab shares. `TransactionListView` now pins search to the field
+under the title (`placement: .navigationBarDrawer(displayMode: .always)`), so
+the button is never created, on any display. The field also keeps the filter
+tokens in view. `BudgetListView`'s Add menu is labelled "Add Budget" for
+VoiceOver and the test.
+
+`TabRootUITests.testSearchStaysInTransactionsAcrossRotations` visits every tab
+in portrait, landscape and portrait again, and checks that Transactions has
+its field, no other tab has search, and Budgets keeps Add. `simctl` can't open
+the Duo, so it runs on the outer display (and an iPad); the original
+inner → outer sequence is still a manual check in Device Hub.
+
 ## Verify
 
 Repeat the 3-step sequence twice in each appearance. Budgets always shows Add,
